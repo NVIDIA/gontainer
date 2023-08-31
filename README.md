@@ -1,40 +1,27 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-# Simple Service Container for Golang projects
+# Service container for Golang projects
 
-Service container features.
+## Features
+ 
+- 🚀 Eager services instantiation with automatic dependencies resolution and optional dependencies support.
+- 🛠 Dependency Injection for service factories, avoiding manual fetch through container API.
+- 🔄 Reverse-to-Instantiation order for service termination to ensure proper resource release and shutdown. 
+- 📣 Events broker for inter-service container-wide communications.
+- 🤖 Clean, well-tested and small codebase based on reflection.
 
-* Eager (non-lazy) services instantiation.
-* Clean but powerful module interface.
-* Support for optional service dependencies.
-* Event broker for inter-service communication.
-* Events for unhandled panics in services. 
+## Examples
 
-## Creating new services
+* [Basic script example](./examples/01_basic_usage/main.go) showing how to do something useful and then exit.
+* [Daemon service example](./examples/02_daemon_service/main.go) showing how to launch background services.
+* [Events handling example]() showing how to communicate with events.
 
-Every service in service container is produced by a service factory produced by `gontainer.NewFactory()`.
-Definition of a simple service can look [like the following](./examples/example.go).
+## Key concepts
 
-```go
-return gontainer.NewFactory(
-    gontainer.WithFactory(
-        func() (Config, error) {
-            // Prepare service instance.
-            instance, err := New(name)
-            if err != nil {
-                return nil, err
-            }
-            // Publish created instance.
-            return instance, nil
-        },
-    ),
-    gontainer.WithHelp(
-        func() string {
-            return `Help for the service.`
-        },
-    ),
-)
-```
+* **Service Factory**
+* **Service**
+* **Service Function**
+* **Event Dispatcher**
 
 ## Service functions
 
@@ -52,3 +39,8 @@ can be awaited to catch the service termination. Error value of service function
    inside service container between services or outside from the client code. See `signals` example service.
 2. The `context.Context` service gives access to the per-service context, inherited from the root app context.
    This context is cancelled right before the service `Close()` call and not when the entire app was closed.
+
+## Builtin events
+
+1. ContainerClose
+2. UnhandledPanic
