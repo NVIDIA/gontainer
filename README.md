@@ -16,7 +16,6 @@ Dependency injection service container for Golang projects.
 
 * [Basic script example](./examples/01_basic_usage/main.go) showing how to do something useful and then exit.
 * [Daemon service example](./examples/02_daemon_service/main.go) showing how to launch background services.
-* [Events broker example](./examples/03_events_broker/main.go) showing how to communicate using events.
 
 ## Key Concepts
 

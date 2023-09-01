@@ -18,7 +18,13 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/NVIDIA/gontainer"
 )
@@ -27,8 +33,18 @@ import (
 type MyService struct{}
 
 // SayHello outputs a friendly greeting.
-func (s *MyService) SayHello(name string) {
-	log.Println("Hello,", name)
+func (s *MyService) SayHello(name string) string {
+	return "Hello, " + name
+}
+
+// MyServer wraps HTTP Server.
+type MyServer struct {
+	server *http.Server
+}
+
+// Close implements close interface.
+func (s *MyServer) Close() error {
+	return s.server.Shutdown(context.Background())
 }
 
 func main() {
@@ -41,11 +57,50 @@ func main() {
 			return new(MyService)
 		}),
 
-		// General-purpose factory with access to all services.
-		// Factories can spawn multiple services or none.
-		// The last return argument can specify a factory error.
-		gontainer.NewFactory(func(service *MyService) {
-			service.SayHello("Username")
+		// Factory function to create an instance of MyServer.
+		gontainer.NewFactory(func(svc *MyService) (*MyServer, error) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				log.Printf("Received http request: %v", r.URL.Path)
+				_, _ = w.Write([]byte(svc.SayHello("Username")))
+			})
+
+			log.Println("Starting listening on: http://127.0.0.1:8080")
+			socket, err := net.Listen("tcp", "127.0.0.1:8080")
+			if err != nil {
+				return nil, err
+			}
+
+			log.Println("Starting serving HTTP requests")
+			server := &http.Server{Handler: handler}
+			go func() {
+				if err := server.Serve(socket); err != nil {
+					log.Printf("Error serving HTTP requests: %s", err)
+				}
+			}()
+
+			return &MyServer{server}, nil
+		}),
+
+		// Factory function to define close-by-signal service.
+		gontainer.NewFactory(func(ctx context.Context, events gontainer.Events) (any, error) {
+			signalsChan := make(chan os.Signal, 0)
+			signal.Notify(signalsChan, syscall.SIGTERM, syscall.SIGINT)
+
+			return func() error {
+				for {
+					select {
+					case sigvar := <-signalsChan:
+						go func() {
+							log.Printf("Closing service container by signal: %v", sigvar)
+							event := gontainer.NewEvent(gontainer.ContainerClose)
+							_ = events.Trigger(event)
+						}()
+						return nil
+					case <-ctx.Done():
+						return nil
+					}
+				}
+			}, nil
 		}),
 	)
 
@@ -72,8 +127,7 @@ func main() {
 		log.Fatalf("Failed to start service container: %s", err)
 	}
 
-	// At this point, all factories have been invoked.
-	// Exiting without wait is OK for console scripts.
-	// For daemons, it is OK to wait for `<-container.Done()`.
-	log.Println("Not awaiting service container done")
+	// Wait for close by signal.
+	log.Println("Awaiting service container done")
+	<-container.Done()
 }
