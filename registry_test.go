@@ -2,10 +2,12 @@ package gontainer
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 )
 
+// TestIsNonEmptyInterface tests checking of argument to be non-empty interface.
 func TestIsNonEmptyInterface(t *testing.T) {
 	var t1 any
 	var t2 interface{}
@@ -20,6 +22,7 @@ func TestIsNonEmptyInterface(t *testing.T) {
 	equal(t, isNonEmptyInterface(reflect.TypeOf(&t5).Elem()), true)
 }
 
+// TestIsEmptyInterface tests checking of argument to be empty interface.
 func TestIsEmptyInterface(t *testing.T) {
 	var t1 any
 	var t2 interface{}
@@ -34,6 +37,7 @@ func TestIsEmptyInterface(t *testing.T) {
 	equal(t, isEmptyInterface(reflect.TypeOf(&t5).Elem()), false)
 }
 
+// TestIsContextInterface tests checking of argument to be context.
 func TestIsContextInterface(t *testing.T) {
 	var t1 any
 	var t2 interface{}
@@ -48,6 +52,7 @@ func TestIsContextInterface(t *testing.T) {
 	equal(t, isContextInterface(reflect.TypeOf(&t5).Elem()), true)
 }
 
+// TestCheckIsOptionalIn tests checking of argument to be optional.
 func TestCheckIsOptionalIn(t *testing.T) {
 	var t1 any
 	var t2 interface{}
@@ -87,6 +92,7 @@ func TestCheckIsOptionalIn(t *testing.T) {
 	equal(t, ok, true)
 }
 
+// TestBoxFactoryOptionalIn tests boxing of factory output to optional box.
 func TestBoxFactoryOptionalIn(t *testing.T) {
 	// Prepare factory description instance.
 	result := "result"
@@ -102,4 +108,19 @@ func TestBoxFactoryOptionalIn(t *testing.T) {
 	box = Optional[string]{}
 	value = boxFactoryOptionalIn(reflect.TypeOf(box), factory, 0)
 	equal(t, value.Interface().(Optional[string]).Get(), "result")
+}
+
+// TestBoxFactoryOutFunc tests conversion of service function to closable service object.
+func TestBoxFactoryOutFunc(t *testing.T) {
+	var result = errors.New("test")
+	var svcfunc any = func() error {
+		return result
+	}
+
+	svcvalue := reflect.ValueOf(&svcfunc).Elem()
+	wrapper, err := boxFactoryOutFunc(svcvalue)
+	equal(t, err, nil)
+
+	service := wrapper.Interface().(function)
+	equal(t, service.Close(), result)
 }
