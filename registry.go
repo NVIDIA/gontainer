@@ -93,10 +93,10 @@ func (r *registry) startFactories() error {
 	return nil
 }
 
-// closeFactories closes factories in the reverse order.
+// closeFactories closes services of factories in the reverse order.
 func (r *registry) closeFactories() error {
 	var errs []string
-	for index := len(r.sequence) - 1; index > 0; index-- {
+	for index := len(r.sequence) - 1; index >= 0; index-- {
 		factory := r.sequence[index]
 		factory.ctxCancel()
 
@@ -298,13 +298,16 @@ func boxFactoryOptionalIn(typ reflect.Type, factory *Factory, outIndex int) refl
 
 // boxFactoryOutFunc boxes specified function to the factory out regular object.
 func boxFactoryOutFunc(factoryOutValue reflect.Value) (reflect.Value, error) {
-	// Check specified factory out value is an any type (with a func).
-	if factoryOutValue.Kind() != reflect.Interface {
-		return factoryOutValue, nil
-	}
-
 	// Check specified factory out value elem is a function.
-	if factoryOutValue.Elem().Kind() != reflect.Func {
+	// The factoryOutValue can be an `any` type with a function in the value,
+	// when the factory declares any return type, or directly a function type,
+	// when the factory declares explicit func return type. Both cases are OK.
+	if factoryOutValue.Kind() == reflect.Interface {
+		if factoryOutValue.Elem().Kind() == reflect.Func {
+			factoryOutValue = factoryOutValue.Elem()
+		}
+	}
+	if factoryOutValue.Kind() != reflect.Func {
 		return factoryOutValue, nil
 	}
 
