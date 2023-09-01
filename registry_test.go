@@ -3,9 +3,67 @@ package gontainer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 )
+
+// TestRegistryRegisterFactory tests corresponding registry method.
+func TestRegistryRegisterFactory(t *testing.T) {
+	fun := func(a, b, c string) (int, bool, error) {
+		return 1, true, nil
+	}
+
+	ctx := context.Background()
+	opts := WithSubscribe("test", func() {})
+	factory := NewFactory(fun, opts)
+
+	registry := &registry{events: events{}}
+	equal(t, registry.registerFactory(ctx, factory), nil)
+	equal(t, registry.factories, []*Factory{factory})
+	equal(t, factory.factoryFunc == nil, false)
+	equal(t, factory.factoryLoaded, true)
+	equal(t, factory.factorySpawned, false)
+	equal(t, factory.factoryCtx != ctx, true)
+	equal(t, factory.factoryCtx != nil, true)
+	equal(t, factory.ctxCancel != nil, true)
+	equal(t, factory.factoryType.String(), "func(string, string, string) (int, bool, error)")
+	equal(t, factory.factoryValue.String(), "<func(string, string, string) (int, bool, error) Value>")
+	equal(t, fmt.Sprint(factory.factoryInTypes), "[string string string]")
+	equal(t, fmt.Sprint(factory.factoryOutTypes), "[int bool]")
+	equal(t, factory.factoryOutError, true)
+	equal(t, len(factory.factoryOutValues), 0)
+	equal(t, len(factory.factoryEvents["test"]), 1)
+	equal(t, fmt.Sprint(factory.factoryEventsTypes), "map[test:[func()]]")
+	equal(t, fmt.Sprint(factory.factoryEventsValues), "map[test:[<func() Value>]]")
+	equal(t, fmt.Sprint(factory.factoryEventsInTypes), "map[func():[]]")
+	equal(t, fmt.Sprint(factory.factoryEventsOutErrors), "map[func():false]")
+}
+
+// TestRegistryStartFactories tests corresponding registry method.
+func TestRegistryStartFactories(t *testing.T) {
+
+}
+
+// TestRegistryCloseFactories tests corresponding registry method.
+func TestRegistryCloseFactories(t *testing.T) {
+
+}
+
+// TestRegistryGetSpawnedFactoryIns tests corresponding registry method.
+func TestRegistryGetSpawnedFactoryIns(t *testing.T) {
+
+}
+
+// TestRegistryFindFactoryByOutType tests corresponding registry method.
+func TestRegistryFindFactoryByOutType(t *testing.T) {
+
+}
+
+// TestRegistrySpawnFactory tests corresponding registry method.
+func TestRegistrySpawnFactory(t *testing.T) {
+
+}
 
 // TestIsNonEmptyInterface tests checking of argument to be non-empty interface.
 func TestIsNonEmptyInterface(t *testing.T) {
