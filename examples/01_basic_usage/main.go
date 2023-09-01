@@ -63,7 +63,9 @@ func main() {
 		}
 	}()
 
-	// Instantiate all services within the container. Delayed Start() enables:
+	// Instantiate all services within the container.
+	// This call will wait until all factories returns.
+	// Delayed Start() enables:
 	// 1. Container validation without full service instantiation.
 	// 2. Event dispatching to factories, e.g., to build help menus.
 	if err := container.Start(); err != nil {
