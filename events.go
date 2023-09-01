@@ -77,7 +77,10 @@ func (e events) Trigger(event Event) error {
 
 // Event declares service container events.
 type Event interface {
+	// Name returns event name.
 	Name() string
+
+	// Args returns event arguments.
 	Args() []any
 }
 
