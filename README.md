@@ -3,7 +3,6 @@
 # Gontainer
 
 Dependency injection service container for Golang projects.
-<p align="center"><img src="splash.png" width="400"/></p>
 
 ## Features
 
