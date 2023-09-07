@@ -160,6 +160,14 @@ func (f *Factory) load(ctx context.Context) error {
 // FactoryOpt defines factory option.
 type FactoryOpt func(*Factory)
 
+// NewService creates new service factory with predefined service.
+func NewService[T any](singleton T) *Factory {
+	return &Factory{
+		factoryFunc:   func() T { return singleton },
+		factoryEvents: map[string][]any{},
+	}
+}
+
 // NewFactory creates new service factory with factory func.
 func NewFactory(factoryFn any, opts ...FactoryOpt) *Factory {
 	factory := &Factory{
