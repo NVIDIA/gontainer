@@ -62,9 +62,6 @@ func New(factories ...*Factory) (result Container, err error) {
 		}
 	}()
 
-	// Register container close event handler.
-	container.events.Subscribe(ContainerClose, container.Close)
-
 	// Register events broker instance in the registry.
 	eventsSingleton := NewFactory(func() Events { return container.events })
 	if err := container.registry.registerFactory(ctx, eventsSingleton); err != nil {
@@ -84,9 +81,6 @@ func New(factories ...*Factory) (result Container, err error) {
 
 // Container defines service container interface.
 type Container interface {
-	// Events returns events broker instance.
-	Events() Events
-
 	// Start initializes every service in the container.
 	Start() error
 
@@ -96,6 +90,9 @@ type Container interface {
 
 	// Done is closing after closing of all services.
 	Done() <-chan struct{}
+
+	// Events returns events broker instance.
+	Events() Events
 }
 
 // Optional defines optional service dependency.
@@ -121,25 +118,29 @@ type container struct {
 	registry registry
 }
 
-// Events returns events broker instance.
-func (c *container) Events() Events {
-	return c.events
-}
-
 // Start initializes every service in the container.
 func (c *container) Start() error {
 	// Trigger panic events in service container.
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			event := NewEvent(UnhandledPanic, recovered, string(debug.Stack()))
-			_ = c.events.Trigger(event)
+			_ = c.events.Trigger(NewEvent(UnhandledPanic, recovered, string(debug.Stack())))
 			panic(recovered)
 		}
 	}()
 
+	// Trigger container starting event.
+	if err := c.events.Trigger(NewEvent(ContainerStarting)); err != nil {
+		return fmt.Errorf("failed to trigger container starting event: %w", err)
+	}
+
 	// Start all factories in service container.
 	if err := c.registry.startFactories(); err != nil {
 		return fmt.Errorf("failed to start services in container: %w", err)
+	}
+
+	// Trigger container started event.
+	if err := c.events.Trigger(NewEvent(ContainerStarted)); err != nil {
+		return fmt.Errorf("failed to trigger container started event: %w", err)
 	}
 
 	return nil
@@ -151,19 +152,30 @@ func (c *container) Close() (err error) {
 	// Trigger panic events in service container.
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			event := NewEvent(UnhandledPanic, recovered, string(debug.Stack()))
-			_ = c.events.Trigger(event)
+			_ = c.events.Trigger(NewEvent(UnhandledPanic, recovered, string(debug.Stack())))
 			panic(recovered)
 		}
 	}()
 
 	// Init container close once.
 	c.closer.Do(func() {
+		// Trigger container closing event.
+		if err := c.events.Trigger(NewEvent(ContainerClosing)); err != nil {
+			err = fmt.Errorf("failed to trigger container closing event: %w", err)
+			return
+		}
+
 		// Close all spawned services in the registry.
 		err = c.registry.closeFactories()
 
 		// Close application context independently.
 		c.cancel()
+
+		// Trigger container closed event.
+		if err := c.events.Trigger(NewEvent(ContainerClosed)); err != nil {
+			err = fmt.Errorf("failed to trigger container closed event: %w", err)
+			return
+		}
 	})
 
 	// Await container close.
@@ -175,4 +187,9 @@ func (c *container) Close() (err error) {
 // Done is closing after closing of all services.
 func (c *container) Done() <-chan struct{} {
 	return c.ctx.Done()
+}
+
+// Events returns events broker instance.
+func (c *container) Events() Events {
+	return c.events
 }
