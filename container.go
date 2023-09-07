@@ -128,15 +128,35 @@ func (c *container) Events() Events {
 
 // Start initializes every service in the container.
 func (c *container) Start() error {
+	// Trigger panic events in service container.
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			event := NewEvent(UnhandledPanic, recovered, string(debug.Stack()))
+			_ = c.events.Trigger(event)
+			panic(recovered)
+		}
+	}()
+
+	// Start all factories in service container.
 	if err := c.registry.startFactories(); err != nil {
 		return fmt.Errorf("failed to start services in container: %w", err)
 	}
+
 	return nil
 }
 
 // Close closes service container with all services.
 // Blocks invocation until the container is closed.
 func (c *container) Close() (err error) {
+	// Trigger panic events in service container.
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			event := NewEvent(UnhandledPanic, recovered, string(debug.Stack()))
+			_ = c.events.Trigger(event)
+			panic(recovered)
+		}
+	}()
+
 	// Init container close once.
 	c.closer.Do(func() {
 		// Close all spawned services in the registry.
