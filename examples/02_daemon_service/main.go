@@ -19,6 +19,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -80,28 +81,6 @@ func main() {
 
 			return &MyServer{server}, nil
 		}),
-
-		// Factory function to define close-by-signal service.
-		gontainer.NewFactory(func(ctx context.Context, events gontainer.Events) (any, error) {
-			signalsChan := make(chan os.Signal, 0)
-			signal.Notify(signalsChan, syscall.SIGTERM, syscall.SIGINT)
-
-			return func() error {
-				for {
-					select {
-					case sigvar := <-signalsChan:
-						go func() {
-							log.Printf("Closing service container by signal: %v", sigvar)
-							event := gontainer.NewEvent(gontainer.ContainerClose)
-							_ = events.Trigger(event)
-						}()
-						return nil
-					case <-ctx.Done():
-						return nil
-					}
-				}
-			}, nil
-		}),
 	)
 
 	// Validate the container's proper handling of all factory functions.
@@ -126,6 +105,24 @@ func main() {
 	if err := container.Start(); err != nil {
 		log.Fatalf("Failed to start service container: %s", err)
 	}
+
+	// Initialize closing of container by signal.
+	go func() {
+		signalsChan := make(chan os.Signal, 0)
+		signal.Notify(signalsChan, syscall.SIGTERM, syscall.SIGINT)
+		for {
+			select {
+			case sigvar := <-signalsChan:
+				log.Printf("Closing service container by signal: %v", sigvar)
+				if err := container.Close(); err != nil {
+					log.Fatalf("Failed to close service container: %s", err)
+				}
+				return
+			case <-container.Done():
+				return
+			}
+		}
+	}()
 
 	// Wait for close by signal.
 	log.Println("Awaiting service container done")

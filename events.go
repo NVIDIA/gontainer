@@ -24,8 +24,17 @@ import (
 
 // Events declaration.
 const (
-	// ContainerClose declares container close intention.
-	ContainerClose = "ContainerClose"
+	// ContainerStarting declares container starting event.
+	ContainerStarting = "ContainerStarting"
+
+	// ContainerStarted declares container started event.
+	ContainerStarted = "ContainerStarted"
+
+	// ContainerClosing declares container closing event.
+	ContainerClosing = "ContainerClosing"
+
+	// ContainerClosed declares container closed event.
+	ContainerClosed = "ContainerClosed"
 
 	// UnhandledPanic declares unhandled panic in container.
 	UnhandledPanic = "UnhandledPanic"
@@ -43,7 +52,7 @@ type Events interface {
 // events implements Events interface.
 type events map[string][]Handler
 
-// Subscribe registers event handler.
+// Subscribe subscribes event handler to the event.
 func (e events) Subscribe(name string, handler any) {
 	var handlerWrapper Handler
 

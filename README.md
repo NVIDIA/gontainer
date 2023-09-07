@@ -127,8 +127,11 @@ Even more, subscription is working before `container.Start()` with the `gontaine
 
 #### Builtin events
 
-1. **ContainerClose**: listened to start closing of container, e.g. to close by OS signal.
-2. **UnhandledPanic**: produces when the panic is happening on container initialization. 
+1. **ContainerStarting**: produced when container start method invoked. Synchronous.
+1. **ContainerStarted**: produced when container start method finished. Synchronous.
+1. **ContainerClosing**: produced when container close method invoked. Synchronous.
+1. **ContainerClosed**: produced when container close method finished. Synchronous.
+1. **UnhandledPanic**: produced when the panic is happened on container init, start or close.
 
 ### Container Lifecycle
 
