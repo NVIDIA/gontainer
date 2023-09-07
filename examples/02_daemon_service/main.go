@@ -49,33 +49,41 @@ func (s *MyServer) Close() error {
 }
 
 func main() {
+	// Prepare external to container object.
+	logger := log.New(os.Stderr, "", log.LstdFlags)
+
 	// Initialize service container.
 	// Order of factories definition is non-restrictive.
 	log.Println("Creating service container instance")
 	container, err := gontainer.New(
+		// Inject singleton object.
+		gontainer.NewService(logger),
+
 		// Factory function to create an instance of MyService.
 		gontainer.NewFactory(func() *MyService {
 			return new(MyService)
 		}),
 
 		// Factory function to create an instance of MyServer.
-		gontainer.NewFactory(func(svc *MyService) (*MyServer, error) {
+		gontainer.NewFactory(func(logger *log.Logger, svc *MyService) (*MyServer, error) {
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				log.Printf("Received http request: %v", r.URL.Path)
 				_, _ = w.Write([]byte(svc.SayHello("Username")))
 			})
 
-			log.Println("Starting listening on: http://127.0.0.1:8080")
+			logger.Println("Starting listening on: http://127.0.0.1:8080")
 			socket, err := net.Listen("tcp", "127.0.0.1:8080")
 			if err != nil {
 				return nil, err
 			}
 
-			log.Println("Starting serving HTTP requests")
+			logger.Println("Starting serving HTTP requests")
 			server := &http.Server{Handler: handler}
 			go func() {
 				if err := server.Serve(socket); err != nil {
-					log.Printf("Error serving HTTP requests: %s", err)
+					if !errors.Is(err, http.ErrServerClosed) {
+						logger.Printf("Error serving HTTP requests: %s", err)
+					}
 				}
 			}()
 
