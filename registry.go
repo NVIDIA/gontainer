@@ -19,8 +19,10 @@ package gontainer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
+	"runtime"
 	"strings"
 	"unsafe"
 )
@@ -196,6 +198,11 @@ func (r *registry) findFactoryByOutType(serviceType reflect.Type) (*Factory, int
 
 // spawnFactory instantiates specified factory definition.
 func (r *registry) spawnFactory(factory *Factory) error {
+	// Protect from cyclic dependencies.
+	if getStackDepth() >= stackDepthLimit {
+		return errors.New("stack depth limit reached")
+	}
+
 	// Check factory already spawned.
 	if factory.factorySpawned {
 		return nil
@@ -330,3 +337,12 @@ func boxFactoryOutFunc(factoryOutValue reflect.Value) (reflect.Value, error) {
 
 // errorType contains reflection type for error variable.
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
+
+// getStackDepth returns current stack depth.
+func getStackDepth() int {
+	pc := make([]uintptr, stackDepthLimit+1)
+	return runtime.Callers(0, pc) - 1
+}
+
+// stackDepthLimit to protect from infinite recursion.
+const stackDepthLimit = 100
