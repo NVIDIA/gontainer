@@ -159,29 +159,33 @@ func (c *container) Close() (err error) {
 
 	// Init container close once.
 	c.closer.Do(func() {
+		// Close container context independently of errors.
+		// It will unblock all concurrent close calls.
+		defer c.cancel()
+
 		// Trigger container closing event.
-		if err := c.events.Trigger(NewEvent(ContainerClosing)); err != nil {
-			err = fmt.Errorf("failed to trigger container closing event: %w", err)
+		if triggerErr := c.events.Trigger(NewEvent(ContainerClosing)); triggerErr != nil {
+			err = fmt.Errorf("failed to trigger container closing event: %w", triggerErr)
 			return
 		}
 
 		// Close all spawned services in the registry.
-		err = c.registry.closeFactories()
-
-		// Close application context independently.
-		c.cancel()
+		if closeErr := c.registry.closeFactories(); closeErr != nil {
+			err = fmt.Errorf("failed to close factories: %w", closeErr)
+			return
+		}
 
 		// Trigger container closed event.
-		if err := c.events.Trigger(NewEvent(ContainerClosed)); err != nil {
-			err = fmt.Errorf("failed to trigger container closed event: %w", err)
+		if triggerErr := c.events.Trigger(NewEvent(ContainerClosed)); triggerErr != nil {
+			err = fmt.Errorf("failed to trigger container closed event: %w", triggerErr)
 			return
 		}
 	})
 
-	// Await container close.
+	// Await container close, e.g. from concurrent close call.
 	<-c.ctx.Done()
 
-	return err
+	return
 }
 
 // Done is closing after closing of all services.
