@@ -21,7 +21,7 @@ jobs:
         uses: tj-actions/coverage-badge-go@v1
         with:
           filename: coverage.out
-          green: 75
+          green: 70
       - uses: stefanzweifel/git-auto-commit-action@v4
         id: auto-commit-action
         with:
