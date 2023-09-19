@@ -20,8 +20,8 @@ jobs:
       - name: Coverage
         uses: tj-actions/coverage-badge-go@v1
         with:
-          green: 80
-        filename: coverage.out
+          filename: coverage.out
+          green: 75
       - uses: stefanzweifel/git-auto-commit-action@v4
         id: auto-commit-action
         with:
