@@ -21,6 +21,47 @@ Dependency injection service container for Golang projects.
 * [Basic script example](./examples/01_basic_usage/main.go) showing how to do something useful and then exit.
 * [Daemon service example](./examples/02_daemon_service/main.go) showing how to launch background services.
 
+## Quick Start
+
+1. Define an example service object.
+    ```go
+    // MyService performs some crucial tasks.
+    type MyService struct{}
+
+    // SayHello outputs a friendly greeting.
+    func (s *MyService) SayHello(name string) {
+	    log.Println("Hello,", name)
+    }
+   ```
+2. Define a service factory.
+   ```go
+   func NewMyService() *MyService {
+      return new(MyService)
+   }
+   ```
+3. Register service factories in the container.
+   ```go
+   container, err := gontainer.New(
+      // Define MyService factory in the container.
+      gontainer.NewFactory(NewMyService),
+   
+      // Here we can define another services depending on `*MyService`.
+      // All dependencies are declared using factory function args.
+      gontainer.NewFactory(func(service *MyService) {
+         service.SayHello("Username")
+      }),
+   )
+   if err != nil {
+      log.Fatalf("Failed to init service container: %s", err)
+   }
+   ```
+5. Start the container and launch all factories.
+   ```go
+   if err := container.Start(); err != nil {
+      log.Fatalf("Failed to start service container: %s", err)
+   }
+   ```
+
 ## Key Concepts
 
 ### Service Factories
