@@ -133,14 +133,17 @@ func (c *container) Start() error {
 		return fmt.Errorf("failed to trigger container starting event: %w", err)
 	}
 
-	// Start all factories in service container.
-	if err := c.registry.startFactories(); err != nil {
-		return fmt.Errorf("failed to start services in container: %w", err)
-	}
+	// Start all factories in the container.
+	startErr := c.registry.startFactories()
 
 	// Trigger container started event.
-	if err := c.events.Trigger(NewEvent(ContainerStarted)); err != nil {
+	if err := c.events.Trigger(NewEvent(ContainerStarted, startErr)); err != nil {
 		return fmt.Errorf("failed to trigger container started event: %w", err)
+	}
+
+	// Handle container start error.
+	if startErr != nil {
+		return fmt.Errorf("failed to start services in container: %w", startErr)
 	}
 
 	return nil
