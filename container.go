@@ -170,13 +170,14 @@ func (c *container) Close() (err error) {
 		}
 
 		// Close all spawned services in the registry.
-		if closeErr := c.registry.closeFactories(); closeErr != nil {
+		closeErr := c.registry.closeFactories()
+		if closeErr != nil {
 			err = fmt.Errorf("failed to close factories: %w", closeErr)
 			return
 		}
 
 		// Trigger container closed event.
-		if triggerErr := c.events.Trigger(NewEvent(ContainerClosed)); triggerErr != nil {
+		if triggerErr := c.events.Trigger(NewEvent(ContainerClosed, closeErr)); triggerErr != nil {
 			err = fmt.Errorf("failed to trigger container closed event: %w", triggerErr)
 			return
 		}
