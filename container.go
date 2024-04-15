@@ -45,12 +45,18 @@ func New(factories ...*Factory) (result Container, err error) {
 	// Prepare events broker instance.
 	events := events{}
 
+	// Prepare services registry instance.
+	registry := &registry{events: events}
+
+	// Prepare function invoker instance.
+	invoker := &invoker{ctx: ctx, registry: registry}
+
 	// Prepare service container instance.
 	container := &container{
 		ctx:      ctx,
 		cancel:   cancel,
 		events:   events,
-		registry: registry{events: events},
+		registry: registry,
 	}
 
 	// Trigger panic events in service container.
@@ -62,9 +68,13 @@ func New(factories ...*Factory) (result Container, err error) {
 		}
 	}()
 
+	// Register service container instance in the registry.
+	if err := container.registry.registerFactory(ctx, NewService[Invoker](invoker)); err != nil {
+		return nil, fmt.Errorf("failed to register service invoker: %w", err)
+	}
+
 	// Register events broker instance in the registry.
-	eventsSingleton := NewFactory(func() Events { return container.events })
-	if err := container.registry.registerFactory(ctx, eventsSingleton); err != nil {
+	if err := container.registry.registerFactory(ctx, NewService[Events](events)); err != nil {
 		return nil, fmt.Errorf("failed to register events service: %w", err)
 	}
 
@@ -114,8 +124,8 @@ type container struct {
 	// Events broker.
 	events Events
 
-	// Service registry.
-	registry registry
+	// Services registry.
+	registry *registry
 }
 
 // Start initializes every service in the container.

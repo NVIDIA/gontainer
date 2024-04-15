@@ -61,7 +61,7 @@ func (r *registry) registerFactory(ctx context.Context, factory *Factory) error 
 			r.events.Subscribe(event, func() error {
 				// Get or spawn event handler dependencies recursively.
 				handlerInTypes := factory.factoryEventsInTypes[handlerType]
-				handlerInValues, err := r.getSpawnedFactoryIns(factory.factoryCtx, handlerInTypes)
+				handlerInValues, err := r.getFactoryIns(factory.factoryCtx, handlerInTypes)
 				if err != nil {
 					return err
 				}
@@ -126,8 +126,8 @@ func (r *registry) closeFactories() error {
 	return nil
 }
 
-// getSpawnedFactoryIns spawns, boxes and returns specified factory input types.
-func (r *registry) getSpawnedFactoryIns(ctx context.Context, factoryInTypes []reflect.Type) ([]reflect.Value, error) {
+// getFactoryIns spawns, boxes and returns specified factory input types.
+func (r *registry) getFactoryIns(ctx context.Context, factoryInTypes []reflect.Type) ([]reflect.Value, error) {
 	factoryInValues := make([]reflect.Value, 0, len(factoryInTypes))
 	for _, origFactoryInType := range factoryInTypes {
 		// Handle specified `context.Context` as a special case.
@@ -209,7 +209,7 @@ func (r *registry) spawnFactory(factory *Factory) error {
 	}
 
 	// Get or spawn factory input values recursively.
-	factoryInValues, err := r.getSpawnedFactoryIns(factory.factoryCtx, factory.factoryInTypes)
+	factoryInValues, err := r.getFactoryIns(factory.factoryCtx, factory.factoryInTypes)
 	if err != nil {
 		return fmt.Errorf("failed to get factory input values: %w", err)
 	}
