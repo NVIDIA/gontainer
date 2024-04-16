@@ -48,6 +48,9 @@ func New(factories ...*Factory) (result Container, err error) {
 	// Prepare services registry instance.
 	registry := &registry{events: events}
 
+	// Prepare service resolver instance.
+	resolver := &resolver{ctx: ctx, registry: registry}
+
 	// Prepare service container instance.
 	container := &container{
 		ctx:      ctx,
@@ -68,6 +71,11 @@ func New(factories ...*Factory) (result Container, err error) {
 	// Register events broker instance in the registry.
 	if err := container.registry.registerFactory(ctx, NewService[Events](events)); err != nil {
 		return nil, fmt.Errorf("failed to register events service: %w", err)
+	}
+
+	// Register service resolver instance in the registry.
+	if err := container.registry.registerFactory(ctx, NewService[Resolver](resolver)); err != nil {
+		return nil, fmt.Errorf("failed to register service resolver: %w", err)
 	}
 
 	// Register provided factories in the registry.
