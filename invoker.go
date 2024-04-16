@@ -33,7 +33,7 @@ func (i *invoker) Invoke(fn any) ([]any, error) {
 	}
 
 	// Prepare function arguments values slice.
-	inValues, err := i.registry.getFactoryIns(i.ctx, inTypes)
+	inValues, err := i.registry.getFactoryInValues(i.ctx, inTypes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get arguments: %w", err)
 	}
