@@ -102,10 +102,11 @@ to the container.
 
 There are two predefined by container service types that may be used as a dependencies in the factory arguments.
 
-1. The `context.Context` service provides the per-service context, inherited from the root app context.
+1. The `context.Context` service provides the per-service context, inherited from the background context.
    This context is cancelled right before the service's `Close()` call and intended to be used with service functions.
 1. The `gontainer.Events` service provides the events broker. It can be used to send and receive events
    inside service container between services or outside from the client code.
+1. The `gontainer.Resolver` service provides a service to resolve dependencies dynamically.
 
 ### Services
 
