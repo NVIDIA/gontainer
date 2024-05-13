@@ -129,12 +129,20 @@ type container struct {
 }
 
 // Start initializes every service in the container.
-func (c *container) Start() error {
+func (c *container) Start() (resultErr error) {
 	// Trigger panic events in service container.
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			_ = c.events.Trigger(NewEvent(UnhandledPanic, recovered, string(debug.Stack())))
+			_ = c.Close()
 			panic(recovered)
+		}
+	}()
+
+	// Close service container immediately on error.
+	defer func() {
+		if resultErr != nil {
+			_ = c.Close()
 		}
 	}()
 
