@@ -108,12 +108,17 @@ func (r *registry) closeFactories() error {
 				// Get the factory result object interface.
 				service := factoryOutValue.Interface()
 
-				// Close service implementing closer interface.
+				// Close service implementing `Close() error` interface.
 				// Service functions will wait for the function return.
 				if closer, ok := service.(interface{ Close() error }); ok {
 					if err := closer.Close(); err != nil {
 						errs = append(errs, err.Error())
 					}
+				}
+
+				// Close service implementing `Close()` interface.
+				if closer, ok := service.(interface{ Close() }); ok {
+					closer.Close()
 				}
 			}
 		}
