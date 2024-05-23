@@ -113,7 +113,7 @@ There are two predefined by container service types that may be used as a depend
 A service is a functional component of the application, created and managed by a Service Factory. 
 The lifetime of a service is tied to the lifetime of the entire container.
 
-A service may optionally implement a `Close() error` method, which is called when the container is shutting down.
+A service may optionally implement a `Close() error` or just `Close()` method, which is called when the container is shutting down.
 
 ```go
 // MyService defines example service.
