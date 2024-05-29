@@ -100,7 +100,7 @@ func MyServiceFactory() {...}
 The factory function's role is to perform any necessary initializations and return a fully-configured service instance
 to the container.
 
-There are two predefined by container service types that may be used as a dependencies in the factory arguments.
+There are several predefined by container service types that may be used as a dependencies in the factory arguments.
 
 1. The `context.Context` service provides the per-service context, inherited from the background context.
    This context is cancelled right before the service's `Close()` call and intended to be used with service functions.
