@@ -35,3 +35,60 @@ func TestFactoryLoad(t *testing.T) {
 	equal(t, fmt.Sprint(factory.factoryEventsInTypes), "map[func():[]]")
 	equal(t, fmt.Sprint(factory.factoryEventsOutErrors), "map[func():false]")
 }
+
+// TestFactoryInfo tests factories info.
+func TestFactoryInfo(t *testing.T) {
+	type localType struct{}
+
+	localFunc := func(globalType) string {
+		return "string"
+	}
+
+	tests := []struct {
+		name  string
+		arg1  *Factory
+		want1 string
+		want2 string
+	}{
+		{
+			name:  "ServiceLocalType",
+			arg1:  NewService(localType{}),
+			want1: "Service[gontainer.localType]",
+			want2: "github.com/NVIDIA/gontainer",
+		},
+		{
+			name:  "ServiceGlobalType",
+			arg1:  NewService(globalType{}),
+			want1: "Service[gontainer.globalType]",
+			want2: "github.com/NVIDIA/gontainer",
+		},
+		{
+			name:  "FactoryLocalFunc",
+			arg1:  NewFactory(localFunc),
+			want1: "Factory[func(gontainer.globalType) string]",
+			want2: "github.com/NVIDIA/gontainer.TestFactoryInfo",
+		},
+		{
+			name:  "FactoryGlobalFunc",
+			arg1:  NewFactory(globalFunc),
+			want1: "Factory[func(string)]",
+			want2: "github.com/NVIDIA/gontainer",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got1 := tt.arg1.Name()
+			if got1 != tt.want1 {
+				t.Errorf("Factory.Name() got = %v, want %v", got1, tt.want1)
+			}
+			got2 := tt.arg1.Source()
+			if got2 != tt.want2 {
+				t.Errorf("Factory.Source() got = %v, want %v", got2, tt.want2)
+			}
+		})
+	}
+}
+
+type globalType struct{}
+
+func globalFunc(string) {}

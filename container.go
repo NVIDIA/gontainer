@@ -101,6 +101,12 @@ type Container interface {
 	// Done is closing after closing of all services.
 	Done() <-chan struct{}
 
+	// Factories returns all defined factories.
+	Factories() []*Factory
+
+	// Services returns all spawned services.
+	Services() []any
+
 	// Events returns events broker instance.
 	Events() Events
 }
@@ -120,6 +126,7 @@ type container struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	closer sync.Once
+	mutex  sync.Mutex
 
 	// Events broker.
 	events Events
@@ -130,6 +137,9 @@ type container struct {
 
 // Start initializes every service in the container.
 func (c *container) Start() (resultErr error) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	// Trigger panic events in service container.
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -170,6 +180,9 @@ func (c *container) Start() (resultErr error) {
 // Close closes service container with all services.
 // Blocks invocation until the container is closed.
 func (c *container) Close() (err error) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	// Trigger panic events in service container.
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -213,6 +226,35 @@ func (c *container) Close() (err error) {
 // Done is closing after closing of all services.
 func (c *container) Done() <-chan struct{} {
 	return c.ctx.Done()
+}
+
+// Factories returns all defined factories.
+func (c *container) Factories() []*Factory {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	return c.registry.factories
+}
+
+// Services returns all spawned services.
+func (c *container) Services() []any {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	select {
+	case <-c.ctx.Done():
+		return nil
+	default:
+		services := make([]any, 0, len(c.registry.factories))
+		for _, factory := range c.registry.factories {
+			if factory.factorySpawned {
+				for _, serviceValue := range factory.factoryOutValues {
+					services = append(services, serviceValue.Interface())
+				}
+			}
+		}
+		return services
+	}
 }
 
 // Events returns events broker instance.
