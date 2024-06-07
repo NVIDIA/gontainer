@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -41,12 +42,13 @@ func TestRegistryStartFactories(t *testing.T) {
 
 // TestRegistryCloseFactories tests corresponding registry method.
 func TestRegistryCloseFactories(t *testing.T) {
-	funcStarted, funcClosed := false, false
+	funcStarted := atomic.Bool{}
+	funcClosed := atomic.Bool{}
 	factory := NewFactory(func(ctx context.Context) any {
 		return func() error {
-			funcStarted = true
+			funcStarted.Store(true)
 			<-ctx.Done()
-			funcClosed = true
+			funcClosed.Store(true)
 			return nil
 		}
 	})
@@ -60,11 +62,11 @@ func TestRegistryCloseFactories(t *testing.T) {
 	// Let factory function start executing in the background.
 	time.Sleep(time.Millisecond)
 
-	equal(t, funcStarted, true)
-	equal(t, funcClosed, false)
+	equal(t, funcStarted.Load(), true)
+	equal(t, funcClosed.Load(), false)
 	equal(t, registry.closeFactories(), nil)
-	equal(t, funcStarted, true)
-	equal(t, funcClosed, true)
+	equal(t, funcStarted.Load(), true)
+	equal(t, funcClosed.Load(), true)
 }
 
 // TestIsNonEmptyInterface tests checking of argument to be non-empty interface.

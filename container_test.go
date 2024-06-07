@@ -2,15 +2,16 @@ package gontainer
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
 // TestContainerLifecycle tests container lifecycle.
 func TestContainerLifecycle(t *testing.T) {
-	factoryStarted := false
-	serviceStarted := false
-	serviceClosed := false
+	factoryStarted := atomic.Bool{}
+	serviceStarted := atomic.Bool{}
+	serviceClosed := atomic.Bool{}
 
 	container, err := New(
 		NewService(float64(100500)),
@@ -20,11 +21,11 @@ func TestContainerLifecycle(t *testing.T) {
 			equal(t, dep1, float64(100500))
 			equal(t, dep2, "string")
 			equal(t, dep3, 123)
-			factoryStarted = true
+			factoryStarted.Store(true)
 			return func() error {
-				serviceStarted = true
+				serviceStarted.Store(true)
 				<-ctx.Done()
-				serviceClosed = true
+				serviceClosed.Store(true)
 				return nil
 			}
 		}),
@@ -38,21 +39,22 @@ func TestContainerLifecycle(t *testing.T) {
 
 	// Start all factories in the container.
 	equal(t, container.Start(), nil)
-	equal(t, factoryStarted, true)
-	equal(t, serviceClosed, false)
+	equal(t, factoryStarted.Load(), true)
+	equal(t, serviceClosed.Load(), false)
 
 	// Assert factories and services.
 	equal(t, len(container.Factories()), 6)
 	equal(t, len(container.Services()), 7)
 
-	// Let async service function launch.
+	// Let factory function start executing in the background.
 	time.Sleep(time.Millisecond)
-	equal(t, serviceStarted, true)
-	equal(t, serviceClosed, false)
+
+	equal(t, serviceStarted.Load(), true)
+	equal(t, serviceClosed.Load(), false)
 
 	// Close all factories in the container.
 	equal(t, container.Close(), nil)
-	equal(t, serviceClosed, true)
+	equal(t, serviceClosed.Load(), true)
 
 	// Assert context is closed.
 	<-container.Done()
