@@ -56,6 +56,7 @@ func New(factories ...*Factory) (result Container, err error) {
 		ctx:      ctx,
 		cancel:   cancel,
 		events:   events,
+		resolver: resolver,
 		registry: registry,
 	}
 
@@ -109,6 +110,9 @@ type Container interface {
 
 	// Events returns events broker instance.
 	Events() Events
+
+	// Resolver returns service resolver instance.
+	Resolver() Resolver
 }
 
 // Optional defines optional service dependency.
@@ -130,6 +134,9 @@ type container struct {
 
 	// Events broker.
 	events Events
+
+	// Service resolver.
+	resolver Resolver
 
 	// Services registry.
 	registry *registry
@@ -259,5 +266,26 @@ func (c *container) Services() []any {
 
 // Events returns events broker instance.
 func (c *container) Events() Events {
-	return c.events
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	select {
+	case <-c.ctx.Done():
+		return nil
+	default:
+		return c.events
+	}
+}
+
+// Resolver returns service resolver instance.
+func (c *container) Resolver() Resolver {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	select {
+	case <-c.ctx.Done():
+		return nil
+	default:
+		return c.resolver
+	}
 }
