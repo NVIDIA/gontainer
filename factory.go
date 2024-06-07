@@ -22,12 +22,23 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"runtime"
+	"strings"
 )
+
+// FactoryFunc declares factory function.
+type FactoryFunc any
 
 // Factory declares service factory.
 type Factory struct {
 	// Factory function.
-	factoryFunc any
+	factoryFunc FactoryFunc
+
+	// Factory function name.
+	factoryName string
+
+	// Factory function location.
+	factorySource string
 
 	// Factory event handlers.
 	factoryEvents map[string][]any
@@ -73,6 +84,16 @@ type Factory struct {
 
 	// Factory event handlers output errors.
 	factoryEventsOutErrors map[reflect.Type]bool
+}
+
+// Name returns factory function name.
+func (f *Factory) Name() string {
+	return f.factoryName
+}
+
+// Source returns factory function source.
+func (f *Factory) Source() string {
+	return f.factorySource
 }
 
 // load initializes factory definition internal values.
@@ -162,16 +183,22 @@ type FactoryOpt func(*Factory)
 
 // NewService creates new service factory with predefined service.
 func NewService[T any](singleton T) *Factory {
+	dataType := reflect.TypeOf(&singleton).Elem()
 	return &Factory{
 		factoryFunc:   func() T { return singleton },
+		factoryName:   fmt.Sprintf("Service[%s]", dataType),
+		factorySource: dataType.PkgPath(),
 		factoryEvents: map[string][]any{},
 	}
 }
 
 // NewFactory creates new service factory with factory func.
 func NewFactory(factoryFn any, opts ...FactoryOpt) *Factory {
+	funcValue := reflect.ValueOf(factoryFn)
 	factory := &Factory{
 		factoryFunc:   factoryFn,
+		factoryName:   fmt.Sprintf("Factory[%s]", funcValue.Type()),
+		factorySource: getFuncSource(funcValue),
 		factoryEvents: map[string][]any{},
 	}
 	for _, opt := range opts {
@@ -185,4 +212,14 @@ func WithSubscribe(event string, handler any) FactoryOpt {
 	return func(factory *Factory) {
 		factory.factoryEvents[event] = append(factory.factoryEvents[event], handler)
 	}
+}
+
+// getFuncSource returns func source path.
+func getFuncSource(funcValue reflect.Value) string {
+	funcName := runtime.FuncForPC(funcValue.Pointer()).Name()
+	lastDot := strings.LastIndex(funcName, ".")
+	if lastDot == -1 {
+		return funcName
+	}
+	return funcName[:lastDot]
 }
