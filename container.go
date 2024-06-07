@@ -134,7 +134,7 @@ type container struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	closer sync.Once
-	mutex  sync.Mutex
+	mutex  sync.RWMutex
 
 	// Events broker.
 	events Events
@@ -148,9 +148,6 @@ type container struct {
 
 // Start initializes every service in the container.
 func (c *container) Start() (resultErr error) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
 	// Trigger panic events in service container.
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -166,6 +163,10 @@ func (c *container) Start() (resultErr error) {
 			_ = c.Close()
 		}
 	}()
+
+	// Acquire write lock.
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 
 	// Trigger container starting event.
 	if err := c.events.Trigger(NewEvent(ContainerStarting)); err != nil {
@@ -191,9 +192,6 @@ func (c *container) Start() (resultErr error) {
 // Close closes service container with all services.
 // Blocks invocation until the container is closed.
 func (c *container) Close() (err error) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
 	// Trigger panic events in service container.
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -201,6 +199,10 @@ func (c *container) Close() (err error) {
 			panic(recovered)
 		}
 	}()
+
+	// Acquire write lock.
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 
 	// Init container close once.
 	c.closer.Do(func() {
@@ -241,16 +243,18 @@ func (c *container) Done() <-chan struct{} {
 
 // Factories returns all defined factories.
 func (c *container) Factories() []*Factory {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	// Acquire read lock.
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
 
 	return c.registry.factories
 }
 
 // Services returns all spawned services.
 func (c *container) Services() []any {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	// Acquire read lock.
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
 
 	select {
 	case <-c.ctx.Done():
@@ -270,8 +274,9 @@ func (c *container) Services() []any {
 
 // Events returns events broker instance.
 func (c *container) Events() Events {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	// Acquire read lock.
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
 
 	select {
 	case <-c.ctx.Done():
@@ -283,8 +288,9 @@ func (c *container) Events() Events {
 
 // Resolver returns service resolver instance.
 func (c *container) Resolver() Resolver {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	// Acquire read lock.
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
 
 	select {
 	case <-c.ctx.Done():
@@ -296,6 +302,11 @@ func (c *container) Resolver() Resolver {
 
 // Invoke invokes specified function.
 func (c *container) Invoke(fn any) ([]any, error) {
+	// Acquire read lock.
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	// Get reflection of the fn.
 	fnValue := reflect.ValueOf(fn)
 	if fnValue.Kind() != reflect.Func {
 		return nil, fmt.Errorf("fn must be a function")
