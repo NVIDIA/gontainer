@@ -20,6 +20,7 @@ package gontainer
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"runtime/debug"
 	"sync"
 )
@@ -113,6 +114,9 @@ type Container interface {
 
 	// Resolver returns service resolver instance.
 	Resolver() Resolver
+
+	// Invoke invokes specified function.
+	Invoke(fn any) ([]any, error)
 }
 
 // Optional defines optional service dependency.
@@ -288,4 +292,31 @@ func (c *container) Resolver() Resolver {
 	default:
 		return c.resolver
 	}
+}
+
+// Invoke invokes specified function.
+func (c *container) Invoke(fn any) ([]any, error) {
+	fnValue := reflect.ValueOf(fn)
+	if fnValue.Kind() != reflect.Func {
+		return nil, fmt.Errorf("fn must be a function")
+	}
+
+	// Resolve function arguments.
+	fnInArgs := make([]reflect.Value, 0, fnValue.Type().NumIn())
+	for i := 0; i < fnValue.Type().NumIn(); i++ {
+		fnArgValue := reflect.New(fnValue.Type().In(i))
+		if err := c.resolver.Resolve(fnArgValue.Interface()); err != nil {
+			return nil, fmt.Errorf("failed to resolve dependency: %w", err)
+		}
+		fnInArgs = append(fnInArgs, fnArgValue.Elem())
+	}
+
+	// Convert function results.
+	fnOutArgs := fnValue.Call(fnInArgs)
+	results := make([]any, 0, len(fnOutArgs))
+	for _, fnOut := range fnOutArgs {
+		results = append(results, fnOut.Interface())
+	}
+
+	return results, nil
 }
