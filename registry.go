@@ -52,32 +52,6 @@ func (r *registry) registerFactory(ctx context.Context, factory *Factory) error 
 		}
 	}
 
-	// Register factory-level event handlers.
-	for event, handlerTypes := range factory.factoryEventsTypes {
-		for index, handlerType := range handlerTypes {
-			handlerValue := factory.factoryEventsValues[event][index]
-
-			// Register handler in events broker.
-			r.events.Subscribe(event, func() error {
-				// Get or spawn event handler dependencies recursively.
-				handlerInTypes := factory.factoryEventsInTypes[handlerType]
-				handlerInValues, err := r.getFactoryInValues(factory.factoryCtx, handlerInTypes)
-				if err != nil {
-					return err
-				}
-
-				// Invoke the handler with resolved dependencies.
-				handlerResults := handlerValue.Call(handlerInValues)
-				handlerOutError := factory.factoryEventsOutErrors[handlerType]
-				if handlerOutError && !handlerResults[0].IsNil() {
-					return handlerResults[0].Interface().(error)
-				}
-
-				return nil
-			})
-		}
-	}
-
 	// Register the factory in the registry.
 	r.factories = append(r.factories, factory)
 

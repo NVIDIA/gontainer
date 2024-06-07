@@ -16,7 +16,7 @@ func TestRegistryRegisterFactory(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	opts := WithSubscribe("test", func() {})
+	opts := WithMetadata("test", func() {})
 	factory := NewFactory(fun, opts)
 
 	registry := &registry{events: events{}}

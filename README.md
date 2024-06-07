@@ -167,7 +167,6 @@ to publish events to, and subscribe to events from, a centralized broker.
 
 This mechanism allows services to remain decoupled while still being able to interact through a centralized medium.
 In particular, the `gontainer.Events` service provides an interface to the events broker and can be injected as a dependency in any service factory.
-Even more, subscription is working before `container.Start()` with the `gontainer.WithSubscribe()` option, e.g. it can be used for config validation.
 
 #### Builtin events
 

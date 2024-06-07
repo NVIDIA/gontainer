@@ -13,7 +13,7 @@ func TestFactoryLoad(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	opts := WithSubscribe("test", func() {})
+	opts := WithMetadata("test", "value")
 	factory := NewFactory(fun, opts)
 
 	equal(t, factory.load(ctx), nil)
@@ -29,11 +29,7 @@ func TestFactoryLoad(t *testing.T) {
 	equal(t, fmt.Sprint(factory.factoryOutTypes), "[int bool]")
 	equal(t, factory.factoryOutError, true)
 	equal(t, len(factory.factoryOutValues), 0)
-	equal(t, len(factory.factoryEvents["test"]), 1)
-	equal(t, fmt.Sprint(factory.factoryEventsTypes), "map[test:[func()]]")
-	equal(t, fmt.Sprint(factory.factoryEventsValues), "map[test:[<func() Value>]]")
-	equal(t, fmt.Sprint(factory.factoryEventsInTypes), "map[func():[]]")
-	equal(t, fmt.Sprint(factory.factoryEventsOutErrors), "map[func():false]")
+	equal(t, factory.factoryMetadata["test"], "value")
 }
 
 // TestFactoryInfo tests factories info.
