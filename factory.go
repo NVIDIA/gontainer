@@ -29,6 +29,9 @@ import (
 // FactoryFunc declares factory function.
 type FactoryFunc any
 
+// FactoryMetadata declares factory metadata.
+type FactoryMetadata map[string]any
+
 // Factory declares service factory.
 type Factory struct {
 	// Factory function.
@@ -40,8 +43,8 @@ type Factory struct {
 	// Factory function location.
 	factorySource string
 
-	// Factory event handlers.
-	factoryEvents map[string][]any
+	// Factory metadata.
+	factoryMetadata FactoryMetadata
 
 	// Factory is loaded.
 	factoryLoaded bool
@@ -72,18 +75,6 @@ type Factory struct {
 
 	// Factory result values.
 	factoryOutValues []reflect.Value
-
-	// Factory event handlers types.
-	factoryEventsTypes map[string][]reflect.Type
-
-	// Factory event handlers values.
-	factoryEventsValues map[string][]reflect.Value
-
-	// Factory event handlers input types.
-	factoryEventsInTypes map[reflect.Type][]reflect.Type
-
-	// Factory event handlers output errors.
-	factoryEventsOutErrors map[reflect.Type]bool
 }
 
 // Name returns factory function name.
@@ -94,6 +85,11 @@ func (f *Factory) Name() string {
 // Source returns factory function source.
 func (f *Factory) Source() string {
 	return f.factorySource
+}
+
+// Metadata returns associated factory metadata.
+func (f *Factory) Metadata() FactoryMetadata {
+	return f.factoryMetadata
 }
 
 // load initializes factory definition internal values.
@@ -136,43 +132,6 @@ func (f *Factory) load(ctx context.Context) error {
 		}
 	}
 
-	// Prepare factory-level event handlers.
-	f.factoryEventsTypes = map[string][]reflect.Type{}
-	f.factoryEventsValues = map[string][]reflect.Value{}
-	f.factoryEventsInTypes = map[reflect.Type][]reflect.Type{}
-	f.factoryEventsOutErrors = map[reflect.Type]bool{}
-	for event, handlers := range f.factoryEvents {
-		for _, handler := range handlers {
-			// Get handler function type and value.
-			handlerType := reflect.TypeOf(handler)
-			handlerValue := reflect.ValueOf(handler)
-
-			// Check that handler in a function.
-			if handlerType.Kind() != reflect.Func {
-				return fmt.Errorf("invalid handler func: not a function: %s", handlerType)
-			}
-
-			// Check that handler function returns nothing or an error.
-			switch {
-			case handlerType.NumOut() == 0:
-			case handlerType.NumOut() == 1 && handlerType.Out(0) == errorType:
-			default:
-				return fmt.Errorf("invalid handler func: bad signature: %s", handlerType)
-			}
-
-			// Collect input types for the handler function.
-			handlerInTypes := make([]reflect.Type, 0, handlerType.NumIn())
-			for index := 0; index < handlerType.NumIn(); index++ {
-				handlerInTypes = append(handlerInTypes, handlerType.In(index))
-			}
-
-			f.factoryEventsTypes[event] = append(f.factoryEventsTypes[event], handlerType)
-			f.factoryEventsValues[event] = append(f.factoryEventsValues[event], handlerValue)
-			f.factoryEventsInTypes[handlerType] = handlerInTypes
-			f.factoryEventsOutErrors[handlerType] = handlerType.NumOut() == 1
-		}
-	}
-
 	// Save the factory load status.
 	f.factoryLoaded = true
 	return nil
@@ -185,10 +144,10 @@ type FactoryOpt func(*Factory)
 func NewService[T any](singleton T) *Factory {
 	dataType := reflect.TypeOf(&singleton).Elem()
 	return &Factory{
-		factoryFunc:   func() T { return singleton },
-		factoryName:   fmt.Sprintf("Service[%s]", dataType),
-		factorySource: dataType.PkgPath(),
-		factoryEvents: map[string][]any{},
+		factoryFunc:     func() T { return singleton },
+		factoryName:     fmt.Sprintf("Service[%s]", dataType),
+		factorySource:   dataType.PkgPath(),
+		factoryMetadata: FactoryMetadata{},
 	}
 }
 
@@ -196,10 +155,10 @@ func NewService[T any](singleton T) *Factory {
 func NewFactory(factoryFn any, opts ...FactoryOpt) *Factory {
 	funcValue := reflect.ValueOf(factoryFn)
 	factory := &Factory{
-		factoryFunc:   factoryFn,
-		factoryName:   fmt.Sprintf("Factory[%s]", funcValue.Type()),
-		factorySource: getFuncSource(funcValue),
-		factoryEvents: map[string][]any{},
+		factoryFunc:     factoryFn,
+		factoryName:     fmt.Sprintf("Factory[%s]", funcValue.Type()),
+		factorySource:   getFuncSource(funcValue),
+		factoryMetadata: FactoryMetadata{},
 	}
 	for _, opt := range opts {
 		opt(factory)
@@ -207,10 +166,10 @@ func NewFactory(factoryFn any, opts ...FactoryOpt) *Factory {
 	return factory
 }
 
-// WithSubscribe registers event handler for the factory.
-func WithSubscribe(event string, handler any) FactoryOpt {
+// WithMetadata adds metadata to the factory.
+func WithMetadata(key string, value any) FactoryOpt {
 	return func(factory *Factory) {
-		factory.factoryEvents[event] = append(factory.factoryEvents[event], handler)
+		factory.factoryMetadata[key] = value
 	}
 }
 
