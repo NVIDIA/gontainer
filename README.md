@@ -108,6 +108,42 @@ There are several predefined by container service types that may be used as a de
    inside service container between services or outside from the client code.
 1. The `gontainer.Resolver` service provides a service to resolve dependencies dynamically.
 
+### Container Interface
+
+```go
+// Container defines service container interface.
+type Container interface {
+	// Start initializes every service in the container.
+	Start() error
+
+	// Close closes service container with all services.
+	// Blocks invocation until the container is closed.
+	Close() error
+
+	// Done is closing after closing of all services.
+	Done() <-chan struct{}
+
+	// Factories returns all defined factories.
+	Factories() []*Factory
+
+	// Services returns all spawned services.
+	Services() []any
+
+	// Events returns events broker instance.
+	Events() Events
+
+	// Resolver returns service resolver instance.
+	// If container is not started, only requested services
+	// will be spawned on `resolver.Resolve(...)` call.
+	Resolver() Resolver
+
+	// Invoke invokes specified function.
+	// If container is not started, only requested services
+	// will be spawned to invoke the func.
+	Invoke(fn any) ([]any, error)
+}
+```
+
 ### Services
 
 A service is a functional component of the application, created and managed by a Service Factory. 
