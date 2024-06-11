@@ -3,6 +3,7 @@ package gontainer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"sync/atomic"
 	"testing"
@@ -40,6 +41,20 @@ func TestRegistryStartFactories(t *testing.T) {
 	equal(t, result.Interface(), true)
 }
 
+// TestRegistryStartWithErrors tests corresponding registry method.
+func TestRegistryStartWithErrors(t *testing.T) {
+	registry := &registry{}
+	equal(t, registry.registerFactory(context.Background(), NewFactory(func() (bool, error) {
+		return false, errors.New("failed to create new service")
+	})), nil)
+
+	err := registry.startFactories()
+	equal(t, err != nil, true)
+	equal(t, fmt.Sprint(err), `failed to spawn service of `+
+		`Factory[func() (bool, error)] from 'github.com/NVIDIA/gontainer': `+
+		`failed to invoke factory func: failed to create new service`)
+}
+
 // TestRegistryCloseFactories tests corresponding registry method.
 func TestRegistryCloseFactories(t *testing.T) {
 	funcStarted := atomic.Bool{}
@@ -67,6 +82,27 @@ func TestRegistryCloseFactories(t *testing.T) {
 	equal(t, registry.closeFactories(), nil)
 	equal(t, funcStarted.Load(), true)
 	equal(t, funcClosed.Load(), true)
+}
+
+// TestRegistryCloseWithError tests corresponding registry method.
+func TestRegistryCloseWithError(t *testing.T) {
+	ctx := context.Background()
+	registry := &registry{}
+
+	equal(t, registry.registerFactory(ctx, NewFactory(func(ctx context.Context) any {
+		return func() error { return errors.New("failed to close 1") }
+	})), nil)
+
+	equal(t, registry.registerFactory(ctx, NewFactory(func() any {
+		return func() error { return errors.New("failed to close 2") }
+	})), nil)
+
+	equal(t, registry.startFactories(), nil)
+	err := registry.closeFactories()
+	equal(t, err != nil, true)
+	equal(t, fmt.Sprint(err), `failed to close services: `+
+		`Factory[func() interface {}] from 'github.com/NVIDIA/gontainer': failed to close 2; `+
+		`Factory[func(context.Context) interface {}] from 'github.com/NVIDIA/gontainer': failed to close 1`)
 }
 
 // TestIsNonEmptyInterface tests checking of argument to be non-empty interface.
