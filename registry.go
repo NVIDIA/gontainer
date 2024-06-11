@@ -62,7 +62,10 @@ func (r *registry) registerFactory(ctx context.Context, factory *Factory) error 
 func (r *registry) startFactories() error {
 	for _, factory := range r.factories {
 		if err := r.spawnFactory(factory); err != nil {
-			return fmt.Errorf("failed to spawn factory '%s': %w", factory.factoryType, err)
+			return fmt.Errorf(
+				"failed to spawn service of %s from '%s': %w",
+				factory.Name(), factory.Source(), err,
+			)
 		}
 	}
 
@@ -86,7 +89,10 @@ func (r *registry) closeFactories() error {
 				// Service functions will wait for the function return.
 				if closer, ok := service.(interface{ Close() error }); ok {
 					if err := closer.Close(); err != nil {
-						errs = append(errs, err.Error())
+						errs = append(errs, fmt.Sprintf(
+							"%s from '%s': %s",
+							factory.Name(), factory.Source(), err.Error(),
+						))
 					}
 				}
 
@@ -206,7 +212,7 @@ func (r *registry) spawnFactory(factory *Factory) error {
 	// Handle factory output error if present.
 	if factory.factoryOutError && !factoryErrorValue.IsNil() {
 		err, _ := factoryErrorValue.Interface().(error)
-		return fmt.Errorf("failed to call factory: %w", err)
+		return fmt.Errorf("failed to invoke factory func: %w", err)
 	}
 
 	// Handle factory out functions as regular objects.

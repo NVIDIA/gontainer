@@ -62,7 +62,7 @@ func TestFactoryInfo(t *testing.T) {
 			name:  "FactoryLocalFunc",
 			arg1:  NewFactory(localFunc),
 			want1: "Factory[func(gontainer.globalType) string]",
-			want2: "github.com/NVIDIA/gontainer.TestFactoryInfo",
+			want2: "github.com/NVIDIA/gontainer",
 		},
 		{
 			name:  "FactoryGlobalFunc",

@@ -175,10 +175,30 @@ func WithMetadata(key string, value any) FactoryOpt {
 
 // getFuncSource returns func source path.
 func getFuncSource(funcValue reflect.Value) string {
-	funcName := runtime.FuncForPC(funcValue.Pointer()).Name()
-	lastDot := strings.LastIndex(funcName, ".")
-	if lastDot == -1 {
-		return funcName
+	fullFuncName := runtime.FuncForPC(funcValue.Pointer()).Name()
+	funcPackage, _ := splitFuncName(fullFuncName)
+	return funcPackage
+}
+
+// splitFuncName splits specified func name to package and a name.
+func splitFuncName(funcFullName string) (string, string) {
+	// Split the full function name with package by dots.
+	fullNameChunks := strings.Split(funcFullName, ".")
+	if len(fullNameChunks) < 2 {
+		return "", funcFullName
 	}
-	return funcName[:lastDot]
+
+	// Find the index of the last element containing "/".
+	lastPackageChunkIndex := len(fullNameChunks) - 1
+	for ; lastPackageChunkIndex >= 0; lastPackageChunkIndex-- {
+		// Is this chunk the rightest part of a package name with dots?
+		if strings.Contains(fullNameChunks[lastPackageChunkIndex], "/") {
+			break
+		}
+	}
+
+	// Prepare package name and function name.
+	packageName := strings.Join(fullNameChunks[:lastPackageChunkIndex+1], ".")
+	funcName := strings.Join(fullNameChunks[lastPackageChunkIndex+1:], ".")
+	return packageName, funcName
 }
