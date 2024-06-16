@@ -47,6 +47,7 @@ func (i *invoker) Invoke(fn any) (InvokeResult, error) {
 			if fnOut.Type().Implements(errorType) {
 				// Use the value as an error.
 				result.err = fnOut.Interface().(error)
+				break
 			}
 		}
 
