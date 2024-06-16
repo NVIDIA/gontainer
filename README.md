@@ -204,7 +204,7 @@ to publish events to, and subscribe to events from, a centralized broker.
 This mechanism allows services to remain decoupled while still being able to interact through a centralized medium.
 In particular, the `gontainer.Events` service provides an interface to the events broker and can be injected as a dependency in any service factory.
 
-#### Builtin events
+### Container Events
 
 1. **ContainerStarting**: produced when container start method invoked. Synchronous.
 1. **ContainerStarted**: produced when container start method finished. Synchronous.
@@ -215,8 +215,7 @@ In particular, the `gontainer.Events` service provides an interface to the event
 ### Container Lifecycle
 
 1. **New**: The container is instantiated, and the reflection parsing of service factories is completed. The container ensures that service dependencies are resolved.
-1. **Subscription**: Factories may subscribe to the corresponding events via the Events Broker.
-1. **Start**: Service factories are called to instantiate all service instances in container.
-1. **Runtime**: The container, along with all its services, are now fully operational.
-1. **Termination**: Upon receiving a close call or event, the container will invoke the `Close()` method on each service that has one, in the reverse order of their initialization.
+1. **Starting**: Service factories are called to instantiate all service instances in container.
+1. **Started**: The container, along with all its services, are now fully operational.
+1. **Closing**: Upon receiving a close call or event, the container will invoke the `Close()` method on each service that has one, in the reverse order of their initialization.
 1. **Closed**: The container is fully terminated, and all resources have been released.
