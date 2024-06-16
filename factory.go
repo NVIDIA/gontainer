@@ -123,13 +123,18 @@ func (f *Factory) load(ctx context.Context) error {
 	f.factoryOutTypes = make([]reflect.Type, 0, f.factoryType.NumOut())
 	f.factoryOutValues = make([]reflect.Value, 0, f.factoryType.NumOut())
 	for index := 0; index < f.factoryType.NumOut(); index++ {
-		if index != f.factoryType.NumOut()-1 || f.factoryType.Out(index) != errorType {
-			// Register regular factory output type.
-			f.factoryOutTypes = append(f.factoryOutTypes, f.factoryType.Out(index))
-		} else {
-			// Register last output index as an error.
-			f.factoryOutError = true
+		// If it is the last return value.
+		if index == f.factoryType.NumOut()-1 {
+			// And type of the value is the error.
+			if f.factoryType.Out(index) == errorType {
+				// Register last output index as an error.
+				f.factoryOutError = true
+				break
+			}
 		}
+
+		// Register regular factory output type.
+		f.factoryOutTypes = append(f.factoryOutTypes, f.factoryType.Out(index))
 	}
 
 	// Save the factory load status.

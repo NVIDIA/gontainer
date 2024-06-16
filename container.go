@@ -20,7 +20,6 @@ package gontainer
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"runtime/debug"
 	"sync"
 )
@@ -52,12 +51,16 @@ func New(factories ...*Factory) (result Container, err error) {
 	// Prepare service resolver instance.
 	resolver := &resolver{ctx: ctx, registry: registry}
 
+	// Prepare function invoker instance.
+	invoker := &invoker{resolver: resolver}
+
 	// Prepare service container instance.
 	container := &container{
 		ctx:      ctx,
 		cancel:   cancel,
 		events:   events,
 		resolver: resolver,
+		invoker:  invoker,
 		registry: registry,
 	}
 
@@ -78,6 +81,11 @@ func New(factories ...*Factory) (result Container, err error) {
 	// Register service resolver instance in the registry.
 	if err := container.registry.registerFactory(ctx, NewService[Resolver](resolver)); err != nil {
 		return nil, fmt.Errorf("failed to register service resolver: %w", err)
+	}
+
+	// Register function invoker instance in the registry.
+	if err := container.registry.registerFactory(ctx, NewService[Invoker](invoker)); err != nil {
+		return nil, fmt.Errorf("failed to register function invoker: %w", err)
 	}
 
 	// Register provided factories in the registry.
@@ -115,8 +123,8 @@ type Container interface {
 	// Resolver returns service resolver instance.
 	Resolver() Resolver
 
-	// Invoke invokes specified function.
-	Invoke(fn any) ([]any, error)
+	// Invoker returns function invoker instance.
+	Invoker() Invoker
 }
 
 // Optional defines optional service dependency.
@@ -141,6 +149,9 @@ type container struct {
 
 	// Service resolver.
 	resolver Resolver
+
+	// Function invoker.
+	invoker Invoker
 
 	// Services registry.
 	registry *registry
@@ -300,34 +311,16 @@ func (c *container) Resolver() Resolver {
 	}
 }
 
-// Invoke invokes specified function.
-func (c *container) Invoke(fn any) ([]any, error) {
+// Invoker returns function invoker instance.
+func (c *container) Invoker() Invoker {
 	// Acquire read lock.
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
-	// Get reflection of the fn.
-	fnValue := reflect.ValueOf(fn)
-	if fnValue.Kind() != reflect.Func {
-		return nil, fmt.Errorf("fn must be a function")
+	select {
+	case <-c.ctx.Done():
+		return nil
+	default:
+		return c.invoker
 	}
-
-	// Resolve function arguments.
-	fnInArgs := make([]reflect.Value, 0, fnValue.Type().NumIn())
-	for i := 0; i < fnValue.Type().NumIn(); i++ {
-		fnArgValue := reflect.New(fnValue.Type().In(i))
-		if err := c.resolver.Resolve(fnArgValue.Interface()); err != nil {
-			return nil, fmt.Errorf("failed to resolve dependency: %w", err)
-		}
-		fnInArgs = append(fnInArgs, fnArgValue.Elem())
-	}
-
-	// Convert function results.
-	fnOutArgs := fnValue.Call(fnInArgs)
-	results := make([]any, 0, len(fnOutArgs))
-	for _, fnOut := range fnOutArgs {
-		results = append(results, fnOut.Interface())
-	}
-
-	return results, nil
 }
