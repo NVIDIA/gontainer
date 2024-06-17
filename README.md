@@ -155,9 +155,9 @@ type Container interface {
 	// will be spawned on `resolver.Resolve(...)` call.
 	Resolver() Resolver
 
-    // Resolver returns function invoker instance.
-    // If container is not started, only requested services
-    // will be spawned to invoke the func.
+	// Resolver returns function invoker instance.
+	// If container is not started, only requested services
+	// will be spawned to invoke the func.
 	Invoker() Invoker
 }
 ```
