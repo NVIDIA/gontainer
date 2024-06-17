@@ -61,6 +61,23 @@ Dependency injection service container for Golang projects.
       log.Fatalf("Failed to start service container: %s", err)
    }
    ```
+   
+6. Alternatively to eager start with a `Start()` call it is possible to use `Resolver` or `Invoker` service. It will spawn only explicitly requested services. 
+   ```go
+   var MyService myService
+   if err := container.Resolver().Resolve(&MyService); err != nil {
+       log.Fatalf("Failed to resolve MyService dependency: %s", err)
+   }
+   myServise.DoSomething()
+   ```
+   or
+   ```go
+   if err := container.Invoker().Invoke(func(myService &MyService) {
+       myServise.DoSomething()
+   }); err != nil {
+       log.Fatalf("Failed to invoke a function: %s", err)
+   }
+   ```
 
 ## Key Concepts
 
@@ -107,6 +124,7 @@ There are several predefined by container service types that may be used as a de
 1. The `gontainer.Events` service provides the events broker. It can be used to send and receive events
    inside service container between services or outside from the client code.
 1. The `gontainer.Resolver` service provides a service to resolve dependencies dynamically.
+1. The `gontainer.Invoker` service provides a service to invoke functions dynamically.
 
 ### Container Interface
 
@@ -137,10 +155,10 @@ type Container interface {
 	// will be spawned on `resolver.Resolve(...)` call.
 	Resolver() Resolver
 
-	// Invoke invokes specified function.
+	// Invoker returns function invoker instance.
 	// If container is not started, only requested services
 	// will be spawned to invoke the func.
-	Invoke(fn any) ([]any, error)
+	Invoker() Invoker
 }
 ```
 

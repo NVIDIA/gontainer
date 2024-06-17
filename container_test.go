@@ -34,7 +34,7 @@ func TestContainerLifecycle(t *testing.T) {
 	equal(t, container == nil, false)
 
 	// Assert factories and services.
-	equal(t, len(container.Factories()), 6)
+	equal(t, len(container.Factories()), 7)
 	equal(t, len(container.Services()), 0)
 
 	// Start all factories in the container.
@@ -43,8 +43,8 @@ func TestContainerLifecycle(t *testing.T) {
 	equal(t, serviceClosed.Load(), false)
 
 	// Assert factories and services.
-	equal(t, len(container.Factories()), 6)
-	equal(t, len(container.Services()), 7)
+	equal(t, len(container.Factories()), 7)
+	equal(t, len(container.Services()), 8)
 
 	// Let factory function start executing in the background.
 	time.Sleep(time.Millisecond)
@@ -60,6 +60,6 @@ func TestContainerLifecycle(t *testing.T) {
 	<-container.Done()
 
 	// Assert factories and services.
-	equal(t, len(container.Factories()), 6)
+	equal(t, len(container.Factories()), 7)
 	equal(t, len(container.Services()), 0)
 }
