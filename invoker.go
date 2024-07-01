@@ -45,8 +45,8 @@ func (i *invoker) Invoke(fn any) (InvokeResult, error) {
 		if index == len(fnOutArgs)-1 {
 			// And type of the value is the error.
 			if fnOut.Type().Implements(errorType) {
-				// Use the value as an error.
-				result.err = fnOut.Interface().(error)
+				// Use the value as an error. Perform safe type conversion to avoid panics.
+				result.err, _ = fnOut.Interface().(error)
 			}
 		}
 

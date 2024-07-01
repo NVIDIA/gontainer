@@ -66,6 +66,16 @@ func TestInvokerService(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name:   "ReturnNilError",
+			haveFn: func(var1 string, var2 int) error { return nil },
+			wantFn: func(t *testing.T, value InvokeResult) {
+				equal(t, len(value.Values()), 1)
+				equal(t, value.Values()[0], nil)
+				equal(t, value.Error(), nil)
+			},
+			wantErr: false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
