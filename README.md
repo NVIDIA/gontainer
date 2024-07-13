@@ -151,7 +151,7 @@ func (s *MyService) Close() error {
 
 ### Service Functions
 
-The **Service Function** is a specialized form of service optimized for simpler tasks. Instead of returning an concrete
+The **Service Function** is a specialized form of service optimized for simpler tasks. Instead of returning a concrete
 type object or an interface, the service factory returns a function that conforms to `func() error` type.
 
 The function serves two primary roles:
@@ -176,6 +176,7 @@ In this design, the factory function is responsible for receiving the context. T
 needs to close, allowing the function to terminate gracefully.
 
 Errors returned by the function are processed as if they were errors returned by a standard `Close()` method to the container.
+This means the container will synchronously wait until a service function returns an error or nil before closing the next services.
 
 ### Events Broker
 
