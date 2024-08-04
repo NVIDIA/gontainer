@@ -96,7 +96,7 @@ func (em *events) callTypedHandler(handler reflect.Value, args []any) error {
 		if !eventArgType.AssignableTo(handlerArgType) {
 			return fmt.Errorf(
 				"%w: type '%s' is not assignable to '%s' (index %d)",
-				HandlerTypeMismatchError, eventArgType, handlerArgType, index,
+				HandlerArgTypeMismatchError, eventArgType, handlerArgType, index,
 			)
 		}
 		handlerInArgs = append(handlerInArgs, reflect.ValueOf(eventArg))
@@ -163,5 +163,5 @@ func (e *event) Args() []any { return e.args }
 // anySliceType contains reflection type for any slice variable.
 var anySliceType = reflect.TypeOf((*[]any)(nil)).Elem()
 
-// HandlerTypeMismatchError declares handler type mismatch error.
-var HandlerTypeMismatchError = errors.New("handler type mismatch")
+// HandlerArgTypeMismatchError declares handler argument type mismatch error.
+var HandlerArgTypeMismatchError = errors.New("handler argument type mismatch")
