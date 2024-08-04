@@ -24,9 +24,6 @@ import (
 	"sync"
 )
 
-// HandlerTypeMismatchError declares handler type mismatch error.
-var HandlerTypeMismatchError = errors.New("handler type mismatch")
-
 // Events declares event broker type.
 type Events interface {
 	// Subscribe registers event handler.
@@ -165,3 +162,6 @@ func (e *event) Args() []any { return e.args }
 
 // anySliceType contains reflection type for any slice variable.
 var anySliceType = reflect.TypeOf((*[]any)(nil)).Elem()
+
+// HandlerTypeMismatchError declares handler type mismatch error.
+var HandlerTypeMismatchError = errors.New("handler type mismatch")
