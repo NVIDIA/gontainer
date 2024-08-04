@@ -20,68 +20,118 @@ package gontainer
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"sync"
 )
 
-// Events declaration.
-const (
-	// ContainerStarting declares container starting event.
-	ContainerStarting = "ContainerStarting"
-
-	// ContainerStarted declares container started event.
-	ContainerStarted = "ContainerStarted"
-
-	// ContainerClosing declares container closing event.
-	ContainerClosing = "ContainerClosing"
-
-	// ContainerClosed declares container closed event.
-	ContainerClosed = "ContainerClosed"
-
-	// UnhandledPanic declares unhandled panic in container.
-	UnhandledPanic = "UnhandledPanic"
-)
+// HandlerTypeMismatchError declares handler type mismatch error.
+var HandlerTypeMismatchError = errors.New("handler type mismatch")
 
 // Events declares event broker type.
 type Events interface {
 	// Subscribe registers event handler.
-	Subscribe(name string, handler any)
+	Subscribe(name string, handlerFn any)
 
 	// Trigger triggers specified event handlers.
 	Trigger(event Event) error
 }
 
 // events implements Events interface.
-type events map[string][]Handler
+type events struct {
+	mutex  sync.RWMutex
+	events map[string][]handler
+}
 
 // Subscribe subscribes event handler to the event.
-func (e events) Subscribe(name string, handler any) {
-	var handlerWrapper Handler
+func (em *events) Subscribe(name string, handlerFn any) {
+	em.mutex.Lock()
+	defer em.mutex.Unlock()
 
-	// Infer event handler signature.
-	switch handler := handler.(type) {
-	case func():
-		handlerWrapper = func(...any) error { handler(); return nil }
-	case func(...any):
-		handlerWrapper = func(args ...any) error { handler(args...); return nil }
-	case func() error:
-		handlerWrapper = func(...any) error { return handler() }
-	case func(...any) error:
-		handlerWrapper = func(args ...any) error { return handler(args...) }
-	default:
-		panic(fmt.Sprintf("unexpected event handler type: %T", handler))
+	// Validate event handler type.
+	handlerValue := reflect.ValueOf(handlerFn)
+	handlerType := handlerValue.Type()
+	if handlerType.Kind() != reflect.Func {
+		panic(fmt.Sprintf("unexpected event handler type: %T", handlerFn))
 	}
 
-	e[name] = append(e[name], handlerWrapper)
+	// Validate event handler output signature.
+	switch {
+	case handlerType.NumOut() == 0:
+	case handlerType.NumOut() == 1 && handlerType.Out(0).Implements(errorType):
+	default:
+		panic(fmt.Sprintf("unexpected event handler signature: %T", handlerFn))
+	}
+
+	// Register event handler function.
+	if handlerType.NumIn() == 1 && handlerType.In(0) == anySliceType {
+		em.events[name] = append(em.events[name], func(event Event) error {
+			return em.callAnyVarHandler(handlerValue, event.Args())
+		})
+	} else {
+		em.events[name] = append(em.events[name], func(event Event) error {
+			return em.callTypedHandler(handlerValue, event.Args())
+		})
+	}
 }
 
 // Trigger triggers specified event handlers.
-func (e events) Trigger(event Event) error {
-	errs := make([]error, 0, len(e[event.Name()]))
-	for _, handler := range e[event.Name()] {
-		if err := handler(event.Args()...); err != nil {
+func (em *events) Trigger(event Event) error {
+	em.mutex.RLock()
+	defer em.mutex.RUnlock()
+
+	errs := make([]error, 0, len(em.events[event.Name()]))
+	for _, handler := range em.events[event.Name()] {
+		if err := handler(event); err != nil {
 			errs = append(errs, err)
 		}
 	}
+
 	return errors.Join(errs...)
+}
+
+// callTypedHandler calls `func(TypeA, TypeB, TypeC) [error]` event handler.
+func (em *events) callTypedHandler(handler reflect.Value, args []any) error {
+	// Prepare slice of in arguments for handler.
+	handlerInArgs := make([]reflect.Value, 0, handler.Type().NumIn())
+	for index, eventArg := range args {
+		eventArgType := reflect.TypeOf(eventArg)
+		handlerArgType := handler.Type().In(index)
+		if !eventArgType.AssignableTo(handlerArgType) {
+			return fmt.Errorf(
+				"%w: type '%s' is not assignable to '%s' (index %d)",
+				HandlerTypeMismatchError, eventArgType, handlerArgType, index,
+			)
+		}
+		handlerInArgs = append(handlerInArgs, reflect.ValueOf(eventArg))
+	}
+
+	// Invoke original event handler function.
+	handlerOutArgs := handler.Call(handlerInArgs)
+	return em.getCallOutError(handlerOutArgs)
+}
+
+// callAnyVarHandler calls `func(...any) [error]` event handler.
+func (em *events) callAnyVarHandler(handler reflect.Value, args []any) error {
+	// Prepare slice of in arguments for handler.
+	handlerInArgs := make([]reflect.Value, 0, len(args))
+	for _, arg := range args {
+		handlerInArgs = append(handlerInArgs, reflect.ValueOf(arg))
+	}
+
+	// Invoke original event handler function.
+	handlerOutArgs := handler.Call(handlerInArgs)
+	return em.getCallOutError(handlerOutArgs)
+}
+
+func (em *events) getCallOutError(outArgs []reflect.Value) error {
+	if len(outArgs) == 1 {
+		// Use the value as an error.
+		// Ignore failed cast of nil error.
+		err, _ := outArgs[0].Interface().(error)
+		return err
+	}
+
+	return nil
 }
 
 // Event declares service container events.
@@ -95,11 +145,11 @@ type Event interface {
 
 // NewEvent returns new event instance.
 func NewEvent(name string, args ...any) Event {
-	return event{name: name, args: args}
+	return &event{name: name, args: args}
 }
 
-// Handler declares event handler function.
-type Handler func(args ...any) error
+// handler declares event handler function.
+type handler func(event Event) error
 
 // event wraps string event.
 type event struct {
@@ -108,7 +158,10 @@ type event struct {
 }
 
 // Name implements Event interface.
-func (e event) Name() string { return e.name }
+func (e *event) Name() string { return e.name }
 
 // Args implements Event interface.
-func (e event) Args() []any { return e.args }
+func (e *event) Args() []any { return e.args }
+
+// anySliceType contains reflection type for any slice variable.
+var anySliceType = reflect.TypeOf((*[]any)(nil)).Elem()
