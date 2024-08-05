@@ -200,13 +200,13 @@ To subscribe to an event, use the `Subscribe()` method. You can pass various typ
 
 - A handler that takes a variable number of any-typed arguments:
   ```go
-  events.Subscribe("TestEvent1", func(args ...any) {
+  events.Subscribe("Event1", func(args ...any) {
       // Handle the event with args slice.
   })
   ```
 - A handler with defined concrete argument types:
   ```go
-  ev.Subscribe("TestEvent3", func(x string, y int, z bool) {
+  ev.Subscribe("Event1", func(x string, y int, z bool) {
       // Handle the event with specific args.
   })
   ```
