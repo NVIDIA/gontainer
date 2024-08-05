@@ -196,15 +196,15 @@ events.Trigger(gontainer.NewEvent("Event1", event, arguments, here))
 
 #### Subscribing to Events
 
-To subscribe to an event, use the `Subscribe()` method. You can pass various types of handler functions, such as:
+To subscribe to an event, use the `Subscribe()` method. Two types of handler functions are supported:
 
-- A handler that takes a variable number of any-typed arguments:
+- A function that accepts a variable number of any-typed arguments:
   ```go
   events.Subscribe("Event1", func(args ...any) {
       // Handle the event with args slice.
   })
   ```
-- A handler with defined concrete argument types:
+- A function that accepts concrete argument types:
   ```go
   ev.Subscribe("Event1", func(x string, y int, z bool) {
       // Handle the event with specific args.
