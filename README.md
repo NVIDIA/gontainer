@@ -186,9 +186,9 @@ to publish events to, and subscribe to events from, a centralized broker.
 This mechanism allows services to remain decoupled while still being able to interact through a centralized medium.
 In particular, the `gontainer.Events` service provides an interface to the events broker and can be injected as a dependency in any service factory.
 
-#### Publishing Events
+#### Triggering Events
 
-To publish an event, use the Trigger method. Create an event using `NewEvent()` and pass the necessary arguments:
+To trigger an event, use the `Trigger()` method. Create an event using `NewEvent()` and pass the necessary arguments:
 
 ```go
 events.Trigger(gontainer.NewEvent("Event1", event, arguments, here))
@@ -196,7 +196,7 @@ events.Trigger(gontainer.NewEvent("Event1", event, arguments, here))
 
 #### Subscribing to Events
 
-To subscribe to an event, use the `Subscribe` method. You can pass various types of handler functions, such as:
+To subscribe to an event, use the `Subscribe()` method. You can pass various types of handler functions, such as:
 
 - A handler that takes a variable number of any-typed arguments:
   ```go
