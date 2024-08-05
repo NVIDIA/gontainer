@@ -90,8 +90,12 @@ func (em *events) Trigger(event Event) error {
 func (em *events) callTypedHandler(handler reflect.Value, args []any) error {
 	// Prepare slice of in arguments for handler.
 	handlerInArgs := make([]reflect.Value, 0, handler.Type().NumIn())
-	for index, eventArg := range args {
-		eventArgType := reflect.TypeOf(eventArg)
+
+	// Fill handler args with provided event args.
+	maxArgsLen := min(len(args), handler.Type().NumIn())
+	for index := 0; index < maxArgsLen; index++ {
+		eventArgType := reflect.TypeOf(args[index])
+		eventArgValue := reflect.ValueOf(args[index])
 		handlerArgType := handler.Type().In(index)
 		if !eventArgType.AssignableTo(handlerArgType) {
 			return fmt.Errorf(
@@ -99,7 +103,15 @@ func (em *events) callTypedHandler(handler reflect.Value, args []any) error {
 				HandlerArgTypeMismatchError, eventArgType, handlerArgType, index,
 			)
 		}
-		handlerInArgs = append(handlerInArgs, reflect.ValueOf(eventArg))
+		handlerInArgs = append(handlerInArgs, eventArgValue)
+	}
+
+	// Fill handler args with default type values.
+	if len(handlerInArgs) < handler.Type().NumIn() {
+		for index := len(handlerInArgs); index < handler.Type().NumIn(); index++ {
+			zeroValuePtr := reflect.New(handler.Type().In(index))
+			handlerInArgs = append(handlerInArgs, zeroValuePtr.Elem())
+		}
 	}
 
 	// Invoke original event handler function.
