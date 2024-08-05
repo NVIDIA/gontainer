@@ -210,7 +210,8 @@ To subscribe to an event, use the `Subscribe()` method. You can pass various typ
       // Handle the event with specific args.
   })
   ```
-  The **number of arguments** in the event and the handler can differ because handlers are designed to be flexible and can process varying numbers and types of arguments, allowing for greater versatility in handling different event scenarios.
+  - The **number of arguments** in the event and the handler can differ because handlers are designed to be flexible and can process varying numbers and types of arguments, allowing for greater versatility in handling different event scenarios.
+  - The **types of arguments** in the event and the handler must be assignable. Otherwise, an error will be returned from a `Trigger()` call.
   
 Every handler function could return an `error` which will be joined and returned from `Trigger()` call.
 
