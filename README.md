@@ -186,6 +186,35 @@ to publish events to, and subscribe to events from, a centralized broker.
 This mechanism allows services to remain decoupled while still being able to interact through a centralized medium.
 In particular, the `gontainer.Events` service provides an interface to the events broker and can be injected as a dependency in any service factory.
 
+#### Triggering Events
+
+To trigger an event, use the `Trigger()` method. Create an event using `NewEvent()` and pass the necessary arguments:
+
+```go
+events.Trigger(gontainer.NewEvent("Event1", event, arguments, here))
+```
+
+#### Subscribing to Events
+
+To subscribe to an event, use the `Subscribe()` method. Two types of handler functions are supported:
+
+- A function that accepts a variable number of any-typed arguments:
+  ```go
+  events.Subscribe("Event1", func(args ...any) {
+      // Handle the event with args slice.
+  })
+  ```
+- A function that accepts concrete argument types:
+  ```go
+  ev.Subscribe("Event1", func(x string, y int, z bool) {
+      // Handle the event with specific args.
+  })
+  ```
+  - The **number of arguments** in the event and the handler can differ because handlers are designed to be flexible and can process varying numbers and types of arguments, allowing for greater versatility in handling different event scenarios.
+  - The **types of arguments** in the event and the handler must be assignable. Otherwise, an error will be returned from a `Trigger()` call.
+  
+Every handler function could return an `error` which will be joined and returned from `Trigger()` call.
+
 ### Container Interface
 
 ```go
