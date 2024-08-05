@@ -95,7 +95,6 @@ func (em *events) callTypedHandler(handler reflect.Value, args []any) error {
 	maxArgsLen := min(len(args), handler.Type().NumIn())
 	for index := 0; index < maxArgsLen; index++ {
 		eventArgType := reflect.TypeOf(args[index])
-		eventArgValue := reflect.ValueOf(args[index])
 		handlerArgType := handler.Type().In(index)
 		if !eventArgType.AssignableTo(handlerArgType) {
 			return fmt.Errorf(
@@ -103,6 +102,7 @@ func (em *events) callTypedHandler(handler reflect.Value, args []any) error {
 				HandlerArgTypeMismatchError, eventArgType, handlerArgType, index,
 			)
 		}
+		eventArgValue := reflect.ValueOf(args[index])
 		handlerInArgs = append(handlerInArgs, eventArgValue)
 	}
 
