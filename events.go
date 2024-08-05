@@ -61,10 +61,12 @@ func (em *events) Subscribe(name string, handlerFn any) {
 
 	// Register event handler function.
 	if handlerType.NumIn() == 1 && handlerType.In(0) == anySliceType {
+		// Register a function that accepts a variable number of any arguments.
 		em.events[name] = append(em.events[name], func(event Event) error {
 			return em.callAnyVarHandler(handlerValue, event.Args())
 		})
 	} else {
+		// Register a function that accepts concrete argument types.
 		em.events[name] = append(em.events[name], func(event Event) error {
 			return em.callTypedHandler(handlerValue, event.Args())
 		})
