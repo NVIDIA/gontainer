@@ -96,15 +96,26 @@ func (em *events) callTypedHandler(handler reflect.Value, args []any) error {
 	// Fill handler args with provided event args.
 	maxArgsLen := min(len(args), handler.Type().NumIn())
 	for index := 0; index < maxArgsLen; index++ {
-		eventArgType := reflect.TypeOf(args[index])
-		handlerArgType := handler.Type().In(index)
-		if !eventArgType.AssignableTo(handlerArgType) {
-			return fmt.Errorf(
-				"%w: type '%s' is not assignable to '%s' (index %d)",
-				HandlerArgTypeMismatchError, eventArgType, handlerArgType, index,
-			)
-		}
 		eventArgValue := reflect.ValueOf(args[index])
+		handlerArgType := handler.Type().In(index)
+
+		// Convert untyped nil values to typed nils (zero value for pointer types).
+		if !eventArgValue.IsValid() && isNillableType(handlerArgType) {
+			eventArgValue = reflect.New(handlerArgType).Elem()
+		}
+
+		// Allow to pass only values which are not untyped nils.
+		if !eventArgValue.IsValid() {
+			return fmt.Errorf("%w: argument '%s' could not reveive type 'nil' (index %d)",
+				HandlerArgTypeMismatchError, handlerArgType, index)
+		}
+
+		// Allow to pass only assignable to handler arg type values.
+		if !eventArgValue.Type().AssignableTo(handlerArgType) {
+			return fmt.Errorf("%w: argument '%s' could not reveive type '%s' (index %d)",
+				HandlerArgTypeMismatchError, handlerArgType, eventArgValue.Type(), index)
+		}
+
 		handlerInArgs = append(handlerInArgs, eventArgValue)
 	}
 
@@ -179,3 +190,13 @@ var anySliceType = reflect.TypeOf((*[]any)(nil)).Elem()
 
 // HandlerArgTypeMismatchError declares handler argument type mismatch error.
 var HandlerArgTypeMismatchError = errors.New("handler argument type mismatch")
+
+// isNillableType returns true whether the specified type kind could accept nil.
+func isNillableType(typ reflect.Type) bool {
+	switch typ.Kind() {
+	case reflect.Ptr, reflect.Slice, reflect.Map, reflect.Chan, reflect.Interface:
+		return true
+	default:
+		return false
+	}
+}

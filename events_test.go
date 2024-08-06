@@ -1,6 +1,7 @@
 package gontainer
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 )
@@ -12,6 +13,8 @@ func TestEvents(t *testing.T) {
 	testEvent3Args := [][]any(nil)
 	testEvent4Args := [][]any(nil)
 	testEvent5Args := [][]any(nil)
+	testEvent6Args := [][]any(nil)
+	testEvent7Args := [][]any(nil)
 
 	ev := &events{events: make(map[string][]handler)}
 	ev.Subscribe("TestEvent1", func(args ...any) {
@@ -33,6 +36,12 @@ func TestEvents(t *testing.T) {
 		testEvent5Args = append(testEvent5Args, []any{x, y, z})
 		return nil
 	})
+	ev.Subscribe("TestEvent6", func(err *struct{}) {
+		testEvent6Args = append(testEvent6Args, []any{err})
+	})
+	ev.Subscribe("TestEvent7", func(err error) {
+		testEvent7Args = append(testEvent7Args, []any{err})
+	})
 
 	equal(t, ev.Trigger(NewEvent("TestEvent1", 1)), nil)
 	equal(t, ev.Trigger(NewEvent("TestEvent1", "x")), nil)
@@ -40,11 +49,19 @@ func TestEvents(t *testing.T) {
 	equal(t, ev.Trigger(NewEvent("TestEvent3", "x", 1, true)), nil)
 	equal(t, ev.Trigger(NewEvent("TestEvent4", "x", 1, true)), nil)
 	equal(t, ev.Trigger(NewEvent("TestEvent5", "x", 1)), nil)
+	equal(t, ev.Trigger(NewEvent("TestEvent6", nil)), nil)
+	equal(t, ev.Trigger(NewEvent("TestEvent6", (*struct{})(nil))), nil)
+	equal(t, ev.Trigger(NewEvent("TestEvent6", &struct{}{})), nil)
+	equal(t, ev.Trigger(NewEvent("TestEvent7", nil)), nil)
+	equal(t, ev.Trigger(NewEvent("TestEvent7", (error)(nil))), nil)
+	equal(t, ev.Trigger(NewEvent("TestEvent7", errors.New("error"))), nil)
 	equal(t, testEvent1Args, [][]any{{1}, {"x"}})
 	equal(t, testEvent2Args, [][]any{{true}})
 	equal(t, testEvent3Args, [][]any{{"x", 1, true}})
 	equal(t, testEvent4Args, [][]any{{"x", 1}})
 	equal(t, testEvent5Args, [][]any{{"x", 1, false}})
+	equal(t, testEvent6Args, [][]any{{(*struct{})(nil)}, {(*struct{})(nil)}, {&struct{}{}}})
+	equal(t, testEvent7Args, [][]any{{(error)(nil)}, {(error)(nil)}, {errors.New("error")}})
 }
 
 func equal(t *testing.T, a, b any) {
