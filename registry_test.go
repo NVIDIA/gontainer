@@ -20,7 +20,7 @@ func TestRegistryRegisterFactory(t *testing.T) {
 	opts := WithMetadata("test", func() {})
 	factory := NewFactory(fun, opts)
 
-	registry := &registry{events: events{}}
+	registry := &registry{}
 	equal(t, registry.registerFactory(ctx, factory), nil)
 	equal(t, registry.factories, []*Factory{factory})
 	equal(t, factory.factoryFunc == nil, false)
@@ -32,7 +32,7 @@ func TestRegistryStartFactories(t *testing.T) {
 	ctx := context.Background()
 	factory := NewFactory(func() bool { return true })
 
-	registry := &registry{events: events{}}
+	registry := &registry{}
 	equal(t, registry.registerFactory(ctx, factory), nil)
 	equal(t, registry.startFactories(), nil)
 	equal(t, factory.factorySpawned, true)

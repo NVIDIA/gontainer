@@ -24,6 +24,24 @@ import (
 	"sync"
 )
 
+// Events declaration.
+const (
+	// ContainerStarting declares container starting event.
+	ContainerStarting = "ContainerStarting"
+
+	// ContainerStarted declares container started event.
+	ContainerStarted = "ContainerStarted"
+
+	// ContainerClosing declares container closing event.
+	ContainerClosing = "ContainerClosing"
+
+	// ContainerClosed declares container closed event.
+	ContainerClosed = "ContainerClosed"
+
+	// UnhandledPanic declares unhandled panic in container.
+	UnhandledPanic = "UnhandledPanic"
+)
+
 // New returns new container instance with a set of configured services.
 // The `factories` specifies factories for services with dependency resolution.
 func New(factories ...*Factory) (result Container, err error) {
@@ -43,7 +61,10 @@ func New(factories ...*Factory) (result Container, err error) {
 	}()
 
 	// Prepare events broker instance.
-	events := events{}
+	events := &events{
+		mutex:  sync.RWMutex{},
+		events: make(map[string][]handler),
+	}
 
 	// Prepare services registry instance.
 	registry := &registry{events: events}
