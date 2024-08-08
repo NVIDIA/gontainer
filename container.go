@@ -206,7 +206,7 @@ func (c *container) Start() (resultErr error) {
 	}
 
 	// Start all factories in the container.
-	startErr := c.registry.startFactories()
+	startErr := c.registry.produceServices()
 
 	// Trigger container started event.
 	if err := c.events.Trigger(NewEvent(ContainerStarted, startErr)); err != nil {
@@ -249,7 +249,7 @@ func (c *container) Close() (err error) {
 		}
 
 		// Close all spawned services in the registry.
-		closeErr := c.registry.closeFactories()
+		closeErr := c.registry.closeServices()
 		if closeErr != nil {
 			err = fmt.Errorf("failed to close factories: %w", closeErr)
 			return
