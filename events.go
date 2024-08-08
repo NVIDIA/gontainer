@@ -106,14 +106,18 @@ func (em *events) callTypedHandler(handler reflect.Value, args []any) error {
 
 		// Allow to pass only values which are not untyped nils.
 		if !eventArgValue.IsValid() {
-			return fmt.Errorf("%w: argument '%s' could not reveive type 'nil' (index %d)",
-				ErrHandlerArgTypeMismatch, handlerArgType, index)
+			return fmt.Errorf(
+				"%w: argument '%s' could not reveive type 'nil' (index %d)",
+				ErrHandlerArgTypeMismatch, handlerArgType, index,
+			)
 		}
 
 		// Allow to pass only assignable to handler arg type values.
 		if !eventArgValue.Type().AssignableTo(handlerArgType) {
-			return fmt.Errorf("%w: argument '%s' could not reveive type '%s' (index %d)",
-				ErrHandlerArgTypeMismatch, handlerArgType, eventArgValue.Type(), index)
+			return fmt.Errorf(
+				"%w: argument '%s' could not reveive type '%s' (index %d)",
+				ErrHandlerArgTypeMismatch, handlerArgType, eventArgValue.Type(), index,
+			)
 		}
 
 		handlerInArgs = append(handlerInArgs, eventArgValue)
