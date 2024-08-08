@@ -107,13 +107,13 @@ func (em *events) callTypedHandler(handler reflect.Value, args []any) error {
 		// Allow to pass only values which are not untyped nils.
 		if !eventArgValue.IsValid() {
 			return fmt.Errorf("%w: argument '%s' could not reveive type 'nil' (index %d)",
-				HandlerArgTypeMismatchError, handlerArgType, index)
+				ErrHandlerArgTypeMismatch, handlerArgType, index)
 		}
 
 		// Allow to pass only assignable to handler arg type values.
 		if !eventArgValue.Type().AssignableTo(handlerArgType) {
 			return fmt.Errorf("%w: argument '%s' could not reveive type '%s' (index %d)",
-				HandlerArgTypeMismatchError, handlerArgType, eventArgValue.Type(), index)
+				ErrHandlerArgTypeMismatch, handlerArgType, eventArgValue.Type(), index)
 		}
 
 		handlerInArgs = append(handlerInArgs, eventArgValue)
@@ -188,9 +188,6 @@ func (e *event) Args() []any { return e.args }
 // anySliceType contains reflection type for any slice variable.
 var anySliceType = reflect.TypeOf((*[]any)(nil)).Elem()
 
-// HandlerArgTypeMismatchError declares handler argument type mismatch error.
-var HandlerArgTypeMismatchError = errors.New("handler argument type mismatch")
-
 // isNillableType returns true whether the specified type kind could accept nil.
 func isNillableType(typ reflect.Type) bool {
 	switch typ.Kind() {
@@ -200,3 +197,6 @@ func isNillableType(typ reflect.Type) bool {
 		return false
 	}
 }
+
+// ErrHandlerArgTypeMismatch declares handler argument type mismatch error.
+var ErrHandlerArgTypeMismatch = errors.New("handler argument type mismatch")

@@ -95,7 +95,7 @@ func (f *Factory) Metadata() FactoryMetadata {
 // load initializes factory definition internal values.
 func (f *Factory) load(ctx context.Context) error {
 	if f.factoryLoaded {
-		return errors.New("invalid factory func: already loaded")
+		return fmt.Errorf("%w: already loaded", ErrFactoryFuncInvalid)
 	}
 
 	// Prepare cancellable context for the factory services.
@@ -103,14 +103,14 @@ func (f *Factory) load(ctx context.Context) error {
 
 	// Check factory configured.
 	if f.factoryFunc == nil {
-		return errors.New("invalid factory func: no func specified")
+		return fmt.Errorf("%w: no func specified", ErrFactoryFuncInvalid)
 	}
 
 	// Validate factory type and signature.
 	f.factoryType = reflect.TypeOf(f.factoryFunc)
 	f.factoryValue = reflect.ValueOf(f.factoryFunc)
 	if f.factoryType.Kind() != reflect.Func {
-		return fmt.Errorf("invalid factory func: not a function: %s", f.factoryType)
+		return fmt.Errorf("%w: not a function: %s", ErrFactoryFuncInvalid, f.factoryType)
 	}
 
 	// Index factory input types from the function signature.
@@ -202,3 +202,6 @@ func splitFuncName(funcFullName string) (string, string) {
 	funcName := strings.Join(fullNameChunks[lastPackageChunkIndex+1:], ".")
 	return packageName, funcName
 }
+
+// ErrFactoryFuncInvalid declares invalid factory func error.
+var ErrFactoryFuncInvalid = errors.New("invalid factory func")

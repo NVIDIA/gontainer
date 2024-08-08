@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
-	"strings"
 	"unsafe"
 )
 
@@ -38,7 +37,7 @@ type registry struct {
 func (r *registry) registerFactory(ctx context.Context, factory *Factory) error {
 	// Load the factory definition.
 	if err := factory.load(ctx); err != nil {
-		return fmt.Errorf("factory load: %w", err)
+		return fmt.Errorf("%w: %w", ErrFactoryRegisterFailed, err)
 	}
 
 	// Validate loaded factory object for the registry.
@@ -46,8 +45,8 @@ func (r *registry) registerFactory(ctx context.Context, factory *Factory) error 
 		// Factories returning `any` may be duplicated.
 		if !isEmptyInterface(factoryOutType) {
 			// Validate uniqueness of the every factory output type.
-			if s, _ := r.findFactoryOf(factoryOutType); s != nil {
-				return fmt.Errorf("factory output duplicate: %s", factoryOutType)
+			if s, _ := r.findFactoryFor(factoryOutType); s != nil {
+				return fmt.Errorf("%w: service duplicate", ErrFactoryRegisterFailed)
 			}
 		}
 	}
@@ -74,7 +73,7 @@ func (r *registry) produceServices() error {
 
 // closeServices closes all services in the reverse order.
 func (r *registry) closeServices() error {
-	var errs []string
+	var errs []error
 	for index := len(r.sequence) - 1; index >= 0; index-- {
 		factory := r.sequence[index]
 		factory.ctxCancel()
@@ -89,10 +88,10 @@ func (r *registry) closeServices() error {
 				// Service functions will wait for the function return.
 				if closer, ok := service.(interface{ Close() error }); ok {
 					if err := closer.Close(); err != nil {
-						errs = append(errs, fmt.Sprintf(
-							"%s from '%s': %s",
-							factory.Name(), factory.Source(), err.Error(),
-						))
+						errs = append(errs, fmt.Errorf(
+							"%s from '%s': %w",
+							factory.Name(), factory.Source(), err),
+						)
 					}
 				}
 
@@ -105,7 +104,7 @@ func (r *registry) closeServices() error {
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("failed to close services: %s", strings.Join(errs, "; "))
+		return fmt.Errorf("failed to close services: %w", errors.Join(errs...))
 	}
 
 	return nil
@@ -118,7 +117,7 @@ func (r *registry) resolveService(serviceType reflect.Type) (reflect.Value, erro
 	realServiceType, isOptional := isOptionalBoxType(serviceType)
 
 	// Lookup factory definition by an output service type.
-	factory, factoryOutIndex := r.findFactoryOf(realServiceType)
+	factory, factoryOutIndex := r.findFactoryFor(realServiceType)
 
 	// Resolve of regular types leads to an error if the factory for the type is not registered
 	// in the container. Resolve of optional types works differently: if the optional type is
@@ -133,12 +132,12 @@ func (r *registry) resolveService(serviceType reflect.Type) (reflect.Value, erro
 		}
 
 		// Return an error for non-optional types.
-		return reflect.Value{}, fmt.Errorf("failed to get factory for type '%s'", serviceType)
+		return reflect.Value{}, fmt.Errorf("%w: '%s'", ErrServiceNotFound, serviceType)
 	}
 
 	// Handle found factory definition.
 	if err := r.spawnFactory(factory); err != nil {
-		return reflect.Value{}, fmt.Errorf("failed to spawn factory '%s': %w", factory.factoryType, err)
+		return reflect.Value{}, fmt.Errorf("%w: '%s': %w", ErrFactorySpawnFailed, factory.factoryType, err)
 	}
 
 	// Get resolved service value.
@@ -155,8 +154,8 @@ func (r *registry) resolveService(serviceType reflect.Type) (reflect.Value, erro
 	return serviceValue, nil
 }
 
-// findFactoryOf lookups for a factory by an output type in the registry.
-func (r *registry) findFactoryOf(serviceType reflect.Type) (*Factory, int) {
+// findFactoryFor lookups for a factory by an output type in the registry.
+func (r *registry) findFactoryFor(serviceType reflect.Type) (*Factory, int) {
 	// Lookup for a factory in the registry.
 	for _, factory := range r.factories {
 		for index, factoryOutType := range factory.factoryOutTypes {
@@ -182,7 +181,7 @@ func (r *registry) findFactoryOf(serviceType reflect.Type) (*Factory, int) {
 func (r *registry) spawnFactory(factory *Factory) error {
 	// Protect from cyclic dependencies.
 	if getStackDepth() >= stackDepthLimit {
-		return errors.New("stack depth limit reached")
+		return ErrStackDepthLimit
 	}
 
 	// Check factory already spawned.
@@ -203,7 +202,7 @@ func (r *registry) spawnFactory(factory *Factory) error {
 		// Resolve factory input dependency.
 		factoryInValue, err := r.resolveService(factoryInType)
 		if err != nil {
-			return fmt.Errorf("failed to get factory input values: %w", err)
+			return fmt.Errorf("failed to resolve service: %w", err)
 		}
 
 		factoryInValues = append(factoryInValues, factoryInValue)
@@ -222,7 +221,7 @@ func (r *registry) spawnFactory(factory *Factory) error {
 	// Handle factory output error if present.
 	if factory.factoryOutError && !factoryErrorValue.IsNil() {
 		err, _ := factoryErrorValue.Interface().(error)
-		return fmt.Errorf("failed to invoke factory func: %w", err)
+		return fmt.Errorf("failed to invoke factory: %w", err)
 	}
 
 	// Handle factory out functions as regular objects.
@@ -266,7 +265,7 @@ func isEmptyInterface(typ reflect.Type) bool {
 // isContextInterface returns true when argument is a context interface.
 func isContextInterface(typ reflect.Type) bool {
 	var ctx context.Context
-	var ctxType = reflect.TypeOf(&ctx).Elem()
+	ctxType := reflect.TypeOf(&ctx).Elem()
 	return typ.Kind() == reflect.Interface && typ.Implements(ctxType)
 }
 
@@ -340,3 +339,15 @@ func getStackDepth() int {
 
 // stackDepthLimit to protect from infinite recursion.
 const stackDepthLimit = 100
+
+// ErrFactoryRegisterFailed declares factory load failed error.
+var ErrFactoryRegisterFailed = errors.New("factory register failed")
+
+// ErrFactorySpawnFailed declares factory spawn failed error.
+var ErrFactorySpawnFailed = errors.New("factory spawn failed")
+
+// ErrServiceNotFound declares service not found error.
+var ErrServiceNotFound = errors.New("service not found")
+
+// ErrStackDepthLimit declares a reach of stack limit error.
+var ErrStackDepthLimit = errors.New("stack depth limit reached")

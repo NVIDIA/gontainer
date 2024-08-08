@@ -96,7 +96,7 @@ func New(factories ...*Factory) (result Container, err error) {
 
 	// Register events broker instance in the registry.
 	if err := container.registry.registerFactory(ctx, NewService[Events](events)); err != nil {
-		return nil, fmt.Errorf("failed to register events service: %w", err)
+		return nil, fmt.Errorf("failed to register events manager: %w", err)
 	}
 
 	// Register service resolver instance in the registry.
@@ -265,7 +265,7 @@ func (c *container) Close() (err error) {
 	// Await container close, e.g. from concurrent close call.
 	<-c.ctx.Done()
 
-	return
+	return nil
 }
 
 // Done is closing after closing of all services.
