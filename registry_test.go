@@ -52,7 +52,7 @@ func TestRegistryStartWithErrors(t *testing.T) {
 	equal(t, err != nil, true)
 	equal(t, fmt.Sprint(err), `failed to spawn services of `+
 		`Factory[func() (bool, error)] from 'github.com/NVIDIA/gontainer': `+
-		`failed to invoke factory: failed to create new service`)
+		`factory returned an error: failed to create new service`)
 }
 
 // TestRegistryCloseFactories tests corresponding registry method.

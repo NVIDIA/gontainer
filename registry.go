@@ -37,7 +37,7 @@ type registry struct {
 func (r *registry) registerFactory(ctx context.Context, factory *Factory) error {
 	// Load the factory definition.
 	if err := factory.load(ctx); err != nil {
-		return fmt.Errorf("%w: %w", ErrFactoryRegisterFailed, err)
+		return fmt.Errorf("failed to load factory: %w", err)
 	}
 
 	// Validate loaded factory object for the registry.
@@ -46,7 +46,7 @@ func (r *registry) registerFactory(ctx context.Context, factory *Factory) error 
 		if !isEmptyInterface(factoryOutType) {
 			// Validate uniqueness of the every factory output type.
 			if s, _ := r.findFactoryFor(factoryOutType); s != nil {
-				return fmt.Errorf("%w: service duplicate", ErrFactoryRegisterFailed)
+				return fmt.Errorf("service duplicate: %s", factoryOutType)
 			}
 		}
 	}
@@ -132,12 +132,12 @@ func (r *registry) resolveService(serviceType reflect.Type) (reflect.Value, erro
 		}
 
 		// Return an error for non-optional types.
-		return reflect.Value{}, fmt.Errorf("%w: '%s'", ErrServiceNotFound, serviceType)
+		return reflect.Value{}, fmt.Errorf("%w: '%s'", ErrServiceNotResolved, serviceType)
 	}
 
 	// Handle found factory definition.
 	if err := r.spawnFactory(factory); err != nil {
-		return reflect.Value{}, fmt.Errorf("%w: '%s': %w", ErrFactorySpawnFailed, factory.factoryType, err)
+		return reflect.Value{}, fmt.Errorf("failed to spawn factory '%s': %w", factory.factoryType, err)
 	}
 
 	// Get resolved service value.
@@ -181,7 +181,7 @@ func (r *registry) findFactoryFor(serviceType reflect.Type) (*Factory, int) {
 func (r *registry) spawnFactory(factory *Factory) error {
 	// Protect from cyclic dependencies.
 	if getStackDepth() >= stackDepthLimit {
-		return ErrStackDepthLimit
+		return ErrStackLimitReached
 	}
 
 	// Check factory already spawned.
@@ -221,7 +221,7 @@ func (r *registry) spawnFactory(factory *Factory) error {
 	// Handle factory output error if present.
 	if factory.factoryOutError && !factoryErrorValue.IsNil() {
 		err, _ := factoryErrorValue.Interface().(error)
-		return fmt.Errorf("failed to invoke factory: %w", err)
+		return fmt.Errorf("%w: %w", ErrFactoryReturnedError, err)
 	}
 
 	// Handle factory out functions as regular objects.
@@ -340,14 +340,11 @@ func getStackDepth() int {
 // stackDepthLimit to protect from infinite recursion.
 const stackDepthLimit = 100
 
-// ErrFactoryRegisterFailed declares factory load failed error.
-var ErrFactoryRegisterFailed = errors.New("factory register failed")
+// ErrStackLimitReached declares a reach of stack limit error.
+var ErrStackLimitReached = errors.New("stack limit reached")
 
-// ErrFactorySpawnFailed declares factory spawn failed error.
-var ErrFactorySpawnFailed = errors.New("factory spawn failed")
+// ErrFactoryReturnedError declares factory returned an error.
+var ErrFactoryReturnedError = errors.New("factory returned an error")
 
-// ErrServiceNotFound declares service not found error.
-var ErrServiceNotFound = errors.New("service not found")
-
-// ErrStackDepthLimit declares a reach of stack limit error.
-var ErrStackDepthLimit = errors.New("stack depth limit reached")
+// ErrServiceNotResolved declares service not resolved error.
+var ErrServiceNotResolved = errors.New("service not resolved")
