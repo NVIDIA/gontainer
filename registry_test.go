@@ -34,7 +34,7 @@ func TestRegistryStartFactories(t *testing.T) {
 
 	registry := &registry{}
 	equal(t, registry.registerFactory(ctx, factory), nil)
-	equal(t, registry.startFactories(), nil)
+	equal(t, registry.produceServices(), nil)
 	equal(t, factory.factorySpawned, true)
 
 	result := factory.factoryOutValues[0]
@@ -48,7 +48,7 @@ func TestRegistryStartWithErrors(t *testing.T) {
 		return false, errors.New("failed to create new service")
 	})), nil)
 
-	err := registry.startFactories()
+	err := registry.produceServices()
 	equal(t, err != nil, true)
 	equal(t, fmt.Sprint(err), `failed to spawn service of `+
 		`Factory[func() (bool, error)] from 'github.com/NVIDIA/gontainer': `+
@@ -71,7 +71,7 @@ func TestRegistryCloseFactories(t *testing.T) {
 	ctx := context.Background()
 	registry := &registry{}
 	equal(t, registry.registerFactory(ctx, factory), nil)
-	equal(t, registry.startFactories(), nil)
+	equal(t, registry.produceServices(), nil)
 	equal(t, factory.factorySpawned, true)
 
 	// Let factory function start executing in the background.
@@ -79,7 +79,7 @@ func TestRegistryCloseFactories(t *testing.T) {
 
 	equal(t, funcStarted.Load(), true)
 	equal(t, funcClosed.Load(), false)
-	equal(t, registry.closeFactories(), nil)
+	equal(t, registry.closeServices(), nil)
 	equal(t, funcStarted.Load(), true)
 	equal(t, funcClosed.Load(), true)
 }
@@ -97,8 +97,8 @@ func TestRegistryCloseWithError(t *testing.T) {
 		return func() error { return errors.New("failed to close 2") }
 	})), nil)
 
-	equal(t, registry.startFactories(), nil)
-	err := registry.closeFactories()
+	equal(t, registry.produceServices(), nil)
+	err := registry.closeServices()
 	equal(t, err != nil, true)
 	equal(t, fmt.Sprint(err), `failed to close services: `+
 		`Factory[func() interface {}] from 'github.com/NVIDIA/gontainer': failed to close 2; `+
@@ -160,51 +160,48 @@ func TestCheckIsOptionalIn(t *testing.T) {
 	var t6 Optional[context.Context]
 
 	typ := reflect.TypeOf(&t1).Elem()
-	rtyp, ok := checkIsOptionalIn(typ)
+	rtyp, ok := isOptionalBoxType(typ)
 	equal(t, rtyp, typ)
 	equal(t, ok, false)
 
 	typ = reflect.TypeOf(&t2).Elem()
-	rtyp, ok = checkIsOptionalIn(typ)
+	rtyp, ok = isOptionalBoxType(typ)
 	equal(t, rtyp, typ)
 	equal(t, ok, false)
 
 	typ = reflect.TypeOf(&t3).Elem()
-	rtyp, ok = checkIsOptionalIn(typ)
+	rtyp, ok = isOptionalBoxType(typ)
 	equal(t, rtyp, typ)
 	equal(t, ok, false)
 
 	typ = reflect.TypeOf(&t4).Elem()
-	rtyp, ok = checkIsOptionalIn(typ)
+	rtyp, ok = isOptionalBoxType(typ)
 	equal(t, rtyp, typ)
 	equal(t, ok, false)
 
 	typ = reflect.TypeOf(&t5).Elem()
-	rtyp, ok = checkIsOptionalIn(typ)
+	rtyp, ok = isOptionalBoxType(typ)
 	equal(t, rtyp, typ)
 	equal(t, ok, false)
 
 	typ = reflect.TypeOf(&t6).Elem()
-	rtyp, ok = checkIsOptionalIn(typ)
+	rtyp, ok = isOptionalBoxType(typ)
 	equal(t, rtyp, reflect.TypeOf(&t5).Elem())
 	equal(t, ok, true)
 }
 
 // TestBoxFactoryOptionalIn tests boxing of factory output to optional box.
 func TestBoxFactoryOptionalIn(t *testing.T) {
-	// Prepare factory description instance.
-	result := "result"
-	outvals := []reflect.Value{reflect.ValueOf(result)}
-	factory := &Factory{factoryOutValues: outvals}
-
-	// When optional misses.
+	// When optional not found.
 	box := Optional[string]{}
-	value := boxFactoryOptionalIn(reflect.TypeOf(box), nil, 0)
+	data := reflect.New(reflect.TypeOf((*string)(nil)).Elem()).Elem()
+	value := getOptionalBox(reflect.TypeOf(box), data)
 	equal(t, value.Interface().(Optional[string]).Get(), "")
 
 	// When optional found.
 	box = Optional[string]{}
-	value = boxFactoryOptionalIn(reflect.TypeOf(box), factory, 0)
+	data = reflect.ValueOf("result")
+	value = getOptionalBox(reflect.TypeOf(box), data)
 	equal(t, value.Interface().(Optional[string]).Get(), "result")
 }
 
@@ -216,7 +213,7 @@ func TestBoxFactoryOutFunc(t *testing.T) {
 	}
 
 	svcvalue := reflect.ValueOf(&svcfunc).Elem()
-	wrapper, err := boxFactoryOutFunc(svcvalue)
+	wrapper, err := wrapFactoryFunc(svcvalue)
 	equal(t, err, nil)
 
 	service := wrapper.Interface().(function)

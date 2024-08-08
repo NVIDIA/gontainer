@@ -46,7 +46,7 @@ func (r *registry) registerFactory(ctx context.Context, factory *Factory) error 
 		// Factories returning `any` may be duplicated.
 		if !isEmptyInterface(factoryOutType) {
 			// Validate uniqueness of the every factory output type.
-			if s, _ := r.findFactoryByOutType(factoryOutType); s != nil {
+			if s, _ := r.findFactoryOf(factoryOutType); s != nil {
 				return fmt.Errorf("factory output duplicate: %s", factoryOutType)
 			}
 		}
@@ -58,12 +58,12 @@ func (r *registry) registerFactory(ctx context.Context, factory *Factory) error 
 	return nil
 }
 
-// startFactories spawns all factories in the registry.
-func (r *registry) startFactories() error {
+// produceServices spawns all services in the registry.
+func (r *registry) produceServices() error {
 	for _, factory := range r.factories {
 		if err := r.spawnFactory(factory); err != nil {
 			return fmt.Errorf(
-				"failed to spawn service of %s from '%s': %w",
+				"failed to spawn services of %s from '%s': %w",
 				factory.Name(), factory.Source(), err,
 			)
 		}
@@ -72,8 +72,8 @@ func (r *registry) startFactories() error {
 	return nil
 }
 
-// closeFactories closes services of factories in the reverse order.
-func (r *registry) closeFactories() error {
+// closeServices closes all services in the reverse order.
+func (r *registry) closeServices() error {
 	var errs []string
 	for index := len(r.sequence) - 1; index >= 0; index-- {
 		factory := r.sequence[index]
@@ -111,55 +111,52 @@ func (r *registry) closeFactories() error {
 	return nil
 }
 
-// getFactoryInValues spawns, boxes and returns specified factory input values for types.
-func (r *registry) getFactoryInValues(ctx context.Context, factoryInTypes []reflect.Type) ([]reflect.Value, error) {
-	factoryInValues := make([]reflect.Value, 0, len(factoryInTypes))
-	for _, origFactoryInType := range factoryInTypes {
-		// Handle specified `context.Context` as a special case.
-		if isContextInterface(origFactoryInType) {
-			factoryInValues = append(factoryInValues, reflect.ValueOf(ctx))
-			continue
+// resolveService resolves and returns the service based on the type.
+func (r *registry) resolveService(serviceType reflect.Type) (reflect.Value, error) {
+	// Detect whether the dependency type is wrapped to the `Optional[type]` box.
+	// If yes, resolve the type wrapped to the optional wrapper type.
+	realServiceType, isOptional := isOptionalBoxType(serviceType)
+
+	// Lookup factory definition by an output service type.
+	factory, factoryOutIndex := r.findFactoryOf(realServiceType)
+
+	// Resolve of regular types leads to an error if the factory for the type is not registered
+	// in the container. Resolve of optional types works differently: if the optional type is
+	// not found, then a zero-value box should be returned instead. For example, resolving an
+	// unregistered type `Config` triggers an error, while resolving `gontainer.Optional[Config]`
+	// returns a zero-value box.
+	if factory == nil {
+		// Return a zero optional value.
+		if isOptional {
+			dependencyZeroValue := reflect.New(serviceType).Elem()
+			return getOptionalBox(serviceType, dependencyZeroValue), nil
 		}
 
-		// Check that optional factory input dependency was specified.
-		factoryInType, inIsOptional := checkIsOptionalIn(origFactoryInType)
-
-		// Lookup factory dependency factory definition.
-		factory, factoryOutIndex := r.findFactoryByOutType(factoryInType)
-
-		// Factory dependency definition may be omitted by the registry state.
-		// For example, if factory accepts `gontainer.Optional[Config]`, then
-		// the `Config` type service factory may be provided and may be omitted.
-		if factory == nil && !inIsOptional {
-			return nil, fmt.Errorf("failed to get factory for type '%s'", factoryInType)
-		}
-
-		// Handle found factory definition.
-		if factory != nil {
-			if err := r.spawnFactory(factory); err != nil {
-				return nil, fmt.Errorf("failed to spawn factory '%s': %w", factory.factoryType, err)
-			}
-		}
-
-		// Optional factory input values should be boxed before passing them to factory.
-		// For example, if factory accepts `gontainer.Optional[Config]`, then it is
-		// required to wrap the `config` service (or nil) with the `Optional` struct.
-		if inIsOptional {
-			// Box optional dependency factory output value that may be empty.
-			factoryInValue := boxFactoryOptionalIn(origFactoryInType, factory, factoryOutIndex)
-			factoryInValues = append(factoryInValues, factoryInValue)
-		} else {
-			// Use direct dependency factory output value.
-			factoryInValue := factory.factoryOutValues[factoryOutIndex]
-			factoryInValues = append(factoryInValues, factoryInValue)
-		}
+		// Return an error for non-optional types.
+		return reflect.Value{}, fmt.Errorf("failed to get factory for type '%s'", serviceType)
 	}
 
-	return factoryInValues, nil
+	// Handle found factory definition.
+	if err := r.spawnFactory(factory); err != nil {
+		return reflect.Value{}, fmt.Errorf("failed to spawn factory '%s': %w", factory.factoryType, err)
+	}
+
+	// Get resolved service value.
+	serviceValue := factory.factoryOutValues[factoryOutIndex]
+
+	// Return resolved service in an optional box type.
+	// For example, if a factory accepts `gontainer.Optional[Config]`,
+	// then it is required to wrap the `Config` with an `Optional` struct.
+	if isOptional {
+		return getOptionalBox(serviceType, serviceValue), nil
+	}
+
+	// Return resolved dependency value.
+	return serviceValue, nil
 }
 
-// findFactoryByOutType lookups for a factory by an output type in the registry.
-func (r *registry) findFactoryByOutType(serviceType reflect.Type) (*Factory, int) {
+// findFactoryOf lookups for a factory by an output type in the registry.
+func (r *registry) findFactoryOf(serviceType reflect.Type) (*Factory, int) {
 	// Lookup for a factory in the registry.
 	for _, factory := range r.factories {
 		for index, factoryOutType := range factory.factoryOutTypes {
@@ -194,9 +191,22 @@ func (r *registry) spawnFactory(factory *Factory) error {
 	}
 
 	// Get or spawn factory input values recursively.
-	factoryInValues, err := r.getFactoryInValues(factory.factoryCtx, factory.factoryInTypes)
-	if err != nil {
-		return fmt.Errorf("failed to get factory input values: %w", err)
+	factoryInValues := make([]reflect.Value, 0, len(factory.factoryInTypes))
+	for _, factoryInType := range factory.factoryInTypes {
+		// Handle specified `context.Context` as a special case.
+		if isContextInterface(factoryInType) {
+			factoryCtxValue := reflect.ValueOf(factory.factoryCtx)
+			factoryInValues = append(factoryInValues, factoryCtxValue)
+			continue
+		}
+
+		// Resolve factory input dependency.
+		factoryInValue, err := r.resolveService(factoryInType)
+		if err != nil {
+			return fmt.Errorf("failed to get factory input values: %w", err)
+		}
+
+		factoryInValues = append(factoryInValues, factoryInValue)
 	}
 
 	// Spawn the factory using the factory input arguments.
@@ -217,7 +227,8 @@ func (r *registry) spawnFactory(factory *Factory) error {
 
 	// Handle factory out functions as regular objects.
 	for factoryOutIndex, factoryOutValue := range factoryOutValues {
-		factoryOutValues[factoryOutIndex], err = boxFactoryOutFunc(factoryOutValue)
+		var err error
+		factoryOutValues[factoryOutIndex], err = wrapFactoryFunc(factoryOutValue)
 		if err != nil {
 			return fmt.Errorf("failed to wrap factory func: %w", err)
 		}
@@ -259,8 +270,8 @@ func isContextInterface(typ reflect.Type) bool {
 	return typ.Kind() == reflect.Interface && typ.Implements(ctxType)
 }
 
-// checkIsOptionalIn checks and returns optional input type.
-func checkIsOptionalIn(typ reflect.Type) (reflect.Type, bool) {
+// isOptionalBoxType checks and returns optional box type.
+func isOptionalBoxType(typ reflect.Type) (reflect.Type, bool) {
 	if typ.Kind() == reflect.Struct {
 		if methodValue, ok := typ.MethodByName("Get"); ok {
 			if methodValue.Type.NumOut() == 1 {
@@ -272,24 +283,22 @@ func checkIsOptionalIn(typ reflect.Type) (reflect.Type, bool) {
 	return typ, false
 }
 
-// boxFactoryOptionalIn boxes an optional factory input to structs.
-func boxFactoryOptionalIn(typ reflect.Type, factory *Factory, outIndex int) reflect.Value {
+// getOptionalBox boxes an optional factory input to structs.
+func getOptionalBox(typ reflect.Type, value reflect.Value) reflect.Value {
 	// Prepare boxing struct for value.
 	box := reflect.New(typ).Elem()
 
 	// Inject factory output value to the boxing struct.
-	if factory != nil {
-		field := box.FieldByName("value")
-		pointer := unsafe.Pointer(field.UnsafeAddr())
-		public := reflect.NewAt(field.Type(), pointer)
-		public.Elem().Set(factory.factoryOutValues[outIndex])
-	}
+	field := box.FieldByName("value")
+	pointer := unsafe.Pointer(field.UnsafeAddr())
+	public := reflect.NewAt(field.Type(), pointer)
+	public.Elem().Set(value)
 
 	return box
 }
 
-// boxFactoryOutFunc boxes specified function to the factory out regular object.
-func boxFactoryOutFunc(factoryOutValue reflect.Value) (reflect.Value, error) {
+// wrapFactoryFunc wraps specified function to the regular service object.
+func wrapFactoryFunc(factoryOutValue reflect.Value) (reflect.Value, error) {
 	// Check specified factory out value elem is a function.
 	// The factoryOutValue can be an `any` type with a function in the value,
 	// when the factory declares any return type, or directly a function type,
