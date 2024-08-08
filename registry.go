@@ -340,11 +340,11 @@ func getStackDepth() int {
 // stackDepthLimit to protect from infinite recursion.
 const stackDepthLimit = 100
 
-// ErrStackLimitReached declares a reach of stack limit error.
-var ErrStackLimitReached = errors.New("stack limit reached")
-
 // ErrFactoryReturnedError declares factory returned an error.
 var ErrFactoryReturnedError = errors.New("factory returned an error")
 
 // ErrServiceNotResolved declares service not resolved error.
 var ErrServiceNotResolved = errors.New("service not resolved")
+
+// ErrStackLimitReached declares a reach of stack limit error.
+var ErrStackLimitReached = errors.New("stack limit reached")
