@@ -256,21 +256,21 @@ type Container interface {
 
 The service container emits several events during its lifecycle:
 
-| Event               | Description                                                                   |
-|---------------------|-------------------------------------------------------------------------------|
-| `ContainerStarting` | Emitted when the container's start method is invoked.                         |
-| `ContainerStarted`  | Emitted when the container's start method has completed.                      |
-| `ContainerClosing`  | Emitted when the container's close method is invoked.                         |
-| `ContainerClosed`   | Emitted when the container's close method has completed.                      |
-| `UnhandledPanic`    | Emitted when a panic occurs during container initialization, start, or close. |
+| <div style="width:200px">Event</div> | <div style="width:600px">Description</div>                                    |
+|--------------------------------------|-------------------------------------------------------------------------------|
+| `ContainerStarting`                  | Emitted when the container's start method is invoked.                         |
+| `ContainerStarted`                   | Emitted when the container's start method has completed.                      |
+| `ContainerClosing`                   | Emitted when the container's close method is invoked.                         |
+| `ContainerClosed`                    | Emitted when the container's close method has completed.                      |
+| `UnhandledPanic`                     | Emitted when a panic occurs during container initialization, start, or close. |
 
 ### Container Errors
 
 The service container may return the following errors, which can be checked using `errors.Is`:
 
-| Error                       | Description                                                                           |
-|-----------------------------|---------------------------------------------------------------------------------------|
-| `ErrFactoryReturnedError`   | Occurs when the factory function returns an error during invocation.                  |
-| `ErrServiceNotResolved`     | Occurs when resolving a service fails due to an unregistered service type.            |
-| `ErrHandlerArgTypeMismatch` | Occurs when an event handler's arguments do not match the event's expected arguments. |
-| `ErrStackLimitReached`      | Occurs when the service container encounters infinite recursion.                      |
+| <div style="width:200px">Error</div> | <div style="width:600px">Description</div>                                            |
+|--------------------------------------|---------------------------------------------------------------------------------------|
+| `ErrFactoryReturnedError`            | Occurs when the factory function returns an error during invocation.                  |
+| `ErrServiceNotResolved`              | Occurs when resolving a service fails due to an unregistered service type.            |
+| `ErrHandlerArgTypeMismatch`          | Occurs when an event handler's arguments do not match the event's expected arguments. |
+| `ErrStackLimitReached`               | Occurs when the service container encounters infinite recursion.                      |
