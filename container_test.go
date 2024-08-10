@@ -17,10 +17,16 @@ func TestContainerLifecycle(t *testing.T) {
 		NewService(float64(100500)),
 		NewFactory(func() string { return "string" }),
 		NewFactory(func() (int, int64) { return 123, 456 }),
-		NewFactory(func(ctx context.Context, dep1 float64, dep2 string, dep3 int) any {
+		NewFactory(func(
+			ctx context.Context,
+			dep1 float64, dep2 string,
+			dep3 Optional[int],
+			dep4 Optional[bool],
+		) any {
 			equal(t, dep1, float64(100500))
 			equal(t, dep2, "string")
-			equal(t, dep3, 123)
+			equal(t, dep3.Get(), 123)
+			equal(t, dep4.Get(), false)
 			factoryStarted.Store(true)
 			return func() error {
 				serviceStarted.Store(true)

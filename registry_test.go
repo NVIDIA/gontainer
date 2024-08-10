@@ -27,8 +27,8 @@ func TestRegistryRegisterFactory(t *testing.T) {
 	equal(t, factory.factoryLoaded, true)
 }
 
-// TestRegistryStartFactories tests corresponding registry method.
-func TestRegistryStartFactories(t *testing.T) {
+// TestRegistryProduceServices tests corresponding registry method.
+func TestRegistryProduceServices(t *testing.T) {
 	ctx := context.Background()
 	factory := NewFactory(func() bool { return true })
 
@@ -41,8 +41,8 @@ func TestRegistryStartFactories(t *testing.T) {
 	equal(t, result.Interface(), true)
 }
 
-// TestRegistryStartWithErrors tests corresponding registry method.
-func TestRegistryStartWithErrors(t *testing.T) {
+// TestRegistryProduceWithErrors tests corresponding registry method.
+func TestRegistryProduceWithErrors(t *testing.T) {
 	registry := &registry{}
 	equal(t, registry.registerFactory(context.Background(), NewFactory(func() (bool, error) {
 		return false, errors.New("failed to create new service")
@@ -55,8 +55,8 @@ func TestRegistryStartWithErrors(t *testing.T) {
 		`factory returned an error: failed to create new service`)
 }
 
-// TestRegistryCloseFactories tests corresponding registry method.
-func TestRegistryCloseFactories(t *testing.T) {
+// TestRegistryCloseServices tests corresponding registry method.
+func TestRegistryCloseServices(t *testing.T) {
 	funcStarted := atomic.Bool{}
 	funcClosed := atomic.Bool{}
 	factory := NewFactory(func(ctx context.Context) any {
