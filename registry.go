@@ -127,7 +127,7 @@ func (r *registry) resolveService(serviceType reflect.Type) (reflect.Value, erro
 	if factory == nil {
 		// Return a zero optional value.
 		if isOptional {
-			dependencyZeroValue := reflect.New(serviceType).Elem()
+			dependencyZeroValue := reflect.New(realServiceType).Elem()
 			return getOptionalBox(serviceType, dependencyZeroValue), nil
 		}
 
