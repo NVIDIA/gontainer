@@ -52,7 +52,7 @@ func TestRegistryStartWithErrors(t *testing.T) {
 	equal(t, err != nil, true)
 	equal(t, fmt.Sprint(err), `failed to spawn services of `+
 		`Factory[func() (bool, error)] from 'github.com/NVIDIA/gontainer': `+
-		`failed to invoke factory func: failed to create new service`)
+		`factory returned an error: failed to create new service`)
 }
 
 // TestRegistryCloseFactories tests corresponding registry method.
@@ -101,7 +101,7 @@ func TestRegistryCloseWithError(t *testing.T) {
 	err := registry.closeServices()
 	equal(t, err != nil, true)
 	equal(t, fmt.Sprint(err), `failed to close services: `+
-		`Factory[func() interface {}] from 'github.com/NVIDIA/gontainer': failed to close 2; `+
+		`Factory[func() interface {}] from 'github.com/NVIDIA/gontainer': failed to close 2`+"\n"+
 		`Factory[func(context.Context) interface {}] from 'github.com/NVIDIA/gontainer': failed to close 1`)
 }
 

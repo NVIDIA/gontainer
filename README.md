@@ -254,16 +254,23 @@ type Container interface {
 
 ### Container Events
 
-1. **ContainerStarting**: produced when container start method invoked. Synchronous.
-1. **ContainerStarted**: produced when container start method finished. Synchronous.
-1. **ContainerClosing**: produced when container close method invoked. Synchronous.
-1. **ContainerClosed**: produced when container close method finished. Synchronous.
-1. **UnhandledPanic**: produced when the panic is happened on container init, start or close.
+The service container emits several events during its lifecycle:
 
-### Container Lifecycle
+| Event               | Description                                                                   |
+|---------------------|-------------------------------------------------------------------------------|
+| `ContainerStarting` | Emitted when the container's start method is invoked.                         |
+| `ContainerStarted`  | Emitted when the container's start method has completed.                      |
+| `ContainerClosing`  | Emitted when the container's close method is invoked.                         |
+| `ContainerClosed`   | Emitted when the container's close method has completed.                      |
+| `UnhandledPanic`    | Emitted when a panic occurs during container initialization, start, or close. |
 
-1. **New**: The container is instantiated, and the reflection parsing of service factories is completed. The container ensures that service dependencies are resolved.
-1. **Starting**: Service factories are called to instantiate all service instances in container.
-1. **Started**: The container, along with all its services, are now fully operational.
-1. **Closing**: Upon receiving a close call or event, the container will invoke the `Close()` method on each service that has one, in the reverse order of their initialization.
-1. **Closed**: The container is fully terminated, and all resources have been released.
+### Container Errors
+
+The service container may return the following errors, which can be checked using `errors.Is`:
+
+| Error                       | Description                                                                           |
+|-----------------------------|---------------------------------------------------------------------------------------|
+| `ErrFactoryReturnedError`   | Occurs when the factory function returns an error during invocation.                  |
+| `ErrServiceNotResolved`     | Occurs when resolving a service fails due to an unregistered service type.            |
+| `ErrHandlerArgTypeMismatch` | Occurs when an event handler's arguments do not match the event's expected arguments. |
+| `ErrStackLimitReached`      | Occurs when the service container encounters infinite recursion.                      |
