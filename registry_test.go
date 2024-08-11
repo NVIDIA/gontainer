@@ -29,24 +29,52 @@ func TestRegistryRegisterFactory(t *testing.T) {
 
 // TestRegistryValidateFactories tests corresponding registry method.
 func TestRegistryValidateFactories(t *testing.T) {
-	ctx := context.Background()
-	factory1 := NewFactory(func(bool) (int, error) {
-		return 1, nil
-	})
-	factory2 := NewFactory(func(string) (bool, error) {
-		return true, nil
-	})
-	factory3 := NewFactory(func(int) (string, error) {
-		return "s", nil
-	})
+	tests := []struct {
+		name      string
+		factories []*Factory
+		wantErr   func(t *testing.T, err error)
+	}{{
+		name: "CircularDependency",
+		factories: []*Factory{
+			NewFactory(func(bool) (int, error) { return 1, nil }),
+			NewFactory(func(string) (bool, error) { return true, nil }),
+			NewFactory(func(int) (string, error) { return "s", nil }),
+		},
+		wantErr: func(t *testing.T, err error) {
+			equal(t, errors.Is(err, ErrCircularDependency), true)
 
-	registry := &registry{}
-	equal(t, registry.registerFactory(ctx, factory1), nil)
-	equal(t, registry.registerFactory(ctx, factory2), nil)
-	equal(t, registry.registerFactory(ctx, factory3), nil)
+			unwrap, ok := err.(interface{ Unwrap() []error })
+			equal(t, ok, true)
 
-	err := registry.validateFactories()
-	equal(t, err, nil)
+			errs := unwrap.Unwrap()
+			equal(t, len(errs), 3)
+
+			equal(t, errors.Is(errs[0], ErrCircularDependency), true)
+			equal(t, errs[0].Error(), "failed to validate service 'bool' (argument 0) "+
+				"of 'Factory[func(bool) (int, error)]' from 'github.com/NVIDIA/gontainer': "+
+				"circular dependency")
+
+			equal(t, errors.Is(errs[1], ErrCircularDependency), true)
+			equal(t, errs[1].Error(), "failed to validate service 'string' (argument 0) "+
+				"of 'Factory[func(string) (bool, error)]' from 'github.com/NVIDIA/gontainer': "+
+				"circular dependency")
+
+			equal(t, errors.Is(errs[2], ErrCircularDependency), true)
+			equal(t, errs[2].Error(), "failed to validate service 'int' (argument 0) "+
+				"of 'Factory[func(int) (string, error)]' from 'github.com/NVIDIA/gontainer': "+
+				"circular dependency")
+		},
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			registry := &registry{}
+			for _, factory := range tt.factories {
+				equal(t, registry.registerFactory(ctx, factory), nil)
+			}
+			tt.wantErr(t, registry.validateFactories())
+		})
+	}
 }
 
 // TestRegistryProduceServices tests corresponding registry method.
