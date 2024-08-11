@@ -441,7 +441,7 @@ func getStackDepth() int {
 // stackDepthLimit to protect from infinite recursion.
 const stackDepthLimit = 100
 
-// ErrFactoryReturnedError declares factory returned an error.
+// ErrFactoryReturnedError declares factory returned error.
 var ErrFactoryReturnedError = errors.New("factory returned error")
 
 // ErrServiceDuplicated declares service duplicated error.
