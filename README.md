@@ -275,4 +275,3 @@ The service container may return the following errors, which can be checked usin
 | `ErrServiceDuplicated`      | Occurs when a service type duplicate found during the initialization procedure.       |
 | `ErrCircularDependency`     | Occurs when a circular dependency found during the initialization procedure.          |
 | `ErrHandlerArgTypeMismatch` | Occurs when an event handler's arguments do not match the event's expected arguments. |
-| `ErrStackLimitReached`      | Occurs when the service container encounters infinite recursion.                      |
