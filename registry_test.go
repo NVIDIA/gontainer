@@ -27,6 +27,28 @@ func TestRegistryRegisterFactory(t *testing.T) {
 	equal(t, factory.factoryLoaded, true)
 }
 
+// TestRegistryValidateFactories tests corresponding registry method.
+func TestRegistryValidateFactories(t *testing.T) {
+	ctx := context.Background()
+	factory1 := NewFactory(func(bool) (int, error) {
+		return 1, nil
+	})
+	factory2 := NewFactory(func(string) (bool, error) {
+		return true, nil
+	})
+	factory3 := NewFactory(func(int) (string, error) {
+		return "s", nil
+	})
+
+	registry := &registry{}
+	equal(t, registry.registerFactory(ctx, factory1), nil)
+	equal(t, registry.registerFactory(ctx, factory2), nil)
+	equal(t, registry.registerFactory(ctx, factory3), nil)
+
+	err := registry.validateFactories()
+	equal(t, err, nil)
+}
+
 // TestRegistryProduceServices tests corresponding registry method.
 func TestRegistryProduceServices(t *testing.T) {
 	ctx := context.Background()
@@ -52,7 +74,7 @@ func TestRegistryProduceWithErrors(t *testing.T) {
 	equal(t, err != nil, true)
 	equal(t, fmt.Sprint(err), `failed to spawn services of `+
 		`Factory[func() (bool, error)] from 'github.com/NVIDIA/gontainer': `+
-		`factory returned an error: failed to create new service`)
+		`factory returned error: failed to create new service`)
 }
 
 // TestRegistryCloseServices tests corresponding registry method.

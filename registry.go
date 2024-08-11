@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"slices"
 	"unsafe"
 )
 
@@ -40,21 +41,102 @@ func (r *registry) registerFactory(ctx context.Context, factory *Factory) error 
 		return fmt.Errorf("failed to load factory: %w", err)
 	}
 
-	// Validate loaded factory object for the registry.
-	for _, factoryOutType := range factory.factoryOutTypes {
-		// Factories returning `any` may be duplicated.
-		if !isEmptyInterface(factoryOutType) {
-			// Validate uniqueness of the every factory output type.
-			if s, _ := r.findFactoryFor(factoryOutType); s != nil {
-				return fmt.Errorf("service duplicate: %s", factoryOutType)
-			}
-		}
-	}
-
 	// Register the factory in the registry.
 	r.factories = append(r.factories, factory)
 
 	return nil
+}
+
+// validateFactories validates registered factories.
+// Validate checks for availability of all non-optional types
+// and for possible circular dependencies between factories.
+func (r *registry) validateFactories() error {
+	var errs []error
+
+	// Validate all factories.
+	for _, factory := range r.factories {
+		// Validate all input types are resolvable.
+		for index, factoryInType := range factory.factoryInTypes {
+			// Is this type a special factory context type?
+			if isContextInterface(factoryInType) {
+				continue
+			}
+
+			// Is this type wrapped to the `Optional[type]`?
+			_, isOptionalType := isOptionalBoxType(factoryInType)
+			if isOptionalType {
+				continue
+			}
+
+			// Is a factory for this type could be resolved?
+			factoryInTypeFactory, _ := r.findFactoryBy(factoryInType)
+			if factoryInTypeFactory == nil {
+				errs = append(errs, fmt.Errorf(
+					"failed to validate service '%s' (argument %d) of '%s' from '%s': %w",
+					factoryInType, index, factory.Name(), factory.Source(), ErrServiceNotResolved,
+				))
+				continue
+			}
+		}
+
+		// Validate all input types have no circular dependencies.
+		for index, factoryInType := range factory.factoryInTypes {
+			// Is this type a special factory context type?
+			if isContextInterface(factoryInType) {
+				continue
+			}
+
+			// Validate dependencies graph of this type.
+			validationQueue := []reflect.Type{factoryInType}
+			var validatedTypesTypes []reflect.Type
+			for len(validationQueue) > 0 {
+				validatingType := validationQueue[0]
+				validationQueue = validationQueue[1:]
+
+				// Is this type wrapped to the `Optional[type]`?
+				validatingType, _ = isOptionalBoxType(validatingType)
+
+				// Is a factory for this type could be resolved?
+				nextTypeFactory, _ := r.findFactoryBy(validatingType)
+				if nextTypeFactory == nil {
+					continue
+				}
+
+				// Was this type already validated before?
+				if slices.Contains(validatedTypesTypes, validatingType) {
+					errs = append(errs, fmt.Errorf(
+						"failed to validate service '%s' (argument %d) of '%s' from '%s': %w",
+						validatingType, index, factory.Name(), factory.Source(), ErrCircularDependency,
+					))
+					break
+				}
+
+				// Register type validation step.
+				validationQueue = append(validationQueue, nextTypeFactory.factoryInTypes...)
+				validatedTypesTypes = append(validatedTypesTypes, validatingType)
+			}
+		}
+
+		// Validate all output types are unique.
+		for index, factoryOutType := range factory.factoryOutTypes {
+			// Factories returning `any` could be duplicated.
+			if isEmptyInterface(factoryOutType) {
+				continue
+			}
+
+			// Validate uniqueness of the every factory output type.
+			factoriesForSameOutType, _ := r.findFactoriesBy(factoryOutType)
+			if len(factoriesForSameOutType) > 1 {
+				errs = append(errs, fmt.Errorf(
+					"failed to validate service '%s' (output %d) of '%s' from '%s': %w",
+					factoryOutType, index, factory.Name(), factory.Source(), ErrServiceDuplicated,
+				))
+			}
+		}
+	}
+
+	// Join all found errors.
+	return errors.Join(errs...)
 }
 
 // produceServices spawns all services in the registry.
@@ -62,7 +144,7 @@ func (r *registry) produceServices() error {
 	for _, factory := range r.factories {
 		if err := r.spawnFactory(factory); err != nil {
 			return fmt.Errorf(
-				"failed to spawn services of %s from '%s': %w",
+				"failed to spawn services of '%s' from '%s': %w",
 				factory.Name(), factory.Source(), err,
 			)
 		}
@@ -117,7 +199,7 @@ func (r *registry) resolveService(serviceType reflect.Type) (reflect.Value, erro
 	realServiceType, isOptional := isOptionalBoxType(serviceType)
 
 	// Lookup factory definition by an output service type.
-	factory, factoryOutIndex := r.findFactoryFor(realServiceType)
+	factory, factoryOutIndex := r.findFactoryBy(realServiceType)
 
 	// Resolve of regular types leads to an error if the factory for the type is not registered
 	// in the container. Resolve of optional types works differently: if the optional type is
@@ -154,27 +236,46 @@ func (r *registry) resolveService(serviceType reflect.Type) (reflect.Value, erro
 	return serviceValue, nil
 }
 
-// findFactoryFor lookups for a factory by an output type in the registry.
-func (r *registry) findFactoryFor(serviceType reflect.Type) (*Factory, int) {
-	// Lookup for a factory in the registry.
+// findFactoryBy lookups for all factories by an output type in the registry.
+func (r *registry) findFactoriesBy(serviceType reflect.Type) ([]*Factory, []int) {
+	var factories []*Factory
+	var outputs []int
+
+	// Lookup for factories in the registry.
 	for _, factory := range r.factories {
 		for index, factoryOutType := range factory.factoryOutTypes {
 			// If requested type matched.
 			if factoryOutType == serviceType {
-				return factory, index
+				factories = append(factories, factory)
+				outputs = append(outputs, index)
+				continue
 			}
 
 			// if requested type implements a non-empty interface.
 			if isNonEmptyInterface(serviceType) {
 				if factoryOutType.Implements(serviceType) {
-					return factory, index
+					factories = append(factories, factory)
+					outputs = append(outputs, index)
+					continue
 				}
 			}
 		}
 	}
 
-	// Factory definition not found.
-	return nil, 0
+	// Return matched factories and indices.
+	return factories, outputs
+}
+
+// findFactoryBy lookups for a factory by an output type in the registry.
+func (r *registry) findFactoryBy(serviceType reflect.Type) (*Factory, int) {
+	// Search for factories by the output type.
+	factories, outputs := r.findFactoriesBy(serviceType)
+	if len(factories) == 0 {
+		return nil, 0
+	}
+
+	// Return found factory and out index.
+	return factories[0], outputs[0]
 }
 
 // spawnFactory instantiates specified factory definition.
@@ -341,10 +442,16 @@ func getStackDepth() int {
 const stackDepthLimit = 100
 
 // ErrFactoryReturnedError declares factory returned an error.
-var ErrFactoryReturnedError = errors.New("factory returned an error")
+var ErrFactoryReturnedError = errors.New("factory returned error")
+
+// ErrServiceDuplicated declares service duplicated error.
+var ErrServiceDuplicated = errors.New("service duplicated")
 
 // ErrServiceNotResolved declares service not resolved error.
 var ErrServiceNotResolved = errors.New("service not resolved")
+
+// ErrCircularDependency declares a cyclic dependency error.
+var ErrCircularDependency = errors.New("circular dependency")
 
 // ErrStackLimitReached declares a reach of stack limit error.
 var ErrStackLimitReached = errors.New("stack limit reached")

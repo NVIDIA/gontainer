@@ -272,5 +272,7 @@ The service container may return the following errors, which can be checked usin
 |-----------------------------|---------------------------------------------------------------------------------------|
 | `ErrFactoryReturnedError`   | Occurs when the factory function returns an error during invocation.                  |
 | `ErrServiceNotResolved`     | Occurs when resolving a service fails due to an unregistered service type.            |
+| `ErrServiceDuplicated`      | Occurs when a service type duplicate found during the initialization procedure.       |
+| `ErrCircularDependency`     | Occurs when a circular dependency found during the initialization procedure.          |
 | `ErrHandlerArgTypeMismatch` | Occurs when an event handler's arguments do not match the event's expected arguments. |
-| `ErrStackLimitReached`      | Occurs when the service container encounters infinite recursion.                      |
+| `ErrDependencyCycle`        | Occurs when the service container encounters infinite recursion.                      |
