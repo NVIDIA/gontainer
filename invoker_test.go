@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// TestInvokerService tests invoker service.
-func TestInvokerService(t *testing.T) {
+// TestInvokerInvoke tests invoker service.
+func TestInvokerInvoke(t *testing.T) {
 	tests := []struct {
 		name    string
 		haveFn  any
