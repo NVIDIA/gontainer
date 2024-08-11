@@ -212,7 +212,7 @@ func TestRegistryProduceWithErrors(t *testing.T) {
 	err := registry.produceServices()
 	equal(t, err != nil, true)
 	equal(t, fmt.Sprint(err), `failed to spawn services of `+
-		`Factory[func() (bool, error)] from 'github.com/NVIDIA/gontainer': `+
+		`'Factory[func() (bool, error)]' from 'github.com/NVIDIA/gontainer': `+
 		`factory returned error: failed to create new service`)
 }
 
