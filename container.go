@@ -95,25 +95,30 @@ func New(factories ...*Factory) (result Container, err error) {
 	}()
 
 	// Register events broker instance in the registry.
-	if err := container.registry.registerFactory(ctx, NewService[Events](events)); err != nil {
+	if err := registry.registerFactory(ctx, NewService[Events](events)); err != nil {
 		return nil, fmt.Errorf("failed to register events manager: %w", err)
 	}
 
 	// Register service resolver instance in the registry.
-	if err := container.registry.registerFactory(ctx, NewService[Resolver](resolver)); err != nil {
+	if err := registry.registerFactory(ctx, NewService[Resolver](resolver)); err != nil {
 		return nil, fmt.Errorf("failed to register service resolver: %w", err)
 	}
 
 	// Register function invoker instance in the registry.
-	if err := container.registry.registerFactory(ctx, NewService[Invoker](invoker)); err != nil {
+	if err := registry.registerFactory(ctx, NewService[Invoker](invoker)); err != nil {
 		return nil, fmt.Errorf("failed to register function invoker: %w", err)
 	}
 
 	// Register provided factories in the registry.
 	for _, factory := range factories {
-		if err := container.registry.registerFactory(ctx, factory); err != nil {
+		if err := registry.registerFactory(ctx, factory); err != nil {
 			return nil, fmt.Errorf("failed to register factory: %w", err)
 		}
+	}
+
+	// Validate all factories in the registry.
+	if err := registry.validateFactories(); err != nil {
+		return nil, fmt.Errorf("failed to validate factories: %w", err)
 	}
 
 	// Return service container instance.
