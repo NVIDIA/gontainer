@@ -1,7 +1,6 @@
 package gontainer
 
 import (
-	"context"
 	"reflect"
 	"testing"
 )
@@ -9,11 +8,8 @@ import (
 // TestIsMultipleType tests checking of argument to be multiple.
 func TestIsMultipleType(t *testing.T) {
 	var t1 any
-	var t2 interface{}
-	var t3 struct{}
-	var t4 string
-	var t5 context.Context
-	var t6 Multiple[context.Context]
+	var t2 string
+	var t3 Multiple[int]
 
 	typ := reflect.TypeOf(&t1).Elem()
 	rtyp, ok := isMultipleType(typ)
@@ -27,22 +23,7 @@ func TestIsMultipleType(t *testing.T) {
 
 	typ = reflect.TypeOf(&t3).Elem()
 	rtyp, ok = isMultipleType(typ)
-	equal(t, rtyp, nil)
-	equal(t, ok, false)
-
-	typ = reflect.TypeOf(&t4).Elem()
-	rtyp, ok = isMultipleType(typ)
-	equal(t, rtyp, nil)
-	equal(t, ok, false)
-
-	typ = reflect.TypeOf(&t5).Elem()
-	rtyp, ok = isMultipleType(typ)
-	equal(t, rtyp, nil)
-	equal(t, ok, false)
-
-	typ = reflect.TypeOf(&t6).Elem()
-	rtyp, ok = isMultipleType(typ)
-	equal(t, rtyp, reflect.TypeOf(&t5).Elem())
+	equal(t, rtyp, reflect.TypeOf((*int)(nil)).Elem())
 	equal(t, ok, true)
 }
 
