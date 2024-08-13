@@ -93,7 +93,7 @@ func (r *registry) validateFactories() error {
 
 			// Validate dependencies graph of this type.
 			validationQueue := []reflect.Type{factoryInType}
-			var validatedTypesTypes []reflect.Type
+			var validatedTypes []reflect.Type
 			for len(validationQueue) > 0 {
 				validatingType := validationQueue[0]
 				validationQueue = validationQueue[1:]
@@ -110,15 +110,8 @@ func (r *registry) validateFactories() error {
 					validatingType = innerType
 				}
 
-				// Is a factory for this type could be resolved?
-				nextTypeFactories, _ := r.findFactoriesFor(validatingType)
-				if len(nextTypeFactories) == 0 {
-					continue
-				}
-				nextTypeFactory := nextTypeFactories[0]
-
 				// Was this type already validated before?
-				if slices.Contains(validatedTypesTypes, validatingType) {
+				if slices.Contains(validatedTypes, validatingType) {
 					errs = append(errs, fmt.Errorf(
 						"failed to validate service '%s' (argument %d) of '%s' from '%s': %w",
 						validatingType, index, factory.Name(), factory.Source(), ErrCircularDependency,
@@ -126,9 +119,14 @@ func (r *registry) validateFactories() error {
 					break
 				}
 
-				// Register type validation step.
-				validationQueue = append(validationQueue, nextTypeFactory.factoryInTypes...)
-				validatedTypesTypes = append(validatedTypesTypes, validatingType)
+				// Register type as validated.
+				validatedTypes = append(validatedTypes, validatingType)
+
+				// Walk through all input types of all factories.
+				typeFactories, _ := r.findFactoriesFor(validatingType)
+				for _, typeFactory := range typeFactories {
+					validationQueue = append(validationQueue, typeFactory.factoryInTypes...)
+				}
 			}
 		}
 
