@@ -13,20 +13,29 @@ func TestContainerLifecycle(t *testing.T) {
 	serviceStarted := atomic.Bool{}
 	serviceClosed := atomic.Bool{}
 
+	svc1 := &testService1{}
+	svc2 := &testService2{}
+	svc3 := &testService3{}
+
 	container, err := New(
 		NewService(float64(100500)),
 		NewFactory(func() string { return "string" }),
 		NewFactory(func() (int, int64) { return 123, 456 }),
+		NewFactory(func() *testService1 { return svc1 }),
+		NewFactory(func() *testService2 { return svc2 }),
+		NewFactory(func() *testService3 { return svc3 }),
 		NewFactory(func(
 			ctx context.Context,
 			dep1 float64, dep2 string,
 			dep3 Optional[int],
 			dep4 Optional[bool],
+			dep5 Multiple[interface{ Do2() }],
 		) any {
 			equal(t, dep1, float64(100500))
 			equal(t, dep2, "string")
 			equal(t, dep3.Get(), 123)
 			equal(t, dep4.Get(), false)
+			equal(t, dep5, Multiple[interface{ Do2() }]{svc1, svc2})
 			factoryStarted.Store(true)
 			return func() error {
 				serviceStarted.Store(true)
@@ -40,7 +49,7 @@ func TestContainerLifecycle(t *testing.T) {
 	equal(t, container == nil, false)
 
 	// Assert factories and services.
-	equal(t, len(container.Factories()), 7)
+	equal(t, len(container.Factories()), 10)
 	equal(t, len(container.Services()), 0)
 
 	// Start all factories in the container.
@@ -49,8 +58,8 @@ func TestContainerLifecycle(t *testing.T) {
 	equal(t, serviceClosed.Load(), false)
 
 	// Assert factories and services.
-	equal(t, len(container.Factories()), 7)
-	equal(t, len(container.Services()), 8)
+	equal(t, len(container.Factories()), 10)
+	equal(t, len(container.Services()), 11)
 
 	// Let factory function start executing in the background.
 	time.Sleep(time.Millisecond)
@@ -66,6 +75,21 @@ func TestContainerLifecycle(t *testing.T) {
 	<-container.Done()
 
 	// Assert factories and services.
-	equal(t, len(container.Factories()), 7)
+	equal(t, len(container.Factories()), 10)
 	equal(t, len(container.Services()), 0)
 }
+
+type testService1 struct{}
+
+func (t *testService1) Do1() {}
+func (t *testService1) Do2() {}
+func (t *testService1) Do3() {}
+
+type testService2 struct{}
+
+func (t *testService2) Do1() {}
+func (t *testService2) Do2() {}
+
+type testService3 struct{}
+
+func (t *testService3) Do1() {}
