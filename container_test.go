@@ -16,6 +16,7 @@ func TestContainerLifecycle(t *testing.T) {
 	svc1 := &testService1{}
 	svc2 := &testService2{}
 	svc3 := &testService3{}
+	svc4 := &testService4{}
 
 	container, err := New(
 		NewService(float64(100500)),
@@ -23,7 +24,7 @@ func TestContainerLifecycle(t *testing.T) {
 		NewFactory(func() (int, int64) { return 123, 456 }),
 		NewFactory(func() *testService1 { return svc1 }),
 		NewFactory(func() *testService2 { return svc2 }),
-		NewFactory(func() *testService3 { return svc3 }),
+		NewFactory(func() (*testService3, *testService4) { return svc3, svc4 }),
 		NewFactory(func(
 			ctx context.Context,
 			dep1 float64, dep2 string,
@@ -59,7 +60,7 @@ func TestContainerLifecycle(t *testing.T) {
 
 	// Assert factories and services.
 	equal(t, len(container.Factories()), 10)
-	equal(t, len(container.Services()), 11)
+	equal(t, len(container.Services()), 12)
 
 	// Let factory function start executing in the background.
 	time.Sleep(time.Millisecond)
@@ -93,3 +94,7 @@ func (t *testService2) Do2() {}
 type testService3 struct{}
 
 func (t *testService3) Do1() {}
+
+type testService4 struct{}
+
+func (t *testService4) Do1() {}
