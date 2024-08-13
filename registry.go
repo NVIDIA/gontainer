@@ -74,8 +74,8 @@ func (r *registry) validateFactories() error {
 			}
 
 			// Is a factory for this type could be resolved?
-			factoryInTypeFactories, _ := r.findFactoriesFor(factoryInType)
-			if len(factoryInTypeFactories) == 0 {
+			typeFactories, _ := r.findFactoriesFor(factoryInType)
+			if len(typeFactories) == 0 {
 				errs = append(errs, fmt.Errorf(
 					"failed to validate service '%s' (argument %d) of '%s' from '%s': %w",
 					factoryInType, index, factory.Name(), factory.Source(), ErrServiceNotResolved,
