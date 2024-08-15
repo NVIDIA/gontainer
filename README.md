@@ -148,7 +148,7 @@ intended to be used when providing concrete service types from multiple factorie
 `*passwordauth.Provider`, `*tokenauth.Provider`) and depending on them as services `Multiple[IProvider]`.
 In this case, the length of the `services` slice could be in the range `[0, N]`.
 
-If a concrete non-interface type is specified in `T`, then the length of the slice could only be `[0, N]` 
+If a concrete non-interface type is specified in `T`, then the length of the slice could only be `[0, 1]` 
 because the container restricts the registration of the same non-interface type more than once.
 
 ```go
