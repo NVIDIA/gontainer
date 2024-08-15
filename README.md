@@ -30,7 +30,7 @@ Dependency injection service container for Golang projects.
 
     // SayHello outputs a friendly greeting.
     func (s *MyService) SayHello(name string) {
-	    log.Println("Hello,", name)
+        log.Println("Hello,", name)
     }
    ```
 2. Define a service factory.
@@ -98,9 +98,6 @@ func MyServiceFactory( /* service dependencies */) *MyService {
 // MyServiceFactory depends on two services.
 func MyServiceFactory(svc1 MyService1, svc2 MyService2) MyService {...}
 
-// MyServiceFactory optionally depends on the service.
-func MyServiceFactory(optSvc1 gontainer.Optional[MyService1]) {...}
-
 // MyServiceFactory provides two services.
 func MyServiceFactory() (MyService1, MyService2) {...}
 
@@ -125,6 +122,43 @@ There are several predefined by container service types that may be used as a de
    inside service container between services or outside from the client code.
 1. The `gontainer.Resolver` service provides a service to resolve dependencies dynamically.
 1. The `gontainer.Invoker` service provides a service to invoke functions dynamically.
+
+In addition, there are several generic types allowing to declare dependencies on a type.
+
+#### Optional Dependency Declaration
+
+The `gontainer.Optional[T]` type allows to depend on a type that may or may not be present.
+For example, when developing a factory that uses a telemetry service, this type can be used if the service
+is registered in the container. If the telemetry service is not registered, this is not considered an error,
+and telemetry initialization can be skipped in the factory.
+
+```go
+// MyServiceFactory optionally depends on the service.
+func MyServiceFactory(optService1 gontainer.Optional[MyService1]) {
+    // Get will not produce any error if the MyService1 is not registered
+    // in the container: it will return zero value for the service type.
+    service := optSvc1.Get()
+}
+```
+
+#### Multiple Dependencies Declaration
+
+The `gontainer.Multiple[T]` type allows retrieval of all services that match the type `T`. This feature is 
+intended to be used when providing concrete service types from multiple factories (e.g., struct pointers like
+`*passwordauth.Provider`, `*tokenauth.Provider`) and depending on them as services `Multiple[IProvider]`.
+In this case, the length of the `services` slice could be in the range `[0, N]`.
+
+If a concrete non-interface type is specified in `T`, then the length of the slice could only be `[0, N]` 
+because the container restricts the registration of the same non-interface type more than once.
+
+```go
+// MyServiceFactory depends on the all implementing interface types.
+func MyServiceFactory(servicesSlice gontainer.Multiple[MyInterface]) {
+    for _, service := range servicesSlice {
+
+    }
+}
+```
 
 ### Services
 
@@ -162,13 +196,13 @@ The function serves two primary roles:
 ```go
 // MyServiceFactory is an example of a service function usage.
 func MyServiceFactory(ctx context.Context) func () error {
-   return func () error {
-      // Await its order in container close.
-      <-ctx.Done()
+    return func () error {
+        // Await its order in container close.
+        <-ctx.Done()
       
-      // Return nil from the `service.Close()`.
-      return nil
-   }
+        // Return nil from the `service.Close()`.
+        return nil
+    }
 }
 ```
 
@@ -221,34 +255,34 @@ Every handler function could return an `error` which will be joined and returned
 ```go
 // Container defines service container interface.
 type Container interface {
-	// Start initializes every service in the container.
-	Start() error
+    // Start initializes every service in the container.
+    Start() error
 
-	// Close closes service container with all services.
-	// Blocks invocation until the container is closed.
-	Close() error
+    // Close closes service container with all services.
+    // Blocks invocation until the container is closed.
+    Close() error
 
-	// Done is closing after closing of all services.
-	Done() <-chan struct{}
+    // Done is closing after closing of all services.
+    Done() <-chan struct{}
 
-	// Factories returns all defined factories.
-	Factories() []*Factory
+    // Factories returns all defined factories.
+    Factories() []*Factory
 
-	// Services returns all spawned services.
-	Services() []any
+    // Services returns all spawned services.
+    Services() []any
 
-	// Events returns events broker instance.
-	Events() Events
+    // Events returns events broker instance.
+    Events() Events
 
-	// Resolver returns service resolver instance.
-	// If container is not started, only requested services
-	// will be spawned on `resolver.Resolve(...)` call.
-	Resolver() Resolver
+    // Resolver returns service resolver instance.
+    // If container is not started, only requested services
+    // will be spawned on `resolver.Resolve(...)` call.
+    Resolver() Resolver
 
-	// Invoker returns function invoker instance.
-	// If container is not started, only requested services
-	// will be spawned to invoke the func.
-	Invoker() Invoker
+    // Invoker returns function invoker instance.
+    // If container is not started, only requested services
+    // will be spawned to invoke the func.
+    Invoker() Invoker
 }
 ```
 

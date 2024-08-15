@@ -153,16 +153,6 @@ type Container interface {
 	Invoker() Invoker
 }
 
-// Optional defines optional service dependency.
-type Optional[T any] struct {
-	value T
-}
-
-// Get returns optional service instance.
-func (o Optional[T]) Get() T {
-	return o.value
-}
-
 // container implements service container.
 type container struct {
 	ctx    context.Context
