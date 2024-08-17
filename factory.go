@@ -197,6 +197,14 @@ func splitFuncName(funcFullName string) (string, string) {
 		}
 	}
 
+	// If the
+	//name contains no package path.
+	if lastPackageChunkIndex == -1 {
+		packageName := fullNameChunks[0]
+		funcName := strings.Join(fullNameChunks[1:], ".")
+		return packageName, funcName
+	}
+
 	// Prepare package name and function name.
 	packageName := strings.Join(fullNameChunks[:lastPackageChunkIndex+1], ".")
 	funcName := strings.Join(fullNameChunks[lastPackageChunkIndex+1:], ".")

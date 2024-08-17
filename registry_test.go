@@ -60,13 +60,13 @@ func TestRegistryValidateFactories(t *testing.T) {
 				equal(t, len(errs), 2)
 
 				equal(t, errors.Is(errs[0], ErrServiceNotResolved), true)
-				equal(t, errs[0].Error(), "failed to validate service 'bool' (argument 0) "+
-					"of 'Factory[func(bool) error]' from 'github.com/NVIDIA/gontainer': "+
+				equal(t, errs[0].Error(), "failed to validate argument 'bool' (index 0) "+
+					"of factory 'Factory[func(bool) error]' from 'github.com/NVIDIA/gontainer': "+
 					"service not resolved")
 
 				equal(t, errors.Is(errs[1], ErrServiceNotResolved), true)
-				equal(t, errs[1].Error(), "failed to validate service 'string' (argument 0) "+
-					"of 'Factory[func(string) error]' from 'github.com/NVIDIA/gontainer': "+
+				equal(t, errs[1].Error(), "failed to validate argument 'string' (index 0) "+
+					"of factory 'Factory[func(string) error]' from 'github.com/NVIDIA/gontainer': "+
 					"service not resolved")
 			},
 		},
@@ -85,13 +85,13 @@ func TestRegistryValidateFactories(t *testing.T) {
 				equal(t, len(errs), 2)
 
 				equal(t, errors.Is(errs[0], ErrServiceDuplicated), true)
-				equal(t, errs[0].Error(), "failed to validate service 'string' (output 0) of "+
-					"'Factory[func() (string, error)]' from 'github.com/NVIDIA/gontainer': "+
+				equal(t, errs[0].Error(), "failed to validate output 'string' (index 0) "+
+					"of factory 'Factory[func() (string, error)]' from 'github.com/NVIDIA/gontainer': "+
 					"service duplicated")
 
 				equal(t, errors.Is(errs[1], ErrServiceDuplicated), true)
-				equal(t, errs[1].Error(), "failed to validate service 'string' (output 0) of "+
-					"'Factory[func() (string, error)]' from 'github.com/NVIDIA/gontainer': "+
+				equal(t, errs[1].Error(), "failed to validate output 'string' (index 0) "+
+					"of factory 'Factory[func() (string, error)]' from 'github.com/NVIDIA/gontainer': "+
 					"service duplicated")
 			},
 		},
@@ -111,19 +111,16 @@ func TestRegistryValidateFactories(t *testing.T) {
 				equal(t, len(errs), 3)
 
 				equal(t, errors.Is(errs[0], ErrCircularDependency), true)
-				equal(t, errs[0].Error(), "failed to validate service 'bool' (argument 0) "+
-					"of 'Factory[func(bool) (int, error)]' from 'github.com/NVIDIA/gontainer': "+
-					"circular dependency")
+				equal(t, errs[0].Error(), "failed to validate factory 'Factory[func(bool) (int, error)]' "+
+					"from 'github.com/NVIDIA/gontainer': circular dependency")
 
 				equal(t, errors.Is(errs[1], ErrCircularDependency), true)
-				equal(t, errs[1].Error(), "failed to validate service 'string' (argument 0) "+
-					"of 'Factory[func(string) (bool, error)]' from 'github.com/NVIDIA/gontainer': "+
-					"circular dependency")
+				equal(t, errs[1].Error(), "failed to validate factory 'Factory[func(string) (bool, error)]' "+
+					"from 'github.com/NVIDIA/gontainer': circular dependency")
 
 				equal(t, errors.Is(errs[2], ErrCircularDependency), true)
-				equal(t, errs[2].Error(), "failed to validate service 'int' (argument 0) "+
-					"of 'Factory[func(int) (string, error)]' from 'github.com/NVIDIA/gontainer': "+
-					"circular dependency")
+				equal(t, errs[2].Error(), "failed to validate factory 'Factory[func(int) (string, error)]' "+
+					"from 'github.com/NVIDIA/gontainer': circular dependency")
 			},
 		},
 		{
@@ -145,34 +142,32 @@ func TestRegistryValidateFactories(t *testing.T) {
 				equal(t, len(errs), 6)
 
 				equal(t, errors.Is(errs[0], ErrServiceNotResolved), true)
-				equal(t, errs[0].Error(), "failed to validate service 'struct { X int }' (argument 0) "+
-					"of 'Factory[func(struct { X int }) string]' from 'github.com/NVIDIA/gontainer': "+
+				equal(t, errs[0].Error(), "failed to validate argument 'struct { X int }' (index 0) "+
+					"of factory 'Factory[func(struct { X int }) string]' from 'github.com/NVIDIA/gontainer': "+
 					"service not resolved")
 
 				equal(t, errors.Is(errs[1], ErrServiceDuplicated), true)
-				equal(t, errs[1].Error(), "failed to validate service 'string' (output 0) "+
-					"of 'Factory[func(struct { X int }) string]' from 'github.com/NVIDIA/gontainer': "+
+				equal(t, errs[1].Error(), "failed to validate output 'string' (index 0) "+
+					"of factory 'Factory[func(struct { X int }) string]' from 'github.com/NVIDIA/gontainer': "+
 					"service duplicated")
 
 				equal(t, errors.Is(errs[2], ErrServiceDuplicated), true)
-				equal(t, errs[2].Error(), "failed to validate service 'string' (output 0) "+
-					"of 'Factory[func(context.Context) (string, error)]' from 'github.com/NVIDIA/gontainer': "+
+				equal(t, errs[2].Error(), "failed to validate output 'string' (index 0) "+
+					"of factory 'Factory[func(context.Context) (string, error)]' from 'github.com/NVIDIA/gontainer': "+
 					"service duplicated")
 
-				equal(t, errors.Is(errs[3], ErrCircularDependency), true)
-				equal(t, errs[3].Error(), "failed to validate service 'bool' (argument 0) "+
-					"of 'Factory[func(bool) (int, error)]' from 'github.com/NVIDIA/gontainer': "+
-					"circular dependency")
+				equal(t, errors.Is(errs[3], ErrServiceDuplicated), true)
+				equal(t, errs[3].Error(), "failed to validate output 'string' (index 1) "+
+					"of factory 'Factory[func(int) (bool, string)]' from 'github.com/NVIDIA/gontainer': "+
+					"service duplicated")
 
 				equal(t, errors.Is(errs[4], ErrCircularDependency), true)
-				equal(t, errs[4].Error(), "failed to validate service 'int' (argument 0) "+
-					"of 'Factory[func(int) (bool, string)]' from 'github.com/NVIDIA/gontainer': "+
-					"circular dependency")
+				equal(t, errs[4].Error(), "failed to validate factory 'Factory[func(bool) (int, error)]' "+
+					"from 'github.com/NVIDIA/gontainer': circular dependency")
 
-				equal(t, errors.Is(errs[5], ErrServiceDuplicated), true)
-				equal(t, errs[5].Error(), "failed to validate service 'string' (output 1) "+
-					"of 'Factory[func(int) (bool, string)]' from 'github.com/NVIDIA/gontainer': "+
-					"service duplicated")
+				equal(t, errors.Is(errs[5], ErrCircularDependency), true)
+				equal(t, errs[5].Error(), "failed to validate factory 'Factory[func(int) (bool, string)]' "+
+					"from 'github.com/NVIDIA/gontainer': circular dependency")
 			},
 		},
 	}

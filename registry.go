@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
-	"slices"
 )
 
 // registry contains all defined factories metadata.
@@ -52,9 +51,8 @@ func (r *registry) registerFactory(ctx context.Context, factory *Factory) error 
 func (r *registry) validateFactories() error {
 	var errs []error
 
-	// Validate all factories.
+	// Validate all input types are resolvable.
 	for _, factory := range r.factories {
-		// Validate all input types are resolvable.
 		for index, factoryInType := range factory.factoryInTypes {
 			// Is this type a special factory context type?
 			if isContextInterface(factoryInType) {
@@ -77,60 +75,16 @@ func (r *registry) validateFactories() error {
 			typeFactories, _ := r.findFactoriesFor(factoryInType)
 			if len(typeFactories) == 0 {
 				errs = append(errs, fmt.Errorf(
-					"failed to validate service '%s' (argument %d) of '%s' from '%s': %w",
+					"failed to validate argument '%s' (index %d) of factory '%s' from '%s': %w",
 					factoryInType, index, factory.Name(), factory.Source(), ErrServiceNotResolved,
 				))
 				continue
 			}
 		}
+	}
 
-		// Validate all input types have no circular dependencies.
-		for index, factoryInType := range factory.factoryInTypes {
-			// Is this type a special factory context type?
-			if isContextInterface(factoryInType) {
-				continue
-			}
-
-			// Validate dependencies graph of this type.
-			validationQueue := []reflect.Type{factoryInType}
-			var validatedTypes []reflect.Type
-			for len(validationQueue) > 0 {
-				validatingType := validationQueue[0]
-				validationQueue = validationQueue[1:]
-
-				// Is this type wrapped to the `Optional[type]`?
-				innerType, isOptional := isOptionalType(validatingType)
-				if isOptional {
-					validatingType = innerType
-				}
-
-				// Is this type wrapped to the `Multiple[type]`?
-				innerType, isMultiple := isMultipleType(validatingType)
-				if isMultiple {
-					validatingType = innerType
-				}
-
-				// Was this type already validated before?
-				if slices.Contains(validatedTypes, validatingType) {
-					errs = append(errs, fmt.Errorf(
-						"failed to validate service '%s' (argument %d) of '%s' from '%s': %w",
-						validatingType, index, factory.Name(), factory.Source(), ErrCircularDependency,
-					))
-					break
-				}
-
-				// Register type as validated.
-				validatedTypes = append(validatedTypes, validatingType)
-
-				// Walk through all input types of all factories.
-				typeFactories, _ := r.findFactoriesFor(validatingType)
-				for _, typeFactory := range typeFactories {
-					validationQueue = append(validationQueue, typeFactory.factoryInTypes...)
-				}
-			}
-		}
-
-		// Validate all output types are unique.
+	// Validate all output types are unique.
+	for _, factory := range r.factories {
 		for index, factoryOutType := range factory.factoryOutTypes {
 			// Factories returning `any` could be duplicated.
 			if isEmptyInterface(factoryOutType) {
@@ -141,9 +95,52 @@ func (r *registry) validateFactories() error {
 			factoriesForSameOutType, _ := r.findFactoriesFor(factoryOutType)
 			if len(factoriesForSameOutType) > 1 {
 				errs = append(errs, fmt.Errorf(
-					"failed to validate service '%s' (output %d) of '%s' from '%s': %w",
+					"failed to validate output '%s' (index %d) of factory '%s' from '%s': %w",
 					factoryOutType, index, factory.Name(), factory.Source(), ErrServiceDuplicated,
 				))
+			}
+		}
+	}
+
+	// Validate for circular dependencies.
+	for index := range r.factories {
+		factories := []*Factory{r.factories[index]}
+	recursion:
+		for len(factories) > 0 {
+			factory := factories[0]
+			factories = factories[1:]
+
+			for _, factoryInType := range factory.factoryInTypes {
+				// Is this type a special factory context type?
+				if isContextInterface(factoryInType) {
+					continue
+				}
+
+				// Is this type wrapped to the `Optional[type]`?
+				innerType, isOptional := isOptionalType(factoryInType)
+				if isOptional {
+					factoryInType = innerType
+				}
+
+				// Is this type wrapped to the `Multiple[type]`?
+				innerType, isMultiple := isMultipleType(factoryInType)
+				if isMultiple {
+					factoryInType = innerType
+				}
+
+				// Walk through all factories for this in argument type.
+				factoriesForType, _ := r.findFactoriesFor(factoryInType)
+				for _, factoryForType := range factoriesForType {
+					if factoryForType == r.factories[index] {
+						errs = append(errs, fmt.Errorf(
+							"failed to validate factory '%s' from '%s': %w",
+							r.factories[index].Name(), r.factories[index].Source(), ErrCircularDependency,
+						))
+						break recursion
+					}
+				}
+
+				factories = append(factories, factoriesForType...)
 			}
 		}
 	}
