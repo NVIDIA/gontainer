@@ -88,3 +88,34 @@ func TestFactoryInfo(t *testing.T) {
 type globalType struct{}
 
 func globalFunc(string) {}
+
+// TestSplitFuncName tests splitting of function name.
+func TestSplitFuncName(t *testing.T) {
+	tests := []struct {
+		name  string
+		arg   string
+		want1 string
+		want2 string
+	}{{
+		name:  "SplitPublicPackage",
+		arg:   "github.com/NVIDIA/gontainer/app.WithApp.func1",
+		want1: "github.com/NVIDIA/gontainer/app",
+		want2: "WithApp.func1",
+	}, {
+		name:  "SplitMainPackage",
+		arg:   "main.main.func1",
+		want1: "main",
+		want2: "main.func1",
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got1, got2 := splitFuncName(tt.arg)
+			if got1 != tt.want1 {
+				t.Errorf("splitFuncName() got1 = %v, want %v", got1, tt.want1)
+			}
+			if got2 != tt.want2 {
+				t.Errorf("splitFuncName() got2 = %v, want %v", got2, tt.want2)
+			}
+		})
+	}
+}
