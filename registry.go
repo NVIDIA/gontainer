@@ -439,7 +439,7 @@ func wrapFactoryFunc(factoryOutValue reflect.Value) (reflect.Value, error) {
 	// It is a programming error, if the function has wrong interface.
 	factoryOutServiceFn, ok := factoryOutValue.Interface().(func() error)
 	if !ok {
-		return factoryOutValue, fmt.Errorf("unexpected signature '%s'", factoryOutValue.Elem().Type())
+		return factoryOutValue, fmt.Errorf("unexpected signature '%s'", factoryOutValue.Type())
 	}
 
 	// Prepare a regular object from the function.
