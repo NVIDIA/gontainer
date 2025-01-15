@@ -23,7 +23,7 @@ Dependency injection service container for Golang projects.
 
 ## Quick Start
 
-1. Define an example service object.
+1. Define an example service.
     ```go
     // MyService performs some crucial tasks.
     type MyService struct{}
@@ -62,7 +62,7 @@ Dependency injection service container for Golang projects.
    }
    ```
    
-6. Alternatively to eager start with a `Start()` call it is possible to use `Resolver` or `Invoker` service. It will spawn only explicitly requested services. 
+6. Alternatively to eager start with a `Start()` call it is possible to use `Resolver` or `Invoker` service. It will spawn only explicitly requested services including it's dependencies. 
    ```go
    var MyService myService
    if err := container.Resolver().Resolve(&MyService); err != nil {
