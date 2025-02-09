@@ -378,11 +378,11 @@ func (r *registry) spawnFactory(factory *Factory) error {
 	// Handle factory out functions as regular objects.
 	for factoryOutIndex, factoryOutValue := range factoryOutValues {
 		if serviceFuncValue, ok := isServiceFunc(factoryOutValue); ok {
-			if serviceFuncResult, err := startServiceFunc(serviceFuncValue); err == nil {
-				factoryOutValues[factoryOutIndex] = serviceFuncResult
-			} else {
+			serviceFuncResult, err := startServiceFunc(serviceFuncValue)
+			if err != nil {
 				return fmt.Errorf("failed to start factory func: %w", err)
 			}
+			factoryOutValues[factoryOutIndex] = serviceFuncResult
 		}
 	}
 
