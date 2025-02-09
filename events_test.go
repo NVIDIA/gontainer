@@ -82,6 +82,7 @@ func TestEvents(t *testing.T) {
 }
 
 func equal(t *testing.T, a, b any) {
+	t.Helper()
 	if !reflect.DeepEqual(a, b) {
 		t.Fatalf("equal failed: '%v' != '%v'", a, b)
 	}
