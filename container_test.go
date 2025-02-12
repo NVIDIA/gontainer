@@ -58,6 +58,7 @@ func TestContainerLifecycle(t *testing.T) {
 			dep7 interface{ Do5() error },
 			dep8 Optional[testService5],
 			dep9 Optional[interface{ Do5() error }],
+			dep10 Optional[func() error],
 		) any {
 			equal(t, dep1, float64(100500))
 			equal(t, dep2, "string")
@@ -70,6 +71,7 @@ func TestContainerLifecycle(t *testing.T) {
 			equal(t, dep8.Get()().Error(), "svc5 error")
 			equal(t, dep8.Get().Do5().Error(), "svc5 error")
 			equal(t, dep9.Get().Do5().Error(), "svc5 error")
+			equal(t, dep10.Get(), (func() error)(nil))
 			factoryStarted.Store(true)
 
 			// Service function.
