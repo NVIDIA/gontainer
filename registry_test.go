@@ -323,17 +323,123 @@ func TestIsContextInterface(t *testing.T) {
 	equal(t, isContextInterface(reflect.TypeOf(&t5).Elem()), true)
 }
 
-// TestWrapFactoryFunc tests wrapping of factory functions.
-func TestWrapFactoryFunc(t *testing.T) {
-	var result = errors.New("test")
-	var svcfunc any = func() error {
-		return result
+// TestIsServiceFunc tests checking of service functions.
+func TestIsServiceFunc(t *testing.T) {
+	svcErr := errors.New("test")
+	svcFunc := func() error { return svcErr }
+
+	tests := []struct {
+		name  string
+		arg1  func() reflect.Value
+		want1 reflect.Value
+		want2 bool
+	}{{
+		name: "AnyTypeVarWithFunc",
+		arg1: func() reflect.Value {
+			var svcFuncAny any = svcFunc
+			return reflect.ValueOf(&svcFuncAny).Elem()
+		},
+		want1: reflect.ValueOf(svcFunc),
+		want2: true,
+	}, {
+		name: "FuncTypeVarWithFunc",
+		arg1: func() reflect.Value {
+			var svcFuncTyped = svcFunc
+			return reflect.ValueOf(&svcFuncTyped).Elem()
+		},
+		want1: reflect.ValueOf(&svcFunc).Elem(),
+		want2: true,
+	}, {
+		name: "FuncWithReceivers",
+		arg1: func() reflect.Value {
+			var svcFuncWrapped funcWithReceivers = svcFunc
+			return reflect.ValueOf(&svcFuncWrapped).Elem()
+		},
+		want1: reflect.Value{},
+		want2: false,
+	}, {
+		name: "AnyTypeVarWithInt",
+		arg1: func() reflect.Value {
+			var intValue any = 5
+			return reflect.ValueOf(&intValue).Elem()
+		},
+		want1: reflect.Value{},
+		want2: false,
+	}, {
+		name: "IntTypeVarWithInt",
+		arg1: func() reflect.Value {
+			intValue := 5
+			return reflect.ValueOf(&intValue).Elem()
+		},
+		want1: reflect.Value{},
+		want2: false,
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got1, got2 := isServiceFunc(tt.arg1())
+			if (got1.IsValid() || tt.want1.IsValid()) && (got1.Pointer() != tt.want1.Pointer()) {
+				t.Errorf("isServiceFunc() got1 = %s, want1 %s", got1, tt.want1)
+			}
+			if got2 != tt.want2 {
+				t.Errorf("isServiceFunc() got2 = %v, want2 %v", got2, tt.want2)
+			}
+		})
 	}
+}
 
-	svcvalue := reflect.ValueOf(&svcfunc).Elem()
-	wrapper, err := wrapFactoryFunc(svcvalue)
-	equal(t, err, nil)
+// TestWrapServiceFunc tests wrapping of service functions.
+func TestWrapServiceFunc(t *testing.T) {
+	svcErr := errors.New("test")
+	svcFunc1 := func() error { return svcErr }
+	svcFunc2 := func() {}
 
-	service := wrapper.Interface().(function)
-	equal(t, service.Close(), result)
+	tests := []struct {
+		name  string
+		arg1  func() reflect.Value
+		want1 error
+		want2 error
+	}{{
+		name: "AnyTypeVarWithFunc1",
+		arg1: func() reflect.Value {
+			var svcFuncAny any = svcFunc1
+			return reflect.ValueOf(&svcFuncAny).Elem()
+		},
+		want1: svcErr,
+		want2: nil,
+	}, {
+		name: "FuncTypeVarWithFunc1",
+		arg1: func() reflect.Value {
+			var svcFuncTyped = svcFunc1
+			return reflect.ValueOf(&svcFuncTyped).Elem()
+		},
+		want1: svcErr,
+		want2: nil,
+	}, {
+		name: "FuncTypeVarWithFunc2",
+		arg1: func() reflect.Value {
+			var svcFuncTyped = svcFunc2
+			return reflect.ValueOf(&svcFuncTyped).Elem()
+		},
+		want1: nil,
+		want2: nil,
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got1, got2 := startServiceFunc(tt.arg1())
+			if !reflect.DeepEqual(got1.Interface().(funcResult).Close(), tt.want1) {
+				t.Errorf("startServiceFunc() got1 = %v, want1 %v", got1, tt.want1)
+			}
+			if !reflect.DeepEqual(got2, tt.want2) {
+				t.Errorf("startServiceFunc() got2 = %v, want2 %v", got2, tt.want2)
+			}
+		})
+	}
+}
+
+// funcWithReceivers is a function type with receivers.
+type funcWithReceivers func() error
+
+// Error defines example method on the service func.
+func (f funcWithReceivers) Error() string {
+	return "error"
 }

@@ -187,7 +187,7 @@ func (s *MyService) Close() error {
 ### Service Functions
 
 The **Service Function** is a specialized form of service optimized for simpler tasks. Instead of returning a concrete
-type object or an interface, the service factory returns a function that conforms to `func() error` type.
+type object or an interface, the service factory returns a function that conforms to `func() error` or `func()` type.
 
 The function serves two primary roles:
 
@@ -196,8 +196,8 @@ The function serves two primary roles:
 
 ```go
 // MyServiceFactory is an example of a service function usage.
-func MyServiceFactory(ctx context.Context) func () error {
-    return func () error {
+func MyServiceFactory(ctx context.Context) func() error {
+    return func() error {
         // Await its order in container close.
         <-ctx.Done()
       

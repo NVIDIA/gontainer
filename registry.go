@@ -377,10 +377,12 @@ func (r *registry) spawnFactory(factory *Factory) error {
 
 	// Handle factory out functions as regular objects.
 	for factoryOutIndex, factoryOutValue := range factoryOutValues {
-		var err error
-		factoryOutValues[factoryOutIndex], err = wrapFactoryFunc(factoryOutValue)
-		if err != nil {
-			return fmt.Errorf("failed to wrap factory func: %w", err)
+		if serviceFuncValue, ok := isServiceFunc(factoryOutValue); ok {
+			serviceFuncResult, err := startServiceFunc(serviceFuncValue)
+			if err != nil {
+				return fmt.Errorf("failed to start factory func: %w", err)
+			}
+			factoryOutValues[factoryOutIndex] = serviceFuncResult
 		}
 	}
 
@@ -395,11 +397,11 @@ func (r *registry) spawnFactory(factory *Factory) error {
 	return nil
 }
 
-// function represents service function return value wrapper.
-type function chan error
+// function represents service func return value wrapper.
+type funcResult chan error
 
 // Close awaits service function and returns result error.
-func (f function) Close() error {
+func (f funcResult) Close() error {
 	return <-f
 }
 
@@ -420,36 +422,59 @@ func isContextInterface(typ reflect.Type) bool {
 	return typ.Kind() == reflect.Interface && typ.Implements(ctxType)
 }
 
-// wrapFactoryFunc wraps specified function to the regular service object.
-func wrapFactoryFunc(factoryOutValue reflect.Value) (reflect.Value, error) {
-	// Check specified factory out value elem is a function.
-	// The factoryOutValue can be an `any` type with a function in the value,
-	// when the factory declares any return type, or directly a function type,
-	// when the factory declares explicit func return type. Both cases are OK.
-	if factoryOutValue.Kind() == reflect.Interface {
-		if factoryOutValue.Elem().Kind() == reflect.Func {
-			factoryOutValue = factoryOutValue.Elem()
+// isServiceFunc returns true when the argument is a service function.
+// The `factoryOutValue` can be an `any` type with a function in the value
+// (when the factory declares `any` return type), or the `function` type
+// (when the factory declares explicit return type).
+func isServiceFunc(factoryOutValue reflect.Value) (reflect.Value, bool) {
+	// Unbox the value if it is an any interface.
+	if isEmptyInterface(factoryOutValue.Type()) {
+		factoryOutValue = factoryOutValue.Elem()
+	}
+
+	// Check if the result value kind is a func kind.
+	// The func type must have no user-defined methods,
+	// because otherwise it could be a service instance
+	// based on the func type but implements an interface.
+	if factoryOutValue.Kind() == reflect.Func {
+		if factoryOutValue.NumMethod() == 0 {
+			return factoryOutValue, true
 		}
 	}
-	if factoryOutValue.Kind() != reflect.Func {
-		return factoryOutValue, nil
+
+	return reflect.Value{}, false
+}
+
+// startServiceFunc wraps service function to the regular service object.
+func startServiceFunc(serviceFuncValue reflect.Value) (reflect.Value, error) {
+	// Prepare closable result chan as a service function replacement.
+	// The service function result error will be returned from the
+	// result wrapper chan `Close() error` method right to the
+	// service container on the termination stage.
+	funcResultChan := funcResult(make(chan error))
+
+	// Start the service function in background.
+	serviceFunc := serviceFuncValue.Interface()
+	switch serviceFunc := serviceFunc.(type) {
+	case func() error:
+		go func() {
+			err := serviceFunc()
+			funcResultChan <- err
+		}()
+	case func():
+		go func() {
+			serviceFunc()
+			funcResultChan <- nil
+		}()
+	default:
+		return reflect.Value{}, fmt.Errorf(
+			"unexpected service function signature: %T",
+			serviceFuncValue.Interface(),
+		)
 	}
-
-	// Check specified factory out value is a service function.
-	// It is a programming error, if the function has wrong interface.
-	factoryOutServiceFn, ok := factoryOutValue.Interface().(func() error)
-	if !ok {
-		return factoryOutValue, fmt.Errorf("unexpected signature '%s'", factoryOutValue.Type())
-	}
-
-	// Prepare a regular object from the function.
-	fnResult := function(make(chan error))
-
-	// Run specified function in background and await for return.
-	go func() { fnResult <- factoryOutServiceFn() }()
 
 	// Return reflected value of the wrapper.
-	return reflect.ValueOf(fnResult), nil
+	return reflect.ValueOf(funcResultChan), nil
 }
 
 // errorType contains reflection type for error variable.
