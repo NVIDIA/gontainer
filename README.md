@@ -67,12 +67,12 @@ Dependency injection service container for Golang projects.
    if err := container.Resolver().Resolve(&MyService); err != nil {
        log.Fatalf("Failed to resolve dependency: %s", err)
    }
-   myServise.DoSomething()
+   myService.DoSomething()
    ```
    or
    ```go
    if err := container.Invoker().Invoke(func(myService *MyService) {
-       myServise.DoSomething()
+       myService.DoSomething()
    }); err != nil {
        log.Fatalf("Failed to invoke a function: %s", err)
    }
