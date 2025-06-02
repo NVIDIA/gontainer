@@ -22,7 +22,25 @@ import (
 	"reflect"
 )
 
-// Invoker defines invoker interface.
+// Invoker defines an interface for invoking functions with automatic dependency resolution.
+//
+// The Invoke method accepts a function `fn`, resolves its input parameters using the invoker’s
+// dependency resolver, and then calls the function with the resolved arguments.
+//
+// If the container has not been started yet, dependency resolution happens in lazy mode — only
+// the required arguments and their transitive dependencies are instantiated on demand.
+//
+// The function may have one of the following return signatures:
+//   - no return values (i.e., `func(...)`),
+//   - a single `error` (i.e., `func(...) error`),
+//   - multiple return values, where the last one may be an `error` (i.e., `func(...) (T1, T2, ..., error)`).
+//
+// If the last return value implements the `error` interface and is non-nil, it is returned.
+// All other return values are collected into the InvokeResult.
+//
+// An error is also returned if:
+//   - `fn` is not a function,
+//   - any dependency could not be resolved.
 type Invoker interface {
 	// Invoke invokes specified function.
 	Invoke(fn any) (InvokeResult, error)

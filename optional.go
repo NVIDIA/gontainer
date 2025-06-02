@@ -22,7 +22,21 @@ import (
 	"unsafe"
 )
 
-// Optional defines optional service dependency.
+// Optional defines a dependency on a service that may or may not be registered.
+//
+// This generic wrapper is used in service factory function parameters to declare
+// that the service of type T is optional. If the container does not contain
+// a matching service, the zero value of T will be injected.
+//
+// Use the Get() method to access the wrapped value inside the factory.
+//
+// Example:
+//
+//	func MyFactory(logger gontainer.Optional[Logger]) {
+//	    if log := logger.Get(); log != nil {
+//	        log.Info("Logger available")
+//	    }
+//	}
 type Optional[T any] struct {
 	value T
 }
