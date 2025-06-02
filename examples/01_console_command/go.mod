@@ -1,4 +1,4 @@
-module github.com/NVIDIA/gontainer/examples/01_basic_usage
+module github.com/NVIDIA/gontainer/examples/01_console_command
 
 go 1.21
 

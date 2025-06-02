@@ -10,16 +10,16 @@ Dependency injection service container for Golang projects.
 
 ## Features
 
-- 🚀 Eager services instantiation with automatic dependencies resolution and optional dependencies support.
-- 🛠 Dependency Injection for service factories, avoiding manual fetch through container API.
-- 🔄 Reverse-to-Instantiation order for service termination to ensure proper resource release and shutdown.
-- 📣 Events broker for inter-service container-wide communications.
-- 🤖 Clean, tested and with small codebase based on reflection.
+- 🚀 Eager or lazy services instantiation with automatic dependencies resolution and optional dependencies support.
+- 🛠 Automatic injection of dependencies for service factories, avoiding manual fetch through container API.
+- 🔄 Automatic reverse-to-instantiation order for service termination to ensure proper resource release and shutdown.
+- 📣 Built-in events broker service for inter-service container-wide communications and loose coupling between services.
+- 🤖 Clean and tested implementation based on reflection.
 
 ## Examples
 
-* [Basic script example](./examples/01_basic_usage/main.go) showing how to do something useful and then exit.
-* [Daemon service example](./examples/02_daemon_service/main.go) showing how to launch background services.
+* [Console command example](./examples/01_console_command/main.go) – demonstrates how to build a simple console command. It shows how to use `Resolver` and `Invoker` services to organize the application entry point in a run-and-exit style.
+* [Daemon service example](./examples/02_daemon_service/main.go) – demonstrates how to maintain background services. It shows how to organize a daemon entry point and wait for graceful shutdown by subscribing to OS termination signals.
 
 ## Quick Start
 
@@ -45,7 +45,7 @@ Dependency injection service container for Golang projects.
       // Define MyService factory in the container.
       gontainer.NewFactory(NewMyService),
    
-      // Here we can define another services depending on `*MyService`.
+      // Here we can define additional services depending on `*MyService`.
       // All dependencies are declared using factory function args.
       gontainer.NewFactory(func(service *MyService) {
          service.SayHello("Username")
@@ -61,32 +61,33 @@ Dependency injection service container for Golang projects.
       log.Fatalf("Failed to start service container: %s", err)
    }
    ```
-   
-6. Alternatively to eager start with a `Start()` call it is possible to use `Resolver` or `Invoker` service. It will spawn only explicitly requested services including it's dependencies. 
+6. Alternatively to eager start with a `Start()` call it is possible to use `Resolver` or `Invoker` service. They will instantiate only the explicitly requested services and their transitive dependencies.
    ```go
-   var MyService myService
+   var myService *MyService
    if err := container.Resolver().Resolve(&MyService); err != nil {
-       log.Fatalf("Failed to resolve MyService dependency: %s", err)
+       log.Fatalf("Failed to resolve dependency: %s", err)
    }
    myServise.DoSomething()
    ```
    or
    ```go
-   if err := container.Invoker().Invoke(func(myService &MyService) {
+   if err := container.Invoker().Invoke(func(myService *MyService) {
        myServise.DoSomething()
    }); err != nil {
        log.Fatalf("Failed to invoke a function: %s", err)
    }
    ```
+   `Resolver` and `Invoker` could also serve as an entry point to the application, especially when it's a simple console tool that runs a task and exits.
+   The [console command example](./examples/01_console_command/main.go) demonstrates this approach.
 
 ## Key Concepts
 
 ### Service Factories
 
 The **Service Factory** is a key component of the service container, serving as a mechanism for creating service instances.
-A **Service Factory** is essentially a function that accepts another services and returns an instances of services of concrete types or an
-interfaces and optionally spawn an error in the last return argument. Using service factory signature, the service container
-will resolve and spawn all dependency services using reflection and fail, if there are unresolvable dependencies.
+A service factory is essentially a function that accepts other services as arguments and returns one or more service instances,
+optionally along with an error. Using service factory signature, the service container will resolve and spawn all dependency
+services using reflection and fail, if there are unresolvable dependencies.
 
 ```go
 // MyServiceFactory is an example of a service factory.
@@ -101,13 +102,13 @@ func MyServiceFactory(svc1 MyService1, svc2 MyService2) MyService {...}
 // MyServiceFactory provides two services.
 func MyServiceFactory() (MyService1, MyService2) {...}
 
-// MyServiceFactory provides two services and spawn error.
+// MyServiceFactory provides two services and return an error.
 func MyServiceFactory() (MyService1, MyService2, error) {...}
 
-// MyServiceFactory provides no services an error.
+// MyServiceFactory returns only an error.
 func MyServiceFactory() error {...}
 
-// MyServiceFactory provides nothing. Sic!
+// MyServiceFactory provides nothing.
 func MyServiceFactory() {...}
 ```
 
@@ -118,10 +119,10 @@ There are several predefined by container service types that may be used as a de
 
 1. The `context.Context` service provides the per-service context, inherited from the background context.
    This context is cancelled right before the service's `Close()` call and intended to be used with service functions.
-1. The `gontainer.Events` service provides the events broker. It can be used to send and receive events
+2. The `gontainer.Events` service provides the events broker. It can be used to send and receive events
    inside service container between services or outside from the client code.
-1. The `gontainer.Resolver` service provides a service to resolve dependencies dynamically.
-1. The `gontainer.Invoker` service provides a service to invoke functions dynamically.
+3. The `gontainer.Resolver` service provides a service to resolve dependencies dynamically.
+4. The `gontainer.Invoker` service provides a service to invoke functions dynamically.
 
 In addition, there are several generic types allowing to declare dependencies on a type.
 
@@ -148,14 +149,14 @@ intended to be used when providing concrete service types from multiple factorie
 `*passwordauth.Provider`, `*tokenauth.Provider`) and depending on them as services `Multiple[IProvider]`.
 In this case, the length of the `services` slice could be in the range `[0, N]`.
 
-If a concrete non-interface type is specified in `T`, then the length of the slice could only be `[0, 1]` 
-because the container restricts the registration of the same non-interface type more than once.
+If a concrete non-interface type is specified in `T`, the slice can have at most one element. 
+The container restricts the registration of the same non-interface type more than once.
 
 ```go
-// MyServiceFactory depends on the all implementing interface types.
+// MyServiceFactory depends on all services implementing the interface.
 func MyServiceFactory(servicesSlice gontainer.Multiple[MyInterface]) {
     for _, service := range servicesSlice {
-
+        service.DoSomething()
     }
 }
 ```
@@ -191,8 +192,8 @@ type object or an interface, the service factory returns a function that conform
 
 The function serves two primary roles:
 
-- It encapsulates the behavior to execute when the container starts asynchronously to the `Start()` method.
-- It returns an error, which is treated as if it were returned by a conventional `Close()` method.
+* It encapsulates the behavior to execute when the container starts asynchronously to the `Start()` method.
+* It returns an error, which is treated as if it were returned by a conventional `Close()` method.
 
 ```go
 // MyServiceFactory is an example of a service function usage.
@@ -234,13 +235,13 @@ events.Trigger(gontainer.NewEvent("Event1", event, arguments, here))
 
 To subscribe to an event, use the `Subscribe()` method. Two types of handler functions are supported:
 
-- A function that accepts a variable number of any-typed arguments:
+* A function that accepts a variable number of any-typed arguments:
   ```go
   events.Subscribe("Event1", func(args ...any) {
       // Handle the event with args slice.
   })
   ```
-- A function that accepts concrete argument types:
+* A function that accepts concrete argument types:
   ```go
   ev.Subscribe("Event1", func(x string, y int, z bool) {
       // Handle the event with specific args.

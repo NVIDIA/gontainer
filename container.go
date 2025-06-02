@@ -125,31 +125,48 @@ func New(factories ...*Factory) (result Container, err error) {
 	return container, nil
 }
 
-// Container defines service container interface.
+// Container defines the main interface for a service container.
+//
+// A Container is responsible for managing the lifecycle of services,
+// including their initialization, shutdown, and dependency resolution.
+//
+// It supports both eager initialization via Start(), and lazy resolution
+// via Resolver or Invoker before the container is started. Services are
+// created using registered factories, and may optionally implement a Close()
+// method to participate in graceful shutdown.
+//
+// The container also includes an internal events broker for decoupled communication
+// between services.
 type Container interface {
-	// Start initializes every service in the container.
+	// Start initializes all registered services in dependency order.
+	// Services are instantiated via their factories.
+	// Returns an error if initialization fails.
 	Start() error
 
-	// Close closes service container with all services.
-	// Blocks invocation until the container is closed.
+	// Close shuts down all services in reverse order of their instantiation.
+	// This method blocks until all services are properly closed.
 	Close() error
 
-	// Done is closing after closing of all services.
+	// Done returns a channel that is closed after all services have been shut down.
+	// Useful for coordinating external shutdown logic.
 	Done() <-chan struct{}
 
-	// Factories returns all defined factories.
+	// Factories returns all registered service factories.
 	Factories() []*Factory
 
-	// Services returns all spawned services.
+	// Services returns all currently instantiated services.
 	Services() []any
 
-	// Events returns events broker instance.
+	// Events returns the container-wide event broker instance.
 	Events() Events
 
-	// Resolver returns service resolver instance.
+	// Resolver returns a service resolver for on-demand dependency injection.
+	// If the container is not yet started, only requested services and their
+	// transitive dependencies will be instantiated.
 	Resolver() Resolver
 
-	// Invoker returns function invoker instance.
+	// Invoker returns a function invoker that can call user-provided functions
+	// with auto-injected dependencies. Behaves lazily if the container is not started.
 	Invoker() Invoker
 }
 

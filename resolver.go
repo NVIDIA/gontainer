@@ -23,9 +23,18 @@ import (
 	"reflect"
 )
 
-// Resolver defines service resolver interface.
+// Resolver defines an interface for resolving service dependencies.
+//
+// The Resolve method accepts a pointer to a variable (`varPtr`) and attempts to populate it
+// with an instance of the requested type. The type is determined via reflection based on the
+// element type of `varPtr`.
+//
+// If the container has not been started yet, Resolve operates in lazy mode — it instantiates
+// only the requested type and its transitive dependencies on demand.
+//
+// An error is returned if the service of the requested type is not found or cannot be resolved.
 type Resolver interface {
-	// Resolve returns specified dependency.
+	// Resolve sets the required dependency via the pointer.
 	Resolve(varPtr any) error
 }
 
@@ -35,7 +44,7 @@ type resolver struct {
 	registry *registry
 }
 
-// Resolve returns specified dependency.
+// Resolve sets the required dependency via the pointer.
 func (r *resolver) Resolve(varPtr any) error {
 	value := reflect.ValueOf(varPtr).Elem()
 	result, err := r.registry.resolveService(value.Type())

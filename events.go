@@ -24,12 +24,30 @@ import (
 	"sync"
 )
 
-// Events declares event broker type.
+// Events defines an interface for a lightweight event broker
+// used for decoupled communication between services within the container.
+//
+// It supports two types of event handlers:
+//   - handlers with a variadic signature: `func(args ...any) [error]`;
+//   - handlers with a typed signature: `func(T1, T2, ...) [error]`.
+//
+// Handlers may optionally return an error, which will be collected and joined
+// during the Trigger phase. All handlers for a given event are executed synchronously.
 type Events interface {
-	// Subscribe registers event handler.
+	// Subscribe registers an event handler for the specified event name.
+	//
+	// The handler must be a function with one of the following signatures:
+	//   - `func(args ...any) [error]`;
+	//   - `func(T1, T2, ...) [error]`.
+	//
+	// If the handler returns an error, it will be captured when the event is triggered.
+	// Panics if the handler is not a function or has an unsupported signature.
 	Subscribe(name string, handlerFn any)
 
-	// Trigger triggers specified event handlers.
+	// Trigger dispatches the given event to all registered handlers.
+	//
+	// Handlers are called synchronously in the order they were registered.
+	// All returned errors are collected and joined into a single error.
 	Trigger(event Event) error
 }
 

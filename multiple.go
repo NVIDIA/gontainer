@@ -21,7 +21,22 @@ import (
 	"reflect"
 )
 
-// Multiple defines multiple service dependencies.
+// Multiple defines a dependency on zero or more services of the same type.
+//
+// This generic wrapper is used in service factory function parameters to declare
+// a dependency on all services assignable to type T registered in the container.
+//
+// The container will collect and inject all matching services into the slice.
+// For interface types, multiple matches are allowed.
+// For concrete (non-interface) types, at most one match is possible.
+//
+// Example:
+//
+//	func MyFactory(providers gontainer.Multiple[AuthProvider]) {
+//	    for _, p := range providers {
+//	        ...
+//	    }
+//	}
 type Multiple[T any] []T
 
 // Multiple marks this type as multiple.
