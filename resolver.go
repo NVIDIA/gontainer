@@ -34,7 +34,7 @@ import (
 //
 // An error is returned if the service of the requested type is not found or cannot be resolved.
 type Resolver interface {
-	// Resolve set required dependency by the pointer.
+	// Resolve sets the required dependency via the pointer.
 	Resolve(varPtr any) error
 }
 
@@ -44,7 +44,7 @@ type resolver struct {
 	registry *registry
 }
 
-// Resolve set required dependency by the pointer.
+// Resolve sets the required dependency via the pointer.
 func (r *resolver) Resolve(varPtr any) error {
 	value := reflect.ValueOf(varPtr).Elem()
 	result, err := r.registry.resolveService(value.Type())
