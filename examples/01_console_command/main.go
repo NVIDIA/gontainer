@@ -62,7 +62,7 @@ func main() {
 	// Validate the container's proper handling of all factory functions.
 	// Errors may point to bad function signatures or unresolvable dependencies.
 	if err != nil {
-		log.Fatalf("Failed to create service container: %s", err)
+		log.Panicf("Failed to create service container: %s", err)
 	}
 
 	// Close defined services in reverse-to-instantiation order.
@@ -71,7 +71,7 @@ func main() {
 	defer func() {
 		log.Println("Closing service container by defer")
 		if err := container.Close(); err != nil {
-			log.Fatalf("Failed to close service container: %s", err)
+			log.Panicf("Failed to close service container: %s", err)
 		}
 	}()
 

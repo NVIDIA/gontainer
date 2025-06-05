@@ -20,6 +20,24 @@ Dependency injection service container for Golang projects.
 
 * [Console command example](./examples/01_console_command/main.go) – demonstrates how to build a simple console command. It shows how to use `Resolver` and `Invoker` services to organize the application entry point in a run-and-exit style.
 * [Daemon service example](./examples/02_daemon_service/main.go) – demonstrates how to maintain background services. It shows how to organize a daemon entry point and wait for graceful shutdown by subscribing to OS termination signals.
+* [Complete webapp example](./examples/03_complete_webapp/main.go) – demonstrates how to organize applications consists of multiple services. It provides basic config service, handles logging, setups HTTP server and initiates two endpoints.
+
+Here is the log of the complete webapp example launch.
+
+```
+time=2025-06-05T15:19:48.373+02:00 level=INFO msg="Starting service container" service=logger
+time=2025-06-05T15:19:48.373+02:00 level=INFO msg="Configuring app endpoints" service=app
+time=2025-06-05T15:19:48.373+02:00 level=INFO msg="Configuring health endpoints" service=app
+time=2025-06-05T15:19:48.373+02:00 level=INFO msg="Starting HTTP server" service=http address=127.0.0.1:8080
+time=2025-06-05T15:19:48.374+02:00 level=INFO msg="Service container started" service=logger
+----------------- Application was started and now accepts HTTP requests -----------------
+time=2025-06-05T15:19:54.716+02:00 level=INFO msg="Serving home page" service=app remote-addr=127.0.0.1:62640
+time=2025-06-05T15:20:01.405+02:00 level=INFO msg="Serving health check" service=app remote-addr=127.0.0.1:62640
+----------------- Here we a pressing CTRL+C or seding TERM signal to the process -----------------
+time=2025-06-05T15:20:04.061+02:00 level=INFO msg="Closing service container" service=logger
+time=2025-06-05T15:20:04.061+02:00 level=INFO msg="Closing HTTP server" service=http
+time=2025-06-05T15:20:04.061+02:00 level=INFO msg="Service container closed" service=logger
+```
 
 ## Quick Start
 
