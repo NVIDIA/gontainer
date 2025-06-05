@@ -14,7 +14,7 @@ Dependency injection service container for Golang projects.
 - 🛠 Automatic injection of dependencies for service factories, avoiding manual fetch through container API.
 - 🔄 Automatic reverse-to-instantiation order for service termination to ensure proper resource release and shutdown.
 - 📣 Built-in events broker service for inter-service container-wide communications and loose coupling between services.
-- 🤖 Clean and tested implementation based on reflection.
+- 🤖 Clean and tested implementation based on reflection and generics. No external dependencies.
 
 ## Examples
 
