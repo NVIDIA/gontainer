@@ -20,6 +20,7 @@ package main
 import (
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/NVIDIA/gontainer"
 )
@@ -28,7 +29,7 @@ import (
 func initCloseSignals(container gontainer.Container, errorFn func(err error)) {
 	go func() {
 		signalsChan := make(chan os.Signal)
-		signal.Notify(signalsChan, os.Interrupt, os.Kill)
+		signal.Notify(signalsChan, syscall.SIGTERM, syscall.SIGINT)
 		for {
 			select {
 			case _ = <-signalsChan:

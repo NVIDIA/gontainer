@@ -31,7 +31,7 @@ Dependency injection service container for Golang projects.
   ----------------- Application was started and now accepts HTTP requests -----------------
   time=2025-06-05T15:19:54.716+02:00 level=INFO msg="Serving home page" service=app remote-addr=127.0.0.1:62640
   time=2025-06-05T15:20:01.405+02:00 level=INFO msg="Serving health check" service=app remote-addr=127.0.0.1:62640
-  ----------------- Here we a pressing CTRL+C or seding TERM signal to the process -----------------
+  ----------------- CTRL+C was pressed or a TERM signal was sent to the process -----------------
   time=2025-06-05T15:20:04.061+02:00 level=INFO msg="Closing service container" service=logger
   time=2025-06-05T15:20:04.061+02:00 level=INFO msg="Closing HTTP server" service=http
   time=2025-06-05T15:20:04.061+02:00 level=INFO msg="Service container closed" service=logger
