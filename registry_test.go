@@ -214,6 +214,66 @@ func TestRegistryProduceServices(t *testing.T) {
 	equal(t, result.Interface(), true)
 }
 
+// TestRegistryResolveByTypeOnce tests corresponding registry method.
+func TestRegistryResolveByTypeOnce(t *testing.T) {
+	factoryInvocations := 0
+	ctx := context.Background()
+	factory := NewFactory(
+		func() bool {
+			factoryInvocations++
+			return true
+		},
+		WithInstantiateOnce(),
+	)
+
+	registry := &registry{}
+	equal(t, registry.registerFactory(ctx, factory), nil)
+
+	resolve := func() bool {
+		typ := reflect.TypeOf(true)
+		value, err := registry.resolveByType(typ)
+		equal(t, err, nil)
+		equal(t, len(value), 1)
+		equal(t, factory.factorySpawned, true)
+		return value[0].Interface().(bool)
+	}
+
+	equal(t, resolve(), true)
+	equal(t, resolve(), true)
+	equal(t, resolve(), true)
+	equal(t, factoryInvocations, 1)
+}
+
+// TestRegistryResolveByTypeAlways tests corresponding registry method.
+func TestRegistryResolveByTypeAlways(t *testing.T) {
+	factoryInvocations := 0
+	ctx := context.Background()
+	factory := NewFactory(
+		func() bool {
+			factoryInvocations++
+			return true
+		},
+		WithInstantiateAlways(),
+	)
+
+	registry := &registry{}
+	equal(t, registry.registerFactory(ctx, factory), nil)
+
+	resolve := func() bool {
+		typ := reflect.TypeOf(true)
+		value, err := registry.resolveByType(typ)
+		equal(t, err, nil)
+		equal(t, len(value), 1)
+		equal(t, factory.factorySpawned, true)
+		return value[0].Interface().(bool)
+	}
+
+	equal(t, resolve(), true)
+	equal(t, resolve(), true)
+	equal(t, resolve(), true)
+	equal(t, factoryInvocations, 3)
+}
+
 // TestRegistryProduceWithErrors tests corresponding registry method.
 func TestRegistryProduceWithErrors(t *testing.T) {
 	registry := &registry{}

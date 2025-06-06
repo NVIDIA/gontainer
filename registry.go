@@ -335,8 +335,8 @@ func (r *registry) spawnFactory(factory *Factory) error {
 		return ErrStackLimitReached
 	}
 
-	// Check factory already spawned.
-	if factory.factorySpawned {
+	// Check factory already spawned and should not be respawned always.
+	if factory.factorySpawned && factory.factoryInstMode == factoryInstModeOnce {
 		return nil
 	}
 

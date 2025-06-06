@@ -61,6 +61,15 @@ type FactoryFunc any
 // integration with external tools. It is populated using `WithMetadata()` option.
 type FactoryMetadata map[string]any
 
+// FactoryInstMode configures services instantiation mode for this factory.
+type factoryInstMode int
+
+// A factory can produce types once or always, depending on the mode.
+const (
+	factoryInstModeOnce factoryInstMode = iota
+	factoryInstModeAlways
+)
+
 // Factory declares a service factory definition used by the container to construct services.
 //
 // A Factory wraps a factory function along with its metadata, input/output type information,
@@ -80,6 +89,9 @@ type Factory struct {
 
 	// Factory metadata.
 	factoryMetadata FactoryMetadata
+
+	// Factory instantiation mode.
+	factoryInstMode factoryInstMode
 
 	// Factory is loaded.
 	factoryLoaded bool
@@ -241,6 +253,26 @@ func NewFactory(factoryFn FactoryFunc, opts ...FactoryOpt) *Factory {
 func WithMetadata(key string, value any) FactoryOpt {
 	return func(factory *Factory) {
 		factory.factoryMetadata[key] = value
+	}
+}
+
+// WithInstantiateOnce sets the factory to instantiate new instances only once
+// when the service is requested at first time (lazy mode without container start)
+// or when the factory is invoked on the eager container start.
+// This is the default behavior.
+func WithInstantiateOnce() FactoryOpt {
+	return func(factory *Factory) {
+		factory.factoryInstMode = factoryInstModeOnce
+	}
+}
+
+// WithInstantiateAlways sets the factory to instantiate new instances every time:
+//   - for every dependency injection;
+//   - for every resolution via resolver service;
+//   - for every resolution via invoker service.
+func WithInstantiateAlways() FactoryOpt {
+	return func(factory *Factory) {
+		factory.factoryInstMode = factoryInstModeAlways
 	}
 }
 
