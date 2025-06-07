@@ -131,7 +131,7 @@ func TestFactoryInstantiateOnce(t *testing.T) {
 	equal(t, factory.factoryInstMode, factoryInstModeOnce)
 }
 
-// testFactoryInstantiateAlways tests factory instantiation always.
+// TestFactoryInstantiateAlways tests factory instantiation always.
 func TestFactoryInstantiateAlways(t *testing.T) {
 	factory := NewFactory(func() {}, WithInstantiateAlways())
 	equal(t, factory.factoryInstMode, factoryInstModeAlways)
