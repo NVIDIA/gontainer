@@ -64,7 +64,7 @@ type FactoryMetadata map[string]any
 // FactoryInstMode configures services instantiation mode for this factory.
 type factoryInstMode int
 
-// A factory can produce types once or always, depending on the mode.
+// A factory can produce types single or always, depending on the mode.
 const (
 	factoryInstModeSingle factoryInstMode = iota
 	factoryInstModeAlways
