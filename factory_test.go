@@ -102,6 +102,23 @@ func TestFactoryInfo(t *testing.T) {
 	}
 }
 
+// TestFactoryMetadata tests factory metadata attachment.
+func TestFactoryMetadata(t *testing.T) {
+	fun := func(a, b, c string) (int, bool, error) {
+		return 1, true, nil
+	}
+
+	var opts []FactoryOpt
+	opts = append(opts, WithMetadata("key1", "value1"))
+	opts = append(opts, WithMetadata("key2", 123456))
+	factory := NewFactory(fun, opts...)
+
+	equal(t, factory.Metadata(), FactoryMetadata{
+		"key1": "value1",
+		"key2": 123456,
+	})
+}
+
 type globalType struct{}
 
 func globalFunc(string) {}
