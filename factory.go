@@ -66,7 +66,7 @@ type factoryInstMode int
 
 // A factory can produce types once or always, depending on the mode.
 const (
-	factoryInstModeOnce factoryInstMode = iota
+	factoryInstModeSingle factoryInstMode = iota
 	factoryInstModeAlways
 )
 
@@ -256,13 +256,13 @@ func WithMetadata(key string, value any) FactoryOpt {
 	}
 }
 
-// WithInstantiateOnce sets the factory to instantiate new instances only once
+// WithInstantiateSingle sets the factory to instantiate new instances only once
 // when the service is requested at first time (lazy mode without container start)
 // or when the factory is invoked on the eager container start.
 // This is the default behavior.
-func WithInstantiateOnce() FactoryOpt {
+func WithInstantiateSingle() FactoryOpt {
 	return func(factory *Factory) {
-		factory.factoryInstMode = factoryInstModeOnce
+		factory.factoryInstMode = factoryInstModeSingle
 	}
 }
 

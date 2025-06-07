@@ -119,16 +119,16 @@ func TestFactoryMetadata(t *testing.T) {
 	})
 }
 
-// TestFactoryInstantiateDefault tests factory instantiation once (default).
+// TestFactoryInstantiateDefault tests factory instantiation single (default).
 func TestFactoryInstantiateDefault(t *testing.T) {
 	factory := NewFactory(func() {})
-	equal(t, factory.factoryInstMode, factoryInstModeOnce)
+	equal(t, factory.factoryInstMode, factoryInstModeSingle)
 }
 
-// TestFactoryInstantiateOnce tests factory instantiation once (explicit).
-func TestFactoryInstantiateOnce(t *testing.T) {
-	factory := NewFactory(func() {}, WithInstantiateOnce())
-	equal(t, factory.factoryInstMode, factoryInstModeOnce)
+// TestFactoryInstantiateSingle tests factory instantiation single (explicit).
+func TestFactoryInstantiateSingle(t *testing.T) {
+	factory := NewFactory(func() {}, WithInstantiateSingle())
+	equal(t, factory.factoryInstMode, factoryInstModeSingle)
 }
 
 // TestFactoryInstantiateAlways tests factory instantiation always.

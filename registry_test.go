@@ -223,7 +223,7 @@ func TestRegistryResolveByTypeOnce(t *testing.T) {
 			factoryInvocations++
 			return true
 		},
-		WithInstantiateOnce(),
+		WithInstantiateSingle(),
 	)
 
 	registry := &registry{}

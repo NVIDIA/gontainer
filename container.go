@@ -306,9 +306,11 @@ func (c *container) Services() []any {
 	default:
 		services := make([]any, 0, len(c.registry.factories))
 		for _, factory := range c.registry.factories {
-			if factory.factorySpawned {
-				for _, serviceValue := range factory.factoryOutValues {
-					services = append(services, serviceValue.Interface())
+			if factory.factoryInstMode == factoryInstModeSingle {
+				if factory.factorySpawned {
+					for _, serviceValue := range factory.factoryOutValues {
+						services = append(services, serviceValue.Interface())
+					}
 				}
 			}
 		}

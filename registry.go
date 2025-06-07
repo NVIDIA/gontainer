@@ -336,8 +336,10 @@ func (r *registry) spawnFactory(factory *Factory) error {
 	}
 
 	// Check factory already spawned and should not be respawned always.
-	if factory.factorySpawned && factory.factoryInstMode == factoryInstModeOnce {
-		return nil
+	if factory.factoryInstMode == factoryInstModeSingle {
+		if factory.factorySpawned {
+			return nil
+		}
 	}
 
 	// Get or spawn factory input values recursively.
