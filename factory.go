@@ -47,6 +47,12 @@ import (
 //
 //	// Multiple dependencies, multiple produced services, no error.
 //	func(log *slog.Logger, db *Database) (*Repo1, *Repo2, *Repo3)
+//
+//	// One optional dependency, one produced service, an error.
+//	func(optionalDB gontainer.Optional[*Database]) (*Repo, error)
+//
+//	// One multiple dependency, one produced service, an error.
+//	func(multipleDBs gontainer.Multiple[IDatabase]) (*Repo, error)
 type FactoryFunc any
 
 // FactoryMetadata defines a key-value store for attaching metadata to a factory.
