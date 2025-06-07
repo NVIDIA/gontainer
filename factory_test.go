@@ -119,6 +119,24 @@ func TestFactoryMetadata(t *testing.T) {
 	})
 }
 
+// TestFactoryInstantiateDefault tests factory instantiation single (default).
+func TestFactoryInstantiateDefault(t *testing.T) {
+	factory := NewFactory(func() {})
+	equal(t, factory.factoryInstMode, factoryInstModeSingle)
+}
+
+// TestFactoryInstantiateSingle tests factory instantiation single (explicit).
+func TestFactoryInstantiateSingle(t *testing.T) {
+	factory := NewFactory(func() {}, WithInstantiateSingle())
+	equal(t, factory.factoryInstMode, factoryInstModeSingle)
+}
+
+// TestFactoryInstantiateAlways tests factory instantiation always.
+func TestFactoryInstantiateAlways(t *testing.T) {
+	factory := NewFactory(func() {}, WithInstantiateAlways())
+	equal(t, factory.factoryInstMode, factoryInstModeAlways)
+}
+
 type globalType struct{}
 
 func globalFunc(string) {}
