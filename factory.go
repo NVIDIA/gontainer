@@ -26,16 +26,33 @@ import (
 	"strings"
 )
 
-// FactoryFunc declares the type alias for a service factory function.
+// FactoryFunc declares the type for a service factory function.
+// A factory function may accept dependencies as input parameters and
+// return zero or more service instances, optionally followed by an error.
+// The container validates its signature at runtime using reflection.
 //
-// A factory function is any function that provides one or more services,
-// optionally accepting dependencies as parameters and returning an error
-// as the last result. Its signature is validated at runtime using reflection.
+// Valid example signatures:
 //
-// Example signatures:
+//	// No dependencies, no produced services.
+//	func()
 //
+//	// No dependencies, one produced service.
 //	func() *MyService
+//
+//	// One dependency, one produced service, an error.
 //	func(db *Database) (*Repo, error)
+//
+//	// Multiple dependencies, multiple produced services, an error.
+//	func(log *slog.Logger, db *Database) (*Repo1, *Repo2, error)
+//
+//	// Multiple dependencies, multiple produced services, no error.
+//	func(log *slog.Logger, db *Database) (*Repo1, *Repo2, *Repo3)
+//
+//	// One optional dependency, one produced service, an error.
+//	func(optionalDB gontainer.Optional[*Database]) (*Repo, error)
+//
+//	// One multiple dependency, one produced service, an error.
+//	func(multipleDBs gontainer.Multiple[IDatabase]) (*Repo, error)
 type FactoryFunc any
 
 // FactoryMetadata defines a key-value store for attaching metadata to a factory.
@@ -172,14 +189,18 @@ type FactoryOpt func(*Factory)
 //
 //	logger := NewLogger()
 //	gontainer.NewService(logger)
-func NewService[T any](singleton T) *Factory {
+func NewService[T any](singleton T, opts ...FactoryOpt) *Factory {
 	dataType := reflect.TypeOf(&singleton).Elem()
-	return &Factory{
+	factory := &Factory{
 		factoryFunc:     func() T { return singleton },
 		factoryName:     fmt.Sprintf("Service[%s]", dataType),
 		factorySource:   dataType.PkgPath(),
 		factoryMetadata: FactoryMetadata{},
 	}
+	for _, opt := range opts {
+		opt(factory)
+	}
+	return factory
 }
 
 // NewFactory creates a new service factory using the provided factory function.
@@ -194,7 +215,7 @@ func NewService[T any](singleton T) *Factory {
 // Example:
 //
 //	gontainer.NewFactory(func(db *Database) (*Handler, error), gontainer.WithTag("http"))
-func NewFactory(factoryFn any, opts ...FactoryOpt) *Factory {
+func NewFactory(factoryFn FactoryFunc, opts ...FactoryOpt) *Factory {
 	funcValue := reflect.ValueOf(factoryFn)
 	factory := &Factory{
 		factoryFunc:     factoryFn,
