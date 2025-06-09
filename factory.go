@@ -185,7 +185,7 @@ func (f *Factory) load() error {
 		}
 	}
 
-	// Load data for singleton factories.
+	// Prepare data for singleton factories.
 	if f.factoryMode == factoryModeSingleton {
 		ctx, cancel := context.WithCancel(context.Background())
 		f.factoryCtx, f.factoryCtxCancel = ctx, cancel
