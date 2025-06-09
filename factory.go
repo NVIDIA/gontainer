@@ -109,7 +109,7 @@ type Factory struct {
 	// Factory is loaded.
 	factoryLoaded bool
 
-	// Factory mode.
+	// Factory spawn mode.
 	// Singleton or transient.
 	factoryMode factoryMode
 
