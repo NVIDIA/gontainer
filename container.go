@@ -50,7 +50,7 @@ func New(factories ...*Factory) (result Container, err error) {
 	// it is unwanted behavior: services should be cancelled in strict reverse order.
 
 	// Prepare container context.
-	// When cancelled, it cancels `container.Done()` channel
+	// When cancelled, it closes `container.Done()` channel
 	// and unblocks any waiting read from `container.Done()`.
 	ctx, cancel := context.WithCancel(context.Background())
 
