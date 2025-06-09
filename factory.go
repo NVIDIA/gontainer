@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 // FactoryFunc declares the type for a service factory function.
@@ -61,13 +62,13 @@ type FactoryFunc any
 // integration with external tools. It is populated using `WithMetadata()` option.
 type FactoryMetadata map[string]any
 
-// FactoryInstMode configures services instantiation mode for this factory.
-type factoryInstMode int
+// FactoryInstMode configures services instantiation mode for the factory.
+type factoryMode int
 
-// A factory can produce types single or always, depending on the mode.
+// A factory can produce services at once or always, depending on the mode.
 const (
-	factoryInstModeSingle factoryInstMode = iota
-	factoryInstModeAlways
+	factoryModeSingleton factoryMode = iota
+	factoryModeTransient
 )
 
 // Factory declares a service factory definition used by the container to construct services.
@@ -90,21 +91,6 @@ type Factory struct {
 	// Factory metadata.
 	factoryMetadata FactoryMetadata
 
-	// Factory instantiation mode.
-	factoryInstMode factoryInstMode
-
-	// Factory is loaded.
-	factoryLoaded bool
-
-	// Factory is spawned.
-	factorySpawned bool
-
-	// Factory context value.
-	factoryCtx context.Context
-
-	// Factory context cancel.
-	ctxCancel context.CancelFunc
-
 	// Factory function type.
 	factoryType reflect.Type
 
@@ -120,7 +106,31 @@ type Factory struct {
 	// Factory output error.
 	factoryOutError bool
 
+	// Factory is loaded.
+	factoryLoaded bool
+
+	// Factory mode.
+	// Singleton or transient.
+	factoryMode factoryMode
+
+	// Factory mutex.
+	// Only for singleton factories.
+	factoryMutex sync.RWMutex
+
+	// Factory is spawned.
+	// Only for singleton factories.
+	factorySpawned bool
+
+	// Factory context value.
+	// Only for singleton factories.
+	factoryCtx context.Context
+
+	// Factory context cancel.
+	// Only for singleton factories.
+	factoryCtxCancel context.CancelFunc
+
 	// Factory result values.
+	// Only for singleton factories.
 	factoryOutValues []reflect.Value
 }
 
@@ -140,13 +150,10 @@ func (f *Factory) Metadata() FactoryMetadata {
 }
 
 // load initializes factory definition internal values.
-func (f *Factory) load(ctx context.Context) error {
+func (f *Factory) load() error {
 	if f.factoryLoaded {
 		return errors.New("invalid factory func: already loaded")
 	}
-
-	// Prepare cancellable context for the factory services.
-	f.factoryCtx, f.ctxCancel = context.WithCancel(ctx)
 
 	// Check factory configured.
 	if f.factoryFunc == nil {
@@ -168,7 +175,6 @@ func (f *Factory) load(ctx context.Context) error {
 
 	// Index factory output types from the function signature.
 	f.factoryOutTypes = make([]reflect.Type, 0, f.factoryType.NumOut())
-	f.factoryOutValues = make([]reflect.Value, 0, f.factoryType.NumOut())
 	for index := 0; index < f.factoryType.NumOut(); index++ {
 		if index != f.factoryType.NumOut()-1 || f.factoryType.Out(index) != errorType {
 			// Register regular factory output type.
@@ -177,6 +183,12 @@ func (f *Factory) load(ctx context.Context) error {
 			// Register last output index as an error.
 			f.factoryOutError = true
 		}
+	}
+
+	// Load data for singleton factories.
+	if f.factoryMode == factoryModeSingleton {
+		ctx, cancel := context.WithCancel(context.Background())
+		f.factoryCtx, f.factoryCtxCancel = ctx, cancel
 	}
 
 	// Save the factory load status.
@@ -256,23 +268,30 @@ func WithMetadata(key string, value any) FactoryOpt {
 	}
 }
 
-// WithInstantiateSingle sets the factory to instantiate new instances only once
-// when the service is requested at first time (lazy mode without container start)
-// or when the factory is invoked on the eager container start.
-// This is the default behavior.
-func WithInstantiateSingle() FactoryOpt {
+// WithSingletonMode sets the factory to produce new instances only once
+// when the service is requested at first time (lazy, without container start)
+// or when the factory is invoked on the eager container start call.
+//
+// Instances are managed by the container lifecycle and will be closed by
+// the container when it will be closed.
+//
+// This is the default behavior of factories in the container.
+func WithSingletonMode() FactoryOpt {
 	return func(factory *Factory) {
-		factory.factoryInstMode = factoryInstModeSingle
+		factory.factoryMode = factoryModeSingleton
 	}
 }
 
-// WithInstantiateAlways sets the factory to instantiate new instances every time:
+// WithTransientMode sets the factory to produce new instances every time:
+//
 //   - for every dependency injection;
 //   - for every resolution via resolver service;
 //   - for every resolution via invoker service.
-func WithInstantiateAlways() FactoryOpt {
+//
+// Instances are not managed by the container lifecycle and should be closed by user.
+func WithTransientMode() FactoryOpt {
 	return func(factory *Factory) {
-		factory.factoryInstMode = factoryInstModeAlways
+		factory.factoryMode = factoryModeTransient
 	}
 }
 

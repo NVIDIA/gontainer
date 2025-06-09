@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -33,12 +34,11 @@ func TestRegistryRegisterFactory(t *testing.T) {
 		return 1, true, nil
 	}
 
-	ctx := context.Background()
 	opts := WithMetadata("test", func() {})
 	factory := NewFactory(fun, opts)
 
 	registry := &registry{}
-	equal(t, registry.registerFactory(ctx, factory), nil)
+	equal(t, registry.registerFactory(factory), nil)
 	equal(t, registry.factories, []*Factory{factory})
 	equal(t, factory.factoryFunc == nil, false)
 	equal(t, factory.factoryLoaded, true)
@@ -190,10 +190,9 @@ func TestRegistryValidateFactories(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
 			registry := &registry{}
 			for _, factory := range tt.factories {
-				equal(t, registry.registerFactory(ctx, factory), nil)
+				equal(t, registry.registerFactory(factory), nil)
 			}
 			tt.wantErr(t, registry.validateFactories())
 		})
@@ -202,32 +201,30 @@ func TestRegistryValidateFactories(t *testing.T) {
 
 // TestRegistryProduceServices tests corresponding registry method.
 func TestRegistryProduceServices(t *testing.T) {
-	ctx := context.Background()
 	factory := NewFactory(func() bool { return true })
 
 	registry := &registry{}
-	equal(t, registry.registerFactory(ctx, factory), nil)
-	equal(t, registry.produceServices(), nil)
+	equal(t, registry.registerFactory(factory), nil)
+	equal(t, registry.spawnFactories(), nil)
 	equal(t, factory.factorySpawned, true)
 
 	result := factory.factoryOutValues[0]
 	equal(t, result.Interface(), true)
 }
 
-// TestRegistryResolveByTypeOnce tests corresponding registry method.
-func TestRegistryResolveByTypeOnce(t *testing.T) {
+// TestRegistryResolveByTypeSingleton tests corresponding registry method.
+func TestRegistryResolveByTypeSingleton(t *testing.T) {
 	factoryInvocations := 0
-	ctx := context.Background()
 	factory := NewFactory(
 		func() bool {
 			factoryInvocations++
 			return true
 		},
-		WithInstantiateSingle(),
+		WithSingletonMode(),
 	)
 
 	registry := &registry{}
-	equal(t, registry.registerFactory(ctx, factory), nil)
+	equal(t, registry.registerFactory(factory), nil)
 
 	resolve := func() bool {
 		typ := reflect.TypeOf(true)
@@ -244,27 +241,26 @@ func TestRegistryResolveByTypeOnce(t *testing.T) {
 	equal(t, factoryInvocations, 1)
 }
 
-// TestRegistryResolveByTypeAlways tests corresponding registry method.
-func TestRegistryResolveByTypeAlways(t *testing.T) {
+// TestRegistryResolveByTypeTransient tests corresponding registry method.
+func TestRegistryResolveByTypeTransient(t *testing.T) {
 	factoryInvocations := 0
-	ctx := context.Background()
 	factory := NewFactory(
 		func() bool {
 			factoryInvocations++
 			return true
 		},
-		WithInstantiateAlways(),
+		WithTransientMode(),
 	)
 
 	registry := &registry{}
-	equal(t, registry.registerFactory(ctx, factory), nil)
+	equal(t, registry.registerFactory(factory), nil)
 
 	resolve := func() bool {
 		typ := reflect.TypeOf(true)
 		value, err := registry.resolveByType(typ)
 		equal(t, err, nil)
 		equal(t, len(value), 1)
-		equal(t, factory.factorySpawned, true)
+		equal(t, factory.factorySpawned, false)
 		return value[0].Interface().(bool)
 	}
 
@@ -274,14 +270,14 @@ func TestRegistryResolveByTypeAlways(t *testing.T) {
 	equal(t, factoryInvocations, 3)
 }
 
-// TestRegistryProduceWithErrors tests corresponding registry method.
-func TestRegistryProduceWithErrors(t *testing.T) {
+// TestRegistrySpawnWithErrors tests corresponding registry method.
+func TestRegistrySpawnWithErrors(t *testing.T) {
 	registry := &registry{}
-	equal(t, registry.registerFactory(context.Background(), NewFactory(func() (bool, error) {
+	equal(t, registry.registerFactory(NewFactory(func() (bool, error) {
 		return false, errors.New("failed to create new service")
 	})), nil)
 
-	err := registry.produceServices()
+	err := registry.spawnFactories()
 	equal(t, err != nil, true)
 	equal(t, fmt.Sprint(err), `failed to spawn services of `+
 		`'Factory[func() (bool, error)]' from 'github.com/NVIDIA/gontainer': `+
@@ -301,10 +297,9 @@ func TestRegistryCloseServices(t *testing.T) {
 		}
 	})
 
-	ctx := context.Background()
 	registry := &registry{}
-	equal(t, registry.registerFactory(ctx, factory), nil)
-	equal(t, registry.produceServices(), nil)
+	equal(t, registry.registerFactory(factory), nil)
+	equal(t, registry.spawnFactories(), nil)
 	equal(t, factory.factorySpawned, true)
 
 	// Let factory function start executing in the background.
@@ -312,30 +307,84 @@ func TestRegistryCloseServices(t *testing.T) {
 
 	equal(t, funcStarted.Load(), true)
 	equal(t, funcClosed.Load(), false)
-	equal(t, registry.closeServices(), nil)
+	equal(t, registry.closeFactories(), nil)
 	equal(t, funcStarted.Load(), true)
 	equal(t, funcClosed.Load(), true)
 }
 
 // TestRegistryCloseWithError tests corresponding registry method.
 func TestRegistryCloseWithError(t *testing.T) {
-	ctx := context.Background()
 	registry := &registry{}
 
-	equal(t, registry.registerFactory(ctx, NewFactory(func(ctx context.Context) any {
+	equal(t, registry.registerFactory(NewFactory(func(ctx context.Context) any {
 		return func() error { return errors.New("failed to close 1") }
 	})), nil)
 
-	equal(t, registry.registerFactory(ctx, NewFactory(func() any {
+	equal(t, registry.registerFactory(NewFactory(func() any {
 		return func() error { return errors.New("failed to close 2") }
 	})), nil)
 
-	equal(t, registry.produceServices(), nil)
-	err := registry.closeServices()
+	equal(t, registry.spawnFactories(), nil)
+	err := registry.closeFactories()
 	equal(t, err != nil, true)
 	equal(t, fmt.Sprint(err), `failed to close services: `+
 		`Factory[func() interface {}] from 'github.com/NVIDIA/gontainer': failed to close 2`+"\n"+
 		`Factory[func(context.Context) interface {}] from 'github.com/NVIDIA/gontainer': failed to close 1`)
+}
+
+// TestRegistryResolve tests resolving of services.
+func TestRegistryResolve(t *testing.T) {
+	registry := &registry{}
+
+	intFactoryCalls := 0
+	equal(t, registry.registerFactory(NewFactory(func() int {
+		intFactoryCalls++
+		return 123
+	})), nil)
+
+	strFactoryCalls := 0
+	equal(t, registry.registerFactory(NewFactory(func() string {
+		strFactoryCalls++
+		return "abc"
+	})), nil)
+
+	value, err := registry.resolveService(reflect.TypeOf(0))
+	equal(t, err, nil)
+	equal(t, value.Interface(), 123)
+	equal(t, intFactoryCalls, 1)
+
+	value, err = registry.resolveService(reflect.TypeOf(""))
+	equal(t, err, nil)
+	equal(t, value.Interface(), "abc")
+	equal(t, strFactoryCalls, 1)
+}
+
+// TestRegistryResolve tests parallel resolving of services.
+func TestRegistryResolveParallel(t *testing.T) {
+	registry := &registry{}
+
+	intFactoryCalls := int64(0)
+	equal(t, registry.registerFactory(NewFactory(
+		func() int {
+			atomic.AddInt64(&intFactoryCalls, 1)
+			return 123
+		},
+		WithTransientMode(),
+	)), nil)
+
+	const numParallel = 100000
+	wg := sync.WaitGroup{}
+	wg.Add(numParallel)
+	for i := 0; i < numParallel; i++ {
+		go func() {
+			value, err := registry.resolveService(reflect.TypeOf(0))
+			equal(t, err, nil)
+			equal(t, value.Interface(), 123)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	equal(t, intFactoryCalls, int64(numParallel))
 }
 
 // TestIsNonEmptyInterface tests checking of argument to be non-empty interface.

@@ -49,7 +49,9 @@ func New(factories ...*Factory) (result Container, err error) {
 	// Cancel of the root context will trigger cancel of all children contexts, but
 	// it is unwanted behavior: services should be cancelled in strict reverse order.
 
-	// Prepare cancellable app context.
+	// Prepare container context.
+	// When cancelled, it cancels `container.Done()` channel
+	// and unblocks any waiting read from `container.Done()`.
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Cancel context only when returning an error.
@@ -70,7 +72,7 @@ func New(factories ...*Factory) (result Container, err error) {
 	registry := &registry{events: events}
 
 	// Prepare service resolver instance.
-	resolver := &resolver{ctx: ctx, registry: registry}
+	resolver := &resolver{registry: registry}
 
 	// Prepare function invoker instance.
 	invoker := &invoker{resolver: resolver}
@@ -95,23 +97,23 @@ func New(factories ...*Factory) (result Container, err error) {
 	}()
 
 	// Register events broker instance in the registry.
-	if err := registry.registerFactory(ctx, NewService[Events](events)); err != nil {
+	if err := registry.registerFactory(NewService[Events](events)); err != nil {
 		return nil, fmt.Errorf("failed to register events manager: %w", err)
 	}
 
 	// Register service resolver instance in the registry.
-	if err := registry.registerFactory(ctx, NewService[Resolver](resolver)); err != nil {
+	if err := registry.registerFactory(NewService[Resolver](resolver)); err != nil {
 		return nil, fmt.Errorf("failed to register service resolver: %w", err)
 	}
 
 	// Register function invoker instance in the registry.
-	if err := registry.registerFactory(ctx, NewService[Invoker](invoker)); err != nil {
+	if err := registry.registerFactory(NewService[Invoker](invoker)); err != nil {
 		return nil, fmt.Errorf("failed to register function invoker: %w", err)
 	}
 
 	// Register provided factories in the registry.
 	for _, factory := range factories {
-		if err := registry.registerFactory(ctx, factory); err != nil {
+		if err := registry.registerFactory(factory); err != nil {
 			return nil, fmt.Errorf("failed to register factory: %w", err)
 		}
 	}
@@ -217,8 +219,9 @@ func (c *container) Start() (resultErr error) {
 		return fmt.Errorf("failed to trigger container starting event: %w", err)
 	}
 
-	// Start all factories in the container.
-	startErr := c.registry.produceServices()
+	// Spawn all factories in the container.
+	// Only singleton factories are affected.
+	startErr := c.registry.spawnFactories()
 
 	// Trigger container started event.
 	if err := c.events.Trigger(NewEvent(ContainerStarted, startErr)); err != nil {
@@ -260,8 +263,9 @@ func (c *container) Close() (err error) {
 			return
 		}
 
-		// Close all spawned services in the registry.
-		closeErr := c.registry.closeServices()
+		// Close all factories and spawned services.
+		// Only singleton factories are affected.
+		closeErr := c.registry.closeFactories()
 		if closeErr != nil {
 			err = fmt.Errorf("failed to close factories: %w", closeErr)
 			return
@@ -306,9 +310,17 @@ func (c *container) Services() []any {
 	default:
 		services := make([]any, 0, len(c.registry.factories))
 		for _, factory := range c.registry.factories {
-			if factory.factoryInstMode == factoryInstModeSingle {
-				if factory.factorySpawned {
-					for _, serviceValue := range factory.factoryOutValues {
+			// Collect singleton factories.
+			if factory.factoryMode == factoryModeSingleton {
+				// Get shared read lock.
+				factory.factoryMutex.RLock()
+				factorySpawned := factory.factorySpawned
+				factoryOutValues := factory.factoryOutValues
+				factory.factoryMutex.RUnlock()
+
+				// Collect spawned services.
+				if factorySpawned {
+					for _, serviceValue := range factoryOutValues {
 						services = append(services, serviceValue.Interface())
 					}
 				}

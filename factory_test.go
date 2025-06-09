@@ -18,7 +18,6 @@
 package gontainer
 
 import (
-	"context"
 	"fmt"
 	"testing"
 )
@@ -29,17 +28,13 @@ func TestFactoryLoad(t *testing.T) {
 		return 1, true, nil
 	}
 
-	ctx := context.Background()
 	opts := WithMetadata("test", "value")
 	factory := NewFactory(fun, opts)
 
-	equal(t, factory.load(ctx), nil)
+	equal(t, factory.load(), nil)
 	equal(t, factory.factoryFunc == nil, false)
 	equal(t, factory.factoryLoaded, true)
 	equal(t, factory.factorySpawned, false)
-	equal(t, factory.factoryCtx != ctx, true)
-	equal(t, factory.factoryCtx != nil, true)
-	equal(t, factory.ctxCancel != nil, true)
 	equal(t, factory.factoryType.String(), "func(string, string, string) (int, bool, error)")
 	equal(t, factory.factoryValue.String(), "<func(string, string, string) (int, bool, error) Value>")
 	equal(t, fmt.Sprint(factory.factoryInTypes), "[string string string]")
@@ -122,19 +117,19 @@ func TestFactoryMetadata(t *testing.T) {
 // TestFactoryInstantiateDefault tests factory instantiation single (default).
 func TestFactoryInstantiateDefault(t *testing.T) {
 	factory := NewFactory(func() {})
-	equal(t, factory.factoryInstMode, factoryInstModeSingle)
+	equal(t, factory.factoryMode, factoryModeSingleton)
 }
 
 // TestFactoryInstantiateSingle tests factory instantiation single (explicit).
 func TestFactoryInstantiateSingle(t *testing.T) {
-	factory := NewFactory(func() {}, WithInstantiateSingle())
-	equal(t, factory.factoryInstMode, factoryInstModeSingle)
+	factory := NewFactory(func() {}, WithSingletonMode())
+	equal(t, factory.factoryMode, factoryModeSingleton)
 }
 
 // TestFactoryInstantiateAlways tests factory instantiation always.
 func TestFactoryInstantiateAlways(t *testing.T) {
-	factory := NewFactory(func() {}, WithInstantiateAlways())
-	equal(t, factory.factoryInstMode, factoryInstModeAlways)
+	factory := NewFactory(func() {}, WithTransientMode())
+	equal(t, factory.factoryMode, factoryModeTransient)
 }
 
 type globalType struct{}

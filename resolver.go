@@ -18,7 +18,6 @@
 package gontainer
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 )
@@ -40,7 +39,6 @@ type Resolver interface {
 
 // resolver implements resolver interface.
 type resolver struct {
-	ctx      context.Context
 	registry *registry
 }
 

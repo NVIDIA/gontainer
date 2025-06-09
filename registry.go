@@ -33,9 +33,9 @@ type registry struct {
 }
 
 // registerFactory registers factory in the registry.
-func (r *registry) registerFactory(ctx context.Context, factory *Factory) error {
+func (r *registry) registerFactory(factory *Factory) error {
 	// Load the factory definition.
-	if err := factory.load(ctx); err != nil {
+	if err := factory.load(); err != nil {
 		return fmt.Errorf("failed to load factory: %w", err)
 	}
 
@@ -149,30 +149,42 @@ func (r *registry) validateFactories() error {
 	return errors.Join(errs...)
 }
 
-// produceServices spawns all services in the registry.
-func (r *registry) produceServices() error {
+// spawnFactories spawns all factories in the registry.
+// Only singleton factories are affected.
+func (r *registry) spawnFactories() error {
 	for _, factory := range r.factories {
-		if err := r.spawnFactory(factory); err != nil {
-			return fmt.Errorf(
-				"failed to spawn services of '%s' from '%s': %w",
-				factory.Name(), factory.Source(), err,
-			)
+		// Spawn only singleton factories.
+		if factory.factoryMode == factoryModeSingleton {
+			// Invoke and spawn the singleton factory.
+			if _, err := r.spawnFactory(factory); err != nil {
+				return fmt.Errorf(
+					"failed to spawn services of '%s' from '%s': %w",
+					factory.Name(), factory.Source(), err,
+				)
+			}
 		}
 	}
 
 	return nil
 }
 
-// closeServices closes all services in the reverse order.
-func (r *registry) closeServices() error {
+// closeFactories closes all singleton factories in reverse order.
+// The closing process includes cancelling each factory's context,
+// followed by invocation of close method on spawned services.
+func (r *registry) closeFactories() error {
 	var errs []error
+
+	// Iterate over spawn sequence in reverse order.
 	for index := len(r.sequence) - 1; index >= 0; index-- {
 		factory := r.sequence[index]
-		factory.ctxCancel()
 
-		// Handle every factory output value.
-		for _, factoryOutValue := range factory.factoryOutValues {
-			if factoryOutValue.IsValid() {
+		// Close only singleton factories.
+		if factory.factoryMode == factoryModeSingleton {
+			// Cancel factory context.
+			factory.factoryCtxCancel()
+
+			// Close all produced services.
+			for _, factoryOutValue := range factory.factoryOutValues {
 				// Get the factory result object interface.
 				service := factoryOutValue.Interface()
 
@@ -281,13 +293,14 @@ func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, err
 
 	for index, factory := range factories {
 		// Handle found factory definition.
-		if err := r.spawnFactory(factory); err != nil {
+		factoryOutValues, err := r.spawnFactory(factory)
+		if err != nil {
 			return nil, fmt.Errorf("failed to spawn factory '%s': %w", factory.factoryType, err)
 		}
 
 		// Handle services from factory outputs.
 		for _, factoryOutIndex := range factoryOutIndexes[index] {
-			services = append(services, factory.factoryOutValues[factoryOutIndex])
+			services = append(services, factoryOutValues[factoryOutIndex])
 		}
 	}
 
@@ -328,36 +341,47 @@ func (r *registry) findFactoriesFor(serviceType reflect.Type) ([]*Factory, [][]i
 	return factories, outputs
 }
 
-// spawnFactory instantiates specified factory definition.
-func (r *registry) spawnFactory(factory *Factory) error {
+func (r *registry) spawnFactory(factory *Factory) ([]reflect.Value, error) {
 	// Protect from cyclic dependencies.
 	if getStackDepth() >= stackDepthLimit {
-		return ErrStackLimitReached
+		return nil, ErrStackLimitReached
 	}
 
-	// Check factory already spawned and should not be respawned always.
-	if factory.factoryInstMode == factoryInstModeSingle {
-		if factory.factorySpawned {
-			return nil
+	// Check singleton factory is already spawned.
+	if factory.factoryMode == factoryModeSingleton {
+		// Get shared read lock.
+		factory.factoryMutex.RLock()
+		factorySpawned := factory.factorySpawned
+		factoryOutValues := factory.factoryOutValues
+		factory.factoryMutex.RUnlock()
+
+		// Return already spawned services.
+		if factorySpawned {
+			return factoryOutValues, nil
 		}
 	}
 
 	// Get or spawn factory input values recursively.
 	factoryInValues := make([]reflect.Value, 0, len(factory.factoryInTypes))
 	for _, factoryInType := range factory.factoryInTypes {
-		// Handle specified `context.Context` as a special case.
-		if isContextInterface(factoryInType) {
-			factoryCtxValue := reflect.ValueOf(factory.factoryCtx)
-			factoryInValues = append(factoryInValues, factoryCtxValue)
+		// Handle specified `context.Context` as a special case of singleton factories.
+		if factory.factoryMode == factoryModeSingleton && isContextInterface(factoryInType) {
+			factoryInValues = append(factoryInValues, reflect.ValueOf(factory.factoryCtx))
 			continue
 		}
 
-		// Resolve factory input dependency.
-		factoryInValue, err := r.resolveService(factoryInType)
-		if err != nil {
-			return fmt.Errorf("failed to resolve service: %w", err)
+		// Handle specified `context.Context` as a special case of transient factories.
+		if factory.factoryMode == factoryModeTransient && isContextInterface(factoryInType) {
+			return nil, fmt.Errorf("context argument is not available for transient factories")
 		}
 
+		// Resolve factory input dependency by its type.
+		factoryInValue, err := r.resolveService(factoryInType)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve service: %w", err)
+		}
+
+		// Prepare factory input values for the every type.
 		factoryInValues = append(factoryInValues, factoryInValue)
 	}
 
@@ -374,7 +398,7 @@ func (r *registry) spawnFactory(factory *Factory) error {
 	// Handle factory output error if present.
 	if factory.factoryOutError && !factoryErrorValue.IsNil() {
 		err, _ := factoryErrorValue.Interface().(error)
-		return fmt.Errorf("%w: %w", ErrFactoryReturnedError, err)
+		return nil, fmt.Errorf("%w: %w", ErrFactoryReturnedError, err)
 	}
 
 	// Handle factory out functions as regular objects.
@@ -382,21 +406,29 @@ func (r *registry) spawnFactory(factory *Factory) error {
 		if serviceFuncValue, ok := isServiceFunc(factoryOutValue); ok {
 			serviceFuncResult, err := startServiceFunc(serviceFuncValue)
 			if err != nil {
-				return fmt.Errorf("failed to start factory func: %w", err)
+				return nil, fmt.Errorf("failed to start service func: %w", err)
 			}
 			factoryOutValues[factoryOutIndex] = serviceFuncResult
 		}
 	}
 
-	// Register factory output values in the registry.
-	factory.factoryOutValues = factoryOutValues
+	// Handle singleton factory result data.
+	if factory.factoryMode == factoryModeSingleton {
+		// Get exclusive write lock.
+		factory.factoryMutex.Lock()
+		defer factory.factoryMutex.Unlock()
 
-	// Recorder services spawn order.
-	r.sequence = append(r.sequence, factory)
+		// Save the factory out values.
+		factory.factoryOutValues = factoryOutValues
 
-	// Save the factory spawn status.
-	factory.factorySpawned = true
-	return nil
+		// Save the factory spawn status.
+		factory.factorySpawned = true
+
+		// Recorder services spawn order.
+		r.sequence = append(r.sequence, factory)
+	}
+
+	return factoryOutValues, nil
 }
 
 // function represents service func return value wrapper.
