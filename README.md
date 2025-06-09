@@ -180,7 +180,7 @@ func MyServiceFactory(servicesSlice gontainer.Multiple[MyInterface]) {
 ### Services
 
 A service is a building block of the application, created and managed by a Service Factory. 
-The lifetime of a service is tied to the lifetime of the entire container for a singletons
+The lifetime of a service is tied to the lifetime of the entire container for singleton services
 and should be managed by the client code if the factory is configured in a transient mode.
 
 A service may optionally implement a `Close() error` or just `Close()` method, which is called when the container is shutting down.
