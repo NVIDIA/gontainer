@@ -150,7 +150,7 @@ func (r *registry) validateFactories() error {
 }
 
 // spawnFactories spawns all factories in the registry.
-// Only singleton factories are affected.
+// Only singleton factories are involved.
 func (r *registry) spawnFactories() error {
 	for _, factory := range r.factories {
 		// Spawn only singleton factories.

@@ -220,7 +220,7 @@ func (c *container) Start() (resultErr error) {
 	}
 
 	// Spawn all factories in the container.
-	// Only singleton factories are affected.
+	// Only singleton factories are involved.
 	startErr := c.registry.spawnFactories()
 
 	// Trigger container started event.
@@ -264,7 +264,7 @@ func (c *container) Close() (err error) {
 		}
 
 		// Close all factories and spawned services.
-		// Only singleton factories are affected.
+		// Only singleton factories are involved.
 		closeErr := c.registry.closeFactories()
 		if closeErr != nil {
 			err = fmt.Errorf("failed to close factories: %w", closeErr)
