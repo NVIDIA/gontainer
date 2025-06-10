@@ -250,6 +250,120 @@ func TestRegistryResolveParallel(t *testing.T) {
 	equal(t, factory.getSpawned(), true)
 }
 
+// TestRegistrySpawnWithNil tests resolving of function services.
+// Function services are regular services and could be resolved.
+func TestRegistryResolveFuncServices(t *testing.T) {
+	func1Calls := atomic.Int64{}
+	func2Calls := atomic.Int64{}
+	fact3Calls := atomic.Int64{}
+
+	sources := []*Factory{
+		NewFactory(func() func() int {
+			return func() int {
+				func1Calls.Add(1)
+				return 42
+			}
+		}),
+		NewFactory(func() func(string) string {
+			return func(str string) string {
+				func2Calls.Add(1)
+				return str + " test"
+			}
+		}),
+		NewFactory(func(
+			fn1 func() int,
+			fn2 func(string) string,
+			fn3 func(string) string,
+		) {
+			fact3Calls.Add(1)
+			equal(t, fn1(), 42)
+			equal(t, fn2("hello"), "hello test")
+			equal(t, fn3("world"), "world test")
+			equal(t, fn3("universe"), "universe test")
+		}),
+	}
+
+	registry := &registry{}
+	for _, source := range sources {
+		factory, err := source.factory()
+		equal(t, err, nil)
+		equal(t, factory == nil, false)
+		registry.registerFactory(factory)
+	}
+
+	err := registry.spawnFactories()
+	equal(t, err, nil)
+
+	err = registry.closeFactories()
+	equal(t, err, nil)
+
+	equal(t, func1Calls.Load(), int64(1))
+	equal(t, func2Calls.Load(), int64(3))
+	equal(t, fact3Calls.Load(), int64(1))
+}
+
+// TestResolveServiceFunc tests resolving of service functions.
+// Service functions runs automatically by the container in background.
+func TestRegistrySpawnServiceFuncs(t *testing.T) {
+	func1Called := atomic.Bool{}
+	func2Called := atomic.Bool{}
+	func3Called := atomic.Bool{}
+	func4Called := atomic.Bool{}
+
+	wg := sync.WaitGroup{}
+	wg.Add(4)
+
+	sources := []*Factory{
+		NewFactory(func() any {
+			return func() {
+				func1Called.Store(true)
+				wg.Done()
+			}
+		}),
+		NewFactory(func() any {
+			return func() error {
+				func2Called.Store(true)
+				wg.Done()
+				return nil
+			}
+		}),
+		NewFactory(func() func() {
+			return func() {
+				func3Called.Store(true)
+				wg.Done()
+			}
+		}),
+		NewFactory(func(ctx context.Context) func() error {
+			return func() error {
+				func4Called.Store(true)
+				<-ctx.Done()
+				wg.Done()
+				return nil
+			}
+		}),
+	}
+
+	registry := &registry{}
+	for _, source := range sources {
+		factory, err := source.factory()
+		equal(t, err, nil)
+		equal(t, factory == nil, false)
+		registry.registerFactory(factory)
+	}
+
+	err := registry.spawnFactories()
+	equal(t, err, nil)
+
+	err = registry.closeFactories()
+	equal(t, err, nil)
+
+	wg.Wait()
+	equal(t, func1Called.Load(), true)
+	equal(t, func2Called.Load(), true)
+	equal(t, func3Called.Load(), true)
+	equal(t, func4Called.Load(), true)
+}
+
 // TestRegistrySpawnWithErrors tests corresponding registry method.
 func TestRegistrySpawnWithErrors(t *testing.T) {
 	source := NewFactory(func() (bool, error) {
