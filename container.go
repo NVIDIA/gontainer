@@ -97,24 +97,32 @@ func New(factories ...*Factory) (result Container, err error) {
 	}()
 
 	// Register events broker instance in the registry.
-	if err := registry.registerFactory(NewService[Events](events)); err != nil {
+	if factory, err := NewService[Events](events).factory(); err != nil {
 		return nil, fmt.Errorf("failed to register events manager: %w", err)
+	} else {
+		registry.registerFactory(factory)
 	}
 
 	// Register service resolver instance in the registry.
-	if err := registry.registerFactory(NewService[Resolver](resolver)); err != nil {
+	if factory, err := NewService[Resolver](resolver).factory(); err != nil {
 		return nil, fmt.Errorf("failed to register service resolver: %w", err)
+	} else {
+		registry.registerFactory(factory)
 	}
 
 	// Register function invoker instance in the registry.
-	if err := registry.registerFactory(NewService[Invoker](invoker)); err != nil {
+	if factory, err := NewService[Invoker](invoker).factory(); err != nil {
 		return nil, fmt.Errorf("failed to register function invoker: %w", err)
+	} else {
+		registry.registerFactory(factory)
 	}
 
 	// Register provided factories in the registry.
-	for _, factory := range factories {
-		if err := registry.registerFactory(factory); err != nil {
+	for _, source := range factories {
+		if factory, err := source.factory(); err != nil {
 			return nil, fmt.Errorf("failed to register factory: %w", err)
+		} else {
+			registry.registerFactory(factory)
 		}
 	}
 
@@ -293,7 +301,13 @@ func (c *container) Factories() []*Factory {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 
-	return c.registry.factories
+	// Collect all factory definitions.
+	factories := make([]*Factory, 0, len(c.registry.factories))
+	for _, factory := range c.registry.factories {
+		factories = append(factories, factory.source)
+	}
+
+	return factories
 }
 
 // Services returns all spawned services.

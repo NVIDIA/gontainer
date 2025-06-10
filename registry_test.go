@@ -34,13 +34,14 @@ func TestRegistryRegisterFactory(t *testing.T) {
 	}
 
 	opts := WithMetadata("test", func() {})
-	factory := NewFactory(fun, opts)
+	source := NewFactory(fun, opts)
+	factory, err := source.factory()
+	equal(t, err, nil)
 
 	registry := &registry{}
-	equal(t, registry.registerFactory(factory), nil)
-	equal(t, registry.factories, []*Factory{factory})
-	equal(t, factory.factoryFunc == nil, false)
-	equal(t, factory.factoryLoaded, true)
+	registry.registerFactory(factory)
+	equal(t, registry.factories[0], factory)
+	equal(t, factory.source.fn == nil, false)
 }
 
 // TestRegistryValidateFactories tests corresponding registry method.
@@ -190,8 +191,11 @@ func TestRegistryValidateFactories(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			registry := &registry{}
-			for _, factory := range tt.factories {
-				equal(t, registry.registerFactory(factory), nil)
+			for _, source := range tt.factories {
+				factory, err := source.factory()
+				equal(t, err, nil)
+				equal(t, factory == nil, false)
+				registry.registerFactory(factory)
 			}
 			tt.wantErr(t, registry.validateFactories())
 		})
@@ -200,27 +204,35 @@ func TestRegistryValidateFactories(t *testing.T) {
 
 // TestRegistrySpawnFactories tests corresponding registry method.
 func TestRegistrySpawnFactories(t *testing.T) {
-	factory := NewFactory(func() bool { return true })
+	source := NewFactory(func() bool { return true })
+
+	factory, err := source.factory()
+	equal(t, err, nil)
+	equal(t, factory == nil, false)
 
 	registry := &registry{}
-	equal(t, registry.registerFactory(factory), nil)
-	equal(t, registry.spawnFactories(), nil)
-	equal(t, factory.factorySpawned, true)
+	registry.registerFactory(factory)
 
-	result := factory.factoryOutValues[0]
-	equal(t, result.Interface(), true)
+	err = registry.spawnFactories()
+	equal(t, err, nil)
+	equal(t, factory.spawned, true)
+	equal(t, factory.outValues[0].Interface(), true)
 }
 
 // TestRegistryResolveParallel tests corresponding registry method.
 // This test must be run with the race detector (`-race` flag).
 func TestRegistryResolveParallel(t *testing.T) {
-	factory := NewFactory(func() bool {
+	source := NewFactory(func() bool {
 		time.Sleep(10 * time.Millisecond)
 		return true
 	})
 
+	factory, err := source.factory()
+	equal(t, err, nil)
+	equal(t, factory == nil, false)
+
 	registry := &registry{}
-	equal(t, registry.registerFactory(factory), nil)
+	registry.registerFactory(factory)
 
 	for x := 0; x < 10; x++ {
 		go func() {
@@ -234,15 +246,20 @@ func TestRegistryResolveParallel(t *testing.T) {
 	equal(t, factory.getSpawned(), true)
 }
 
-
 // TestRegistrySpawnWithErrors tests corresponding registry method.
 func TestRegistrySpawnWithErrors(t *testing.T) {
-	registry := &registry{}
-	equal(t, registry.registerFactory(NewFactory(func() (bool, error) {
+	source := NewFactory(func() (bool, error) {
 		return false, errors.New("failed to create new service")
-	})), nil)
+	})
 
-	err := registry.spawnFactories()
+	factory, err := source.factory()
+	equal(t, err, nil)
+	equal(t, factory == nil, false)
+
+	registry := &registry{}
+	registry.registerFactory(factory)
+
+	err = registry.spawnFactories()
 	equal(t, err != nil, true)
 	equal(t, fmt.Sprint(err), `failed to spawn services of `+
 		`'Factory[func() (bool, error)]' from 'github.com/NVIDIA/gontainer': `+
@@ -253,7 +270,7 @@ func TestRegistrySpawnWithErrors(t *testing.T) {
 func TestRegistryCloseFactories(t *testing.T) {
 	funcStarted := atomic.Bool{}
 	funcClosed := atomic.Bool{}
-	factory := NewFactory(func(ctx context.Context) any {
+	source := NewFactory(func(ctx context.Context) any {
 		return func() error {
 			funcStarted.Store(true)
 			<-ctx.Done()
@@ -262,10 +279,14 @@ func TestRegistryCloseFactories(t *testing.T) {
 		}
 	})
 
+	factory, err := source.factory()
+	equal(t, err, nil)
+	equal(t, factory == nil, false)
+
 	registry := &registry{}
-	equal(t, registry.registerFactory(factory), nil)
+	registry.registerFactory(factory)
 	equal(t, registry.spawnFactories(), nil)
-	equal(t, factory.factorySpawned, true)
+	equal(t, factory.spawned, true)
 
 	// Let factory function start executing in the background.
 	time.Sleep(time.Millisecond)
@@ -279,22 +300,35 @@ func TestRegistryCloseFactories(t *testing.T) {
 
 // TestRegistryCloseWithError tests corresponding registry method.
 func TestRegistryCloseWithError(t *testing.T) {
-	registry := &registry{}
-
-	equal(t, registry.registerFactory(NewFactory(func(ctx context.Context) any {
+	source1 := NewFactory(func(ctx context.Context) any {
 		return func() error { return errors.New("failed to close 1") }
-	})), nil)
-
-	equal(t, registry.registerFactory(NewFactory(func() any {
+	})
+	source2 := NewFactory(func() any {
 		return func() error { return errors.New("failed to close 2") }
-	})), nil)
+	})
 
-	equal(t, registry.spawnFactories(), nil)
-	err := registry.closeFactories()
+	factory1, err := source1.factory()
+	equal(t, err, nil)
+	equal(t, factory1 == nil, false)
+
+	factory2, err := source2.factory()
+	equal(t, err, nil)
+	equal(t, factory2 == nil, false)
+
+	registry := &registry{}
+	registry.registerFactory(factory1)
+	registry.registerFactory(factory2)
+
+	err = registry.spawnFactories()
+	equal(t, err, nil)
+
+	err = registry.closeFactories()
 	equal(t, err != nil, true)
-	equal(t, fmt.Sprint(err), `failed to close services: `+
-		`Factory[func() interface {}] from 'github.com/NVIDIA/gontainer': failed to close 2`+"\n"+
-		`Factory[func(context.Context) interface {}] from 'github.com/NVIDIA/gontainer': failed to close 1`)
+	equal(t, fmt.Sprint(err), ``+
+		`failed to close service 'gontainer.funcResult' (index 0) of factory `+
+		`'Factory[func() interface {}]' from 'github.com/NVIDIA/gontainer': failed to close 2`+"\n"+
+		`failed to close service 'gontainer.funcResult' (index 0) of factory `+
+		`'Factory[func(context.Context) interface {}]' from 'github.com/NVIDIA/gontainer': failed to close 1`)
 }
 
 // TestIsNonEmptyInterface tests checking of argument to be non-empty interface.
