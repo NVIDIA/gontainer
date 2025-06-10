@@ -19,22 +19,58 @@ Dependency injection service container for Golang projects.
 ## Examples
 
 * [Console command example](./examples/01_console_command/main.go) – demonstrates how to build a simple console command. It shows how to use `Resolver` and `Invoker` services to organize the application entry point in a run-and-exit style.
-* [Daemon service example](./examples/02_daemon_service/main.go) – demonstrates how to maintain background services. It shows how to organize a daemon entry point and wait for graceful shutdown by subscribing to OS termination signals.
-* [Complete webapp example](./examples/03_complete_webapp/main.go) – demonstrates how to organize applications consists of multiple services. It provides basic config service, handles logging, setups HTTP server and initiates two endpoints.
-  Here is the log of the complete webapp example launch.
   ```
-  time=2025-06-05T15:19:48.373+02:00 level=INFO msg="Starting service container" service=logger
-  time=2025-06-05T15:19:48.373+02:00 level=INFO msg="Configuring app endpoints" service=app
-  time=2025-06-05T15:19:48.373+02:00 level=INFO msg="Configuring health endpoints" service=app
-  time=2025-06-05T15:19:48.373+02:00 level=INFO msg="Starting HTTP server" service=http address=127.0.0.1:8080
-  time=2025-06-05T15:19:48.374+02:00 level=INFO msg="Service container started" service=logger
-  ----------------- Application was started and now accepts HTTP requests -----------------
-  time=2025-06-05T15:19:54.716+02:00 level=INFO msg="Serving home page" service=app remote-addr=127.0.0.1:62640
-  time=2025-06-05T15:20:01.405+02:00 level=INFO msg="Serving health check" service=app remote-addr=127.0.0.1:62640
-  ----------------- CTRL+C was pressed or a TERM signal was sent to the process -----------------
-  time=2025-06-05T15:20:04.061+02:00 level=INFO msg="Closing service container" service=logger
-  time=2025-06-05T15:20:04.061+02:00 level=INFO msg="Closing HTTP server" service=http
-  time=2025-06-05T15:20:04.061+02:00 level=INFO msg="Service container closed" service=logger
+  12:51:32 Creating new service container
+  12:51:32 Hello from the Hello Service Bob
+  12:51:32 Hello from the Hello Service Bob
+  12:51:32 Closing service container by defer
+  12:51:32 Service container closed
+  ```
+* [Daemon service example](./examples/02_daemon_service/main.go) – demonstrates how to maintain background services. It shows how to organize a daemon entry point and wait for graceful shutdown by subscribing to OS termination signals.
+  ```
+  12:48:22 Creating service container instance
+  12:48:22 Starting service container
+  12:48:22 Starting listening on: http://127.0.0.1:8080
+  12:48:22 Starting serving HTTP requests
+  ------ Application was started and now accepts HTTP requests -------------
+  12:48:22 Awaiting service container done
+  ------ CTRL+C was pressed or a TERM signal was sent to the process -------
+  12:48:28 Service container done closed
+  12:48:28 Closing service container by defer
+  12:48:28 Service container closed
+  ```
+* [Complete webapp example](./examples/03_complete_webapp/main.go) – demonstrates how to organize web application with multiple services. It provides basic config service, handles logging, setups HTTP server and initiates two endpoints.
+  ```
+  15:19:48 INFO msg="Starting service container" service=logger
+  15:19:48 INFO msg="Configuring app endpoints" service=app
+  15:19:48 INFO msg="Configuring health endpoints" service=app
+  15:19:48 INFO msg="Starting HTTP server" service=http address=127.0.0.1:8080
+  15:19:48 INFO msg="Service container started" service=logger
+  ------ Application was started and now accepts HTTP requests -------------
+  15:19:54 INFO msg="Serving home page" service=app remote-addr=127.0.0.1:62640
+  15:20:01 INFO msg="Serving health check" service=app remote-addr=127.0.0.1:62640
+  ------ CTRL+C was pressed or a TERM signal was sent to the process -------
+  15:20:04 INFO msg="Closing service container" service=logger
+  15:20:04 INFO msg="Closing HTTP server" service=http
+  15:20:04 INFO msg="Service container closed" service=logger
+  ```
+* [Transient service example](./examples/04_transient_services/main.go) – demonstrates how to return a function that can be called multiple times to produce transient services.
+  ```
+  12:43:18 Creating new service container
+  12:43:18 Starting service container
+  12:43:18 Closing service container by defer
+  12:43:18 Starting service function with 42
+  12:43:18 Exiting from service function
+  12:43:18 Service container closed
+  ```
+* [Service function example](./examples/05_service_functions/main.go) – demonstrates how to define a service function that could be used to organize the application entry point.
+  ```
+  12:47:21 Creating new service container
+  12:47:21 Starting service container
+  12:47:21 Closing service container by defer
+  12:47:21 Starting service function with 42
+  12:47:21 Exiting from service function
+  12:47:21 Service container closed
   ```
 
 ## Quick Start

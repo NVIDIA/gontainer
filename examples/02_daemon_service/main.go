@@ -103,6 +103,7 @@ func main() {
 		if err := container.Close(); err != nil {
 			log.Panicf("Failed to close service container: %s", err)
 		}
+		log.Println("Service container closed")
 	}()
 
 	// Instantiate all services within the container.
@@ -120,4 +121,5 @@ func main() {
 	// Wait for close by signal.
 	log.Println("Awaiting service container done")
 	<-container.Done()
+	log.Println("Service container done closed")
 }

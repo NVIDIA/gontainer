@@ -33,9 +33,9 @@ type registry struct {
 }
 
 // registerFactory registers factory in the registry.
-func (r *registry) registerFactory(ctx context.Context, factory *Factory) error {
+func (r *registry) registerFactory(factory *Factory) error {
 	// Load the factory definition.
-	if err := factory.load(ctx); err != nil {
+	if err := factory.load(); err != nil {
 		return fmt.Errorf("failed to load factory: %w", err)
 	}
 
@@ -149,8 +149,8 @@ func (r *registry) validateFactories() error {
 	return errors.Join(errs...)
 }
 
-// produceServices spawns all services in the registry.
-func (r *registry) produceServices() error {
+// spawnFactories spawns all factories in the registry.
+func (r *registry) spawnFactories() error {
 	for _, factory := range r.factories {
 		if err := r.spawnFactory(factory); err != nil {
 			return fmt.Errorf(
@@ -163,8 +163,8 @@ func (r *registry) produceServices() error {
 	return nil
 }
 
-// closeServices closes all services in the reverse order.
-func (r *registry) closeServices() error {
+// closeFactories closes all factories in the reverse order.
+func (r *registry) closeFactories() error {
 	var errs []error
 	for index := len(r.sequence) - 1; index >= 0; index-- {
 		factory := r.sequence[index]
@@ -415,11 +415,14 @@ func isEmptyInterface(typ reflect.Type) bool {
 	return typ.Kind() == reflect.Interface && typ.NumMethod() == 0
 }
 
+// isErrorInterface returns true when argument is an `error` interface.
+func isErrorInterface(typ reflect.Type) bool {
+	return typ.Kind() == reflect.Interface && typ.Implements(reflect.TypeFor[error]())
+}
+
 // isContextInterface returns true when argument is a context interface.
 func isContextInterface(typ reflect.Type) bool {
-	var ctx context.Context
-	ctxType := reflect.TypeOf(&ctx).Elem()
-	return typ.Kind() == reflect.Interface && typ.Implements(ctxType)
+	return typ.Kind() == reflect.Interface && typ.Implements(reflect.TypeFor[context.Context]())
 }
 
 // isServiceFunc returns true when the argument is a service function.
@@ -433,15 +436,31 @@ func isServiceFunc(factoryOutValue reflect.Value) (reflect.Value, bool) {
 	}
 
 	// Check if the result value kind is a func kind.
-	// The func type must have no user-defined methods,
-	// because otherwise it could be a service instance
-	// based on the func type but implements an interface.
-	if factoryOutValue.Kind() == reflect.Func {
-		if factoryOutValue.NumMethod() == 0 {
+	if factoryOutValue.Kind() != reflect.Func {
+		return reflect.Value{}, false
+	}
+
+	// The service func type must have no user-defined methods,
+	// Otherwise it could be a service instance based on the func type
+	// but with a several public methods implementing public interface.
+	if factoryOutValue.NumMethod() > 0 {
+		return reflect.Value{}, false
+	}
+
+	// The service func type could be just a `func()` type.
+	if factoryOutValue.Type().NumOut() == 0 {
+		return factoryOutValue, true
+	}
+
+	// The service func type could be a `func() error` type.
+	if factoryOutValue.Type().NumOut() == 1 {
+		if isErrorInterface(factoryOutValue.Type().Out(0)) {
 			return factoryOutValue, true
 		}
 	}
 
+	// All other types like `func(name string) (MyType, error)`
+	// or `func() MyType` or are not service functions.
 	return reflect.Value{}, false
 }
 
@@ -467,6 +486,8 @@ func startServiceFunc(serviceFuncValue reflect.Value) (reflect.Value, error) {
 			funcResultChan <- nil
 		}()
 	default:
+		// This case must never be reached.
+		// Protected by the `isServiceFunc()`.
 		return reflect.Value{}, fmt.Errorf(
 			"unexpected service function signature: %T",
 			serviceFuncValue.Interface(),

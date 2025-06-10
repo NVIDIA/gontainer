@@ -70,7 +70,7 @@ func New(factories ...*Factory) (result Container, err error) {
 	registry := &registry{events: events}
 
 	// Prepare service resolver instance.
-	resolver := &resolver{ctx: ctx, registry: registry}
+	resolver := &resolver{registry: registry}
 
 	// Prepare function invoker instance.
 	invoker := &invoker{resolver: resolver}
@@ -95,23 +95,23 @@ func New(factories ...*Factory) (result Container, err error) {
 	}()
 
 	// Register events broker instance in the registry.
-	if err := registry.registerFactory(ctx, NewService[Events](events)); err != nil {
+	if err := registry.registerFactory(NewService[Events](events)); err != nil {
 		return nil, fmt.Errorf("failed to register events manager: %w", err)
 	}
 
 	// Register service resolver instance in the registry.
-	if err := registry.registerFactory(ctx, NewService[Resolver](resolver)); err != nil {
+	if err := registry.registerFactory(NewService[Resolver](resolver)); err != nil {
 		return nil, fmt.Errorf("failed to register service resolver: %w", err)
 	}
 
 	// Register function invoker instance in the registry.
-	if err := registry.registerFactory(ctx, NewService[Invoker](invoker)); err != nil {
+	if err := registry.registerFactory(NewService[Invoker](invoker)); err != nil {
 		return nil, fmt.Errorf("failed to register function invoker: %w", err)
 	}
 
 	// Register provided factories in the registry.
 	for _, factory := range factories {
-		if err := registry.registerFactory(ctx, factory); err != nil {
+		if err := registry.registerFactory(factory); err != nil {
 			return nil, fmt.Errorf("failed to register factory: %w", err)
 		}
 	}
@@ -218,7 +218,7 @@ func (c *container) Start() (resultErr error) {
 	}
 
 	// Start all factories in the container.
-	startErr := c.registry.produceServices()
+	startErr := c.registry.spawnFactories()
 
 	// Trigger container started event.
 	if err := c.events.Trigger(NewEvent(ContainerStarted, startErr)); err != nil {
@@ -261,7 +261,7 @@ func (c *container) Close() (err error) {
 		}
 
 		// Close all spawned services in the registry.
-		closeErr := c.registry.closeServices()
+		closeErr := c.registry.closeFactories()
 		if closeErr != nil {
 			err = fmt.Errorf("failed to close factories: %w", closeErr)
 			return

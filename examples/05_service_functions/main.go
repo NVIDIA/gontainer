@@ -18,51 +18,53 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/NVIDIA/gontainer"
 )
-
-// NameService is a service that returns a name.
-type NameService struct {
-	name string
-}
-
-// GetName returns a name.
-func (s *NameService) GetName() string {
-	return "Bob"
-}
-
-// HelloService is a service that says hello.
-type HelloService struct {
-	nameService *NameService
-}
-
-// SayHello says hello to the name.
-func (s *HelloService) SayHello() {
-	log.Println("Hello from the Hello Service", s.nameService.GetName())
-}
 
 func main() {
 	// Initialize service container.
 	// Order of factories definition is non-restrictive.
 	log.Println("Creating new service container")
 	container, err := gontainer.New(
-		// Factory to create an instance of NameService.
-		gontainer.NewFactory(func() *NameService {
-			return &NameService{name: "Bob"}
+		// Return an int value from the factory.
+		gontainer.NewFactory(func() int {
+			return 42
 		}),
 
-		// Factory to create an instance of HelloService.
-		gontainer.NewFactory(func(svc *NameService) *HelloService {
-			return &HelloService{nameService: svc}
-		}),
+		// Depend on the transient service factory.
+		// Call this factory several times.
+		gontainer.NewFactory(
+			func(ctx context.Context, value int) any {
+				// Service functions could have two signatures: `func()` or `func() error`.
+				// Service container will automatically invoke these functions in background
+				// goroutine on an eager container start with the `container.Start()` call.
+				// Invocation of the service function will not block the container start.
+				// Example usage: organize the application entry point and start
+				// all required services in a single place.
+				return func() error {
+					log.Printf("Starting service function with %d", value)
+					<-ctx.Done()
+					log.Printf("Exiting from service function")
+					return nil
+				}
+			},
+		),
 	)
 
 	// Validate the container's proper handling of all factory functions.
 	// Errors may point to bad function signatures or unresolvable dependencies.
 	if err != nil {
 		log.Panicf("Failed to create service container: %s", err)
+	}
+
+	// Instantiate all services within the container.
+	// This call will wait until all factories returns.
+	log.Println("Starting service container")
+	if err := container.Start(); err != nil {
+		log.Panicf("Failed to start service container: %s", err)
 	}
 
 	// Close defined services in reverse-to-instantiation order.
@@ -75,29 +77,4 @@ func main() {
 		}
 		log.Println("Service container closed")
 	}()
-
-	// Application entrypoint using the `Invoker` service.
-	// Invoker will resolve all dependencies for the function.
-	_, err = container.Invoker().Invoke(func(svc *HelloService) {
-		// Here the application bootstrap code could be located.
-		// It can access all services from the container.
-		// For example, HTTP server could be started here.
-		svc.SayHello()
-	})
-	if err != nil {
-		log.Panicf("Failed to invoke: %s", err)
-	}
-
-	// - or -
-
-	// Application entrypoint using the `Resolver` service.
-	// This code will manually resolve all dependencies.
-	var helloService *HelloService
-	err = container.Resolver().Resolve(&helloService)
-	if err != nil {
-		log.Panicf("Failed to resolve: %s", err)
-	}
-
-	// Manually call the service code.
-	helloService.SayHello()
 }
