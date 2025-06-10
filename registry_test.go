@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -234,15 +235,18 @@ func TestRegistryResolveParallel(t *testing.T) {
 	registry := &registry{}
 	registry.registerFactory(factory)
 
+	wg := sync.WaitGroup{}
+	wg.Add(10)
 	for x := 0; x < 10; x++ {
 		go func() {
 			values, err := registry.resolveByType(reflect.TypeOf(true))
 			equal(t, err, nil)
 			equal(t, values[0].Interface(), true)
+			wg.Done()
 		}()
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	wg.Wait()
 	equal(t, factory.getSpawned(), true)
 }
 
