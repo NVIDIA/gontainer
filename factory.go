@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 // FactoryFunc declares the type for a service factory function.
@@ -70,106 +71,86 @@ type FactoryMetadata map[string]any
 // to enable dependency injection and lifecycle control.
 type Factory struct {
 	// Factory function.
-	factoryFunc FactoryFunc
+	fn FactoryFunc
 
 	// Factory function name.
-	factoryName string
+	name string
 
 	// Factory function location.
-	factorySource string
+	source string
 
 	// Factory metadata.
-	factoryMetadata FactoryMetadata
-
-	// Factory is loaded.
-	factoryLoaded bool
-
-	// Factory is spawned.
-	factorySpawned bool
-
-	// Factory context value.
-	factoryCtx context.Context
-
-	// Factory context cancel.
-	ctxCancel context.CancelFunc
-
-	// Factory function type.
-	factoryType reflect.Type
-
-	// Factory function value.
-	factoryValue reflect.Value
-
-	// Factory input types.
-	factoryInTypes []reflect.Type
-
-	// Factory output types.
-	factoryOutTypes []reflect.Type
-
-	// Factory output error.
-	factoryOutError bool
-
-	// Factory result values.
-	factoryOutValues []reflect.Value
+	metadata FactoryMetadata
 }
 
 // Name returns factory function name.
 func (f *Factory) Name() string {
-	return f.factoryName
+	return f.name
 }
 
 // Source returns factory function source.
 func (f *Factory) Source() string {
-	return f.factorySource
+	return f.source
 }
 
 // Metadata returns associated factory metadata.
 func (f *Factory) Metadata() FactoryMetadata {
-	return f.factoryMetadata
+	return f.metadata
 }
 
-// load initializes factory definition internal values.
-func (f *Factory) load() error {
-	if f.factoryLoaded {
-		return errors.New("invalid factory func: already loaded")
-	}
-
+// factory produces internal representation for the factory.
+// Separate internal representation is used to let single
+// factory instance be used in multiple containers.
+func (f *Factory) factory() (*factory, error) {
 	// Check factory configured.
-	if f.factoryFunc == nil {
-		return errors.New("invalid factory func: no func specified")
+	if f.fn == nil {
+		return nil, errors.New("invalid factory func: no func specified")
 	}
 
 	// Prepare cancellable context for the factory services.
 	f.factoryCtx, f.ctxCancel = context.WithCancel(context.Background())
 
 	// Validate factory type and signature.
-	f.factoryType = reflect.TypeOf(f.factoryFunc)
-	f.factoryValue = reflect.ValueOf(f.factoryFunc)
-	if f.factoryType.Kind() != reflect.Func {
-		return fmt.Errorf("invalid factory func: not a function: %s", f.factoryType)
+	funcType := reflect.TypeOf(f.fn)
+	funcValue := reflect.ValueOf(f.fn)
+	if funcType.Kind() != reflect.Func {
+		return nil, fmt.Errorf("invalid factory func: not a function: %s", funcType)
 	}
 
 	// Index factory input types from the function signature.
-	f.factoryInTypes = make([]reflect.Type, 0, f.factoryType.NumIn())
-	for index := 0; index < f.factoryType.NumIn(); index++ {
-		f.factoryInTypes = append(f.factoryInTypes, f.factoryType.In(index))
+	inTypes := make([]reflect.Type, 0, funcType.NumIn())
+	for index := 0; index < funcType.NumIn(); index++ {
+		inTypes = append(inTypes, funcType.In(index))
 	}
 
 	// Index factory output types from the function signature.
-	f.factoryOutTypes = make([]reflect.Type, 0, f.factoryType.NumOut())
-	f.factoryOutValues = make([]reflect.Value, 0, f.factoryType.NumOut())
-	for index := 0; index < f.factoryType.NumOut(); index++ {
-		if index != f.factoryType.NumOut()-1 || f.factoryType.Out(index) != errorType {
+	outTypes := make([]reflect.Type, 0, funcType.NumOut())
+	outError := false
+	for index := 0; index < funcType.NumOut(); index++ {
+		if index != funcType.NumOut()-1 || funcType.Out(index) != errorType {
 			// Register regular factory output type.
-			f.factoryOutTypes = append(f.factoryOutTypes, f.factoryType.Out(index))
+			outTypes = append(outTypes, funcType.Out(index))
 		} else {
 			// Register last output index as an error.
-			f.factoryOutError = true
+			outError = true
 		}
 	}
 
-	// Save the factory load status.
-	f.factoryLoaded = true
-	return nil
+	// Prepare cancellable context for the factory services.
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Prepare registry factory instance.
+	return &factory{
+		source:    f,
+		spawned:   false,
+		ctx:       ctx,
+		cancel:    cancel,
+		funcType:  funcType,
+		funcValue: funcValue,
+		inTypes:   inTypes,
+		outTypes:  outTypes,
+		outError:  outError,
+	}, nil
 }
 
 // FactoryOpt defines a functional option for configuring a service factory.
@@ -192,10 +173,10 @@ type FactoryOpt func(*Factory)
 func NewService[T any](singleton T, opts ...FactoryOpt) *Factory {
 	dataType := reflect.TypeOf(&singleton).Elem()
 	factory := &Factory{
-		factoryFunc:     func() T { return singleton },
-		factoryName:     fmt.Sprintf("Service[%s]", dataType),
-		factorySource:   dataType.PkgPath(),
-		factoryMetadata: FactoryMetadata{},
+		fn:       func() T { return singleton },
+		name:     fmt.Sprintf("Service[%s]", dataType),
+		source:   dataType.PkgPath(),
+		metadata: FactoryMetadata{},
 	}
 	for _, opt := range opts {
 		opt(factory)
@@ -218,10 +199,10 @@ func NewService[T any](singleton T, opts ...FactoryOpt) *Factory {
 func NewFactory(factoryFn FactoryFunc, opts ...FactoryOpt) *Factory {
 	funcValue := reflect.ValueOf(factoryFn)
 	factory := &Factory{
-		factoryFunc:     factoryFn,
-		factoryName:     fmt.Sprintf("Factory[%s]", funcValue.Type()),
-		factorySource:   getFuncSource(funcValue),
-		factoryMetadata: FactoryMetadata{},
+		fn:       factoryFn,
+		name:     fmt.Sprintf("Factory[%s]", funcValue.Type()),
+		source:   getFuncSource(funcValue),
+		metadata: FactoryMetadata{},
 	}
 	for _, opt := range opts {
 		opt(factory)
@@ -240,7 +221,7 @@ func NewFactory(factoryFn FactoryFunc, opts ...FactoryOpt) *Factory {
 //	gontainer.NewFactory(..., gontainer.WithMetadata("version", "v1.2"))
 func WithMetadata(key string, value any) FactoryOpt {
 	return func(factory *Factory) {
-		factory.factoryMetadata[key] = value
+		factory.metadata[key] = value
 	}
 }
 
@@ -279,4 +260,68 @@ func splitFuncName(funcFullName string) (string, string) {
 	packageName := strings.Join(fullNameChunks[:lastPackageChunkIndex+1], ".")
 	funcName := strings.Join(fullNameChunks[lastPackageChunkIndex+1:], ".")
 	return packageName, funcName
+}
+
+// factory is the factory internal representation.
+type factory struct {
+	// Factory source.
+	source *Factory
+
+	// Factory mutex.
+	mutex sync.RWMutex
+
+	// Factory is spawned.
+	spawned bool
+
+	// Factory context value.
+	ctx context.Context
+
+	// Factory context cancel.
+	cancel context.CancelFunc
+
+	// Factory function type.
+	funcType reflect.Type
+
+	// Factory function value.
+	funcValue reflect.Value
+
+	// Factory input types.
+	inTypes []reflect.Type
+
+	// Factory output types.
+	outTypes []reflect.Type
+
+	// Factory output error.
+	outError bool
+
+	// Factory result values.
+	outValues []reflect.Value
+}
+
+// getSpawned returns factory spawned status in a thread-safe way.
+func (f *factory) getSpawned() bool {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
+	return f.spawned
+}
+
+// setSpawned sets factory spawned status in a thread-safe way.
+func (f *factory) setSpawned(value bool) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+	f.spawned = value
+}
+
+// getOutValues returns factory output values in a thread-safe way.
+func (f *factory) getOutValues() []reflect.Value {
+	f.mutex.RLock()
+	defer f.mutex.RUnlock()
+	return f.outValues
+}
+
+// setOutValues sets factory output values in a thread-safe way.
+func (f *factory) setOutValues(values []reflect.Value) {
+	f.mutex.Lock()
+	defer f.mutex.Unlock()
+	f.outValues = values
 }
