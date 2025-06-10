@@ -33,9 +33,9 @@ type registry struct {
 }
 
 // registerFactory registers factory in the registry.
-func (r *registry) registerFactory(ctx context.Context, factory *Factory) error {
+func (r *registry) registerFactory(factory *Factory) error {
 	// Load the factory definition.
-	if err := factory.load(ctx); err != nil {
+	if err := factory.load(); err != nil {
 		return fmt.Errorf("failed to load factory: %w", err)
 	}
 
@@ -149,8 +149,8 @@ func (r *registry) validateFactories() error {
 	return errors.Join(errs...)
 }
 
-// produceServices spawns all services in the registry.
-func (r *registry) produceServices() error {
+// spawnFactories spawns all factories in the registry.
+func (r *registry) spawnFactories() error {
 	for _, factory := range r.factories {
 		if err := r.spawnFactory(factory); err != nil {
 			return fmt.Errorf(
@@ -163,8 +163,8 @@ func (r *registry) produceServices() error {
 	return nil
 }
 
-// closeServices closes all services in the reverse order.
-func (r *registry) closeServices() error {
+// closeFactories closes all factories in the reverse order.
+func (r *registry) closeFactories() error {
 	var errs []error
 	for index := len(r.sequence) - 1; index >= 0; index-- {
 		factory := r.sequence[index]
