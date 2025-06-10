@@ -49,7 +49,9 @@ func New(factories ...*Factory) (result Container, err error) {
 	// Cancel of the root context will trigger cancel of all children contexts, but
 	// it is unwanted behavior: services should be cancelled in strict reverse order.
 
-	// Prepare cancellable app context.
+	// Prepare container context.
+	// When cancelled, it closes `container.Done()` channel
+	// and unblocks any waiting read from `container.Done()`.
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Cancel context only when returning an error.
@@ -218,7 +220,7 @@ func (c *container) Start() (resultErr error) {
 	}
 
 	// Start all factories in the container.
-	startErr := c.registry.produceServices()
+	startErr := c.registry.spawnFactories()
 
 	// Trigger container started event.
 	if err := c.events.Trigger(NewEvent(ContainerStarted, startErr)); err != nil {
@@ -261,7 +263,7 @@ func (c *container) Close() (err error) {
 		}
 
 		// Close all spawned services in the registry.
-		closeErr := c.registry.closeServices()
+		closeErr := c.registry.closeFactories()
 		if closeErr != nil {
 			err = fmt.Errorf("failed to close factories: %w", closeErr)
 			return
@@ -306,8 +308,8 @@ func (c *container) Services() []any {
 	default:
 		services := make([]any, 0, len(c.registry.factories))
 		for _, factory := range c.registry.factories {
-			if factory.factorySpawned {
-				for _, serviceValue := range factory.factoryOutValues {
+			if factory.getSpawned() {
+				for _, serviceValue := range factory.getOutValues() {
 					services = append(services, serviceValue.Interface())
 				}
 			}

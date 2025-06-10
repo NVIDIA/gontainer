@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 // FactoryFunc declares the type for a service factory function.
@@ -83,6 +84,9 @@ type Factory struct {
 
 	// Factory is loaded.
 	factoryLoaded bool
+
+	// Factory spawn mutex.
+	factoryMutex sync.RWMutex
 
 	// Factory is spawned.
 	factorySpawned bool
@@ -170,6 +174,34 @@ func (f *Factory) load(ctx context.Context) error {
 	// Save the factory load status.
 	f.factoryLoaded = true
 	return nil
+}
+
+// getSpawned returns factory spawned status in a thread-safe way.
+func (f *Factory) getSpawned() bool {
+	f.factoryMutex.RLock()
+	defer f.factoryMutex.RUnlock()
+	return f.factorySpawned
+}
+
+// setSpawned sets factory spawned status in a thread-safe way.
+func (f *Factory) setSpawned(value bool) {
+	f.factoryMutex.Lock()
+	defer f.factoryMutex.Unlock()
+	f.factorySpawned = value
+}
+
+// getOutValues returns factory output values in a thread-safe way.
+func (f *Factory) getOutValues() []reflect.Value {
+	f.factoryMutex.RLock()
+	defer f.factoryMutex.RUnlock()
+	return f.factoryOutValues
+}
+
+// getOutValues returns factory output values in a thread-safe way.
+func (f *Factory) setOutValues(values []reflect.Value) {
+	f.factoryMutex.Lock()
+	defer f.factoryMutex.Unlock()
+	f.factoryOutValues = values
 }
 
 // FactoryOpt defines a functional option for configuring a service factory.

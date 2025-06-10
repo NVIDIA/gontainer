@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime"
+	"sync"
 )
 
 // registry contains all defined factories metadata.
@@ -30,6 +31,7 @@ type registry struct {
 	factories []*Factory
 	sequence  []*Factory
 	events    Events
+	mutex     sync.RWMutex
 }
 
 // registerFactory registers factory in the registry.
@@ -149,8 +151,8 @@ func (r *registry) validateFactories() error {
 	return errors.Join(errs...)
 }
 
-// produceServices spawns all services in the registry.
-func (r *registry) produceServices() error {
+// spawnFactories spawns all factories in the registry.
+func (r *registry) spawnFactories() error {
 	for _, factory := range r.factories {
 		if err := r.spawnFactory(factory); err != nil {
 			return fmt.Errorf(
@@ -163,34 +165,37 @@ func (r *registry) produceServices() error {
 	return nil
 }
 
-// closeServices closes all services in the reverse order.
-func (r *registry) closeServices() error {
+// closeFactories closes all factories in the reverse order.
+func (r *registry) closeFactories() error {
 	var errs []error
 	for index := len(r.sequence) - 1; index >= 0; index-- {
 		factory := r.sequence[index]
 		factory.ctxCancel()
 
-		// Handle every factory output value.
-		for _, factoryOutValue := range factory.factoryOutValues {
-			if factoryOutValue.IsValid() {
-				// Get the factory result object interface.
-				service := factoryOutValue.Interface()
+		// Skip closing services of not spawned factories.
+		if !factory.getSpawned() {
+			continue
+		}
 
-				// Close service implementing `Close() error` interface.
-				// Service functions will wait for the function return.
-				if closer, ok := service.(interface{ Close() error }); ok {
-					if err := closer.Close(); err != nil {
-						errs = append(errs, fmt.Errorf(
-							"%s from '%s': %w",
-							factory.Name(), factory.Source(), err),
-						)
-					}
-				}
+		// Handle every spawned factory output value.
+		for _, factoryOutValue := range factory.getOutValues() {
+			// Get the factory result object interface.
+			service := factoryOutValue.Interface()
 
-				// Close service implementing `Close()` interface.
-				if closer, ok := service.(interface{ Close() }); ok {
-					closer.Close()
+			// Close service implementing `Close() error` interface.
+			// Service functions will wait for the function return.
+			if closer, ok := service.(interface{ Close() error }); ok {
+				if err := closer.Close(); err != nil {
+					errs = append(errs, fmt.Errorf(
+						"%s from '%s': %w",
+						factory.Name(), factory.Source(), err),
+					)
 				}
+			}
+
+			// Close service implementing `Close()` interface.
+			if closer, ok := service.(interface{ Close() }); ok {
+				closer.Close()
 			}
 		}
 	}
@@ -286,8 +291,9 @@ func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, err
 		}
 
 		// Handle services from factory outputs.
+		factoryOutValues := factory.getOutValues()
 		for _, factoryOutIndex := range factoryOutIndexes[index] {
-			services = append(services, factory.factoryOutValues[factoryOutIndex])
+			services = append(services, factoryOutValues[factoryOutIndex])
 		}
 	}
 
@@ -336,7 +342,7 @@ func (r *registry) spawnFactory(factory *Factory) error {
 	}
 
 	// Check factory already spawned.
-	if factory.factorySpawned {
+	if factory.getSpawned() {
 		return nil
 	}
 
@@ -386,14 +392,17 @@ func (r *registry) spawnFactory(factory *Factory) error {
 		}
 	}
 
-	// Register factory output values in the registry.
-	factory.factoryOutValues = factoryOutValues
-
-	// Recorder services spawn order.
-	r.sequence = append(r.sequence, factory)
-
 	// Save the factory spawn status.
-	factory.factorySpawned = true
+	factory.setSpawned(true)
+
+	// Save the factory out values.
+	factory.setOutValues(factoryOutValues)
+
+	// Save the factory spawn order.
+	r.mutex.Lock()
+	r.sequence = append(r.sequence, factory)
+	r.mutex.Unlock()
+
 	return nil
 }
 
