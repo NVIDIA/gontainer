@@ -417,12 +417,14 @@ func isEmptyInterface(typ reflect.Type) bool {
 
 // isErrorInterface returns true when argument is an `error` interface.
 func isErrorInterface(typ reflect.Type) bool {
-	return typ.Kind() == reflect.Interface && typ.Implements(reflect.TypeFor[error]())
+	ctxType := reflect.TypeOf((*error)(nil)).Elem()
+	return typ.Kind() == reflect.Interface && typ.Implements(ctxType)
 }
 
 // isContextInterface returns true when argument is a context interface.
 func isContextInterface(typ reflect.Type) bool {
-	return typ.Kind() == reflect.Interface && typ.Implements(reflect.TypeFor[context.Context]())
+	ctxType := reflect.TypeOf((*context.Context)(nil)).Elem()
+	return typ.Kind() == reflect.Interface && typ.Implements(ctxType)
 }
 
 // isServiceFunc returns true when the argument is a service function.
