@@ -1,4 +1,4 @@
-module github.com/NVIDIA/gontainer/examples/04_service_functions
+module github.com/NVIDIA/gontainer/examples/05_service_functions
 
 go 1.21
 

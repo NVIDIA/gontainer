@@ -121,5 +121,5 @@ func main() {
 	// Wait for close by signal.
 	log.Println("Awaiting service container done")
 	<-container.Done()
-	log.Println("Service container done closed")
+	log.Println("Service container done chan closed")
 }
