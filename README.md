@@ -172,7 +172,7 @@ There are several predefined by container service types that may be used as a de
 1. The `context.Context` service provides the per-service context, inherited from the background context.
    This context is cancelled right before the service's `Close()` call and intended to be used with service functions.
 2. The `gontainer.Events` service provides the events broker. It can be used to send and receive events
-   inside service container between services or outside from the client code.
+   inside service container between services or outside from the client code. Thread safe.
 3. The `gontainer.Resolver` service provides a service to resolve dependencies dynamically. Thread safe.
 4. The `gontainer.Invoker` service provides a service to invoke functions dynamically. Thread safe.
 
