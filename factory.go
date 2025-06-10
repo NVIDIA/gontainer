@@ -132,18 +132,18 @@ func (f *Factory) Metadata() FactoryMetadata {
 }
 
 // load initializes factory definition internal values.
-func (f *Factory) load(ctx context.Context) error {
+func (f *Factory) load() error {
 	if f.factoryLoaded {
 		return errors.New("invalid factory func: already loaded")
 	}
-
-	// Prepare cancellable context for the factory services.
-	f.factoryCtx, f.ctxCancel = context.WithCancel(ctx)
 
 	// Check factory configured.
 	if f.factoryFunc == nil {
 		return errors.New("invalid factory func: no func specified")
 	}
+
+	// Prepare cancellable context for the factory services.
+	f.factoryCtx, f.ctxCancel = context.WithCancel(context.Background())
 
 	// Validate factory type and signature.
 	f.factoryType = reflect.TypeOf(f.factoryFunc)

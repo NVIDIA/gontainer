@@ -35,9 +35,9 @@ type registry struct {
 }
 
 // registerFactory registers factory in the registry.
-func (r *registry) registerFactory(ctx context.Context, factory *Factory) error {
+func (r *registry) registerFactory(factory *Factory) error {
 	// Load the factory definition.
-	if err := factory.load(ctx); err != nil {
+	if err := factory.load(); err != nil {
 		return fmt.Errorf("failed to load factory: %w", err)
 	}
 

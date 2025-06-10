@@ -33,12 +33,11 @@ func TestRegistryRegisterFactory(t *testing.T) {
 		return 1, true, nil
 	}
 
-	ctx := context.Background()
 	opts := WithMetadata("test", func() {})
 	factory := NewFactory(fun, opts)
 
 	registry := &registry{}
-	equal(t, registry.registerFactory(ctx, factory), nil)
+	equal(t, registry.registerFactory(factory), nil)
 	equal(t, registry.factories, []*Factory{factory})
 	equal(t, factory.factoryFunc == nil, false)
 	equal(t, factory.factoryLoaded, true)
@@ -190,10 +189,9 @@ func TestRegistryValidateFactories(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
 			registry := &registry{}
 			for _, factory := range tt.factories {
-				equal(t, registry.registerFactory(ctx, factory), nil)
+				equal(t, registry.registerFactory(factory), nil)
 			}
 			tt.wantErr(t, registry.validateFactories())
 		})
@@ -202,11 +200,10 @@ func TestRegistryValidateFactories(t *testing.T) {
 
 // TestRegistrySpawnFactories tests corresponding registry method.
 func TestRegistrySpawnFactories(t *testing.T) {
-	ctx := context.Background()
 	factory := NewFactory(func() bool { return true })
 
 	registry := &registry{}
-	equal(t, registry.registerFactory(ctx, factory), nil)
+	equal(t, registry.registerFactory(factory), nil)
 	equal(t, registry.spawnFactories(), nil)
 	equal(t, factory.factorySpawned, true)
 
@@ -222,9 +219,8 @@ func TestRegistryResolveParallel(t *testing.T) {
 		return true
 	})
 
-	ctx := context.Background()
 	registry := &registry{}
-	equal(t, registry.registerFactory(ctx, factory), nil)
+	equal(t, registry.registerFactory(factory), nil)
 
 	for x := 0; x < 10; x++ {
 		go func() {
@@ -238,10 +234,11 @@ func TestRegistryResolveParallel(t *testing.T) {
 	equal(t, factory.getSpawned(), true)
 }
 
+
 // TestRegistrySpawnWithErrors tests corresponding registry method.
 func TestRegistrySpawnWithErrors(t *testing.T) {
 	registry := &registry{}
-	equal(t, registry.registerFactory(context.Background(), NewFactory(func() (bool, error) {
+	equal(t, registry.registerFactory(NewFactory(func() (bool, error) {
 		return false, errors.New("failed to create new service")
 	})), nil)
 
@@ -265,9 +262,8 @@ func TestRegistryCloseFactories(t *testing.T) {
 		}
 	})
 
-	ctx := context.Background()
 	registry := &registry{}
-	equal(t, registry.registerFactory(ctx, factory), nil)
+	equal(t, registry.registerFactory(factory), nil)
 	equal(t, registry.spawnFactories(), nil)
 	equal(t, factory.factorySpawned, true)
 
@@ -283,14 +279,13 @@ func TestRegistryCloseFactories(t *testing.T) {
 
 // TestRegistryCloseWithError tests corresponding registry method.
 func TestRegistryCloseWithError(t *testing.T) {
-	ctx := context.Background()
 	registry := &registry{}
 
-	equal(t, registry.registerFactory(ctx, NewFactory(func(ctx context.Context) any {
+	equal(t, registry.registerFactory(NewFactory(func(ctx context.Context) any {
 		return func() error { return errors.New("failed to close 1") }
 	})), nil)
 
-	equal(t, registry.registerFactory(ctx, NewFactory(func() any {
+	equal(t, registry.registerFactory(NewFactory(func() any {
 		return func() error { return errors.New("failed to close 2") }
 	})), nil)
 
