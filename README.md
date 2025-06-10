@@ -32,8 +32,8 @@ Dependency injection service container for Golang projects.
   12:48:22 Starting service container
   12:48:22 Starting listening on: http://127.0.0.1:8080
   12:48:22 Starting serving HTTP requests
-  ------ Application was started and now accepts HTTP requests -------------
   12:48:22 Awaiting service container done
+  ------ Application was started and now accepts HTTP requests -------------
   ------ CTRL+C was pressed or a TERM signal was sent to the process -------
   12:48:28 Service container done closed
   12:48:28 Closing service container by defer
