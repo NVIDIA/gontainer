@@ -316,7 +316,7 @@ func (f *factory) getOutValues() []reflect.Value {
 	return f.outValues
 }
 
-// getOutValues returns factory output values in a thread-safe way.
+// setOutValues sets factory output values in a thread-safe way.
 func (f *factory) setOutValues(values []reflect.Value) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
