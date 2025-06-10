@@ -446,7 +446,7 @@ func isServiceFunc(outValue reflect.Value) (reflect.Value, bool) {
 	}
 
 	// Check if the result value kind is a func kind.
-	if factoryOutValue.Kind() != reflect.Func {
+	if outValue.Kind() != reflect.Func {
 		return reflect.Value{}, false
 	}
 
@@ -459,12 +459,12 @@ func isServiceFunc(outValue reflect.Value) (reflect.Value, bool) {
 
 	// The service func type could be just a `func()` type.
 	if outValue.Type().NumOut() == 0 {
-		return factoryOutValue, true
+		return outValue, true
 	}
 
 	// The service func type could be a `func() error` type.
-	if factoryOutValue.Type().NumOut() == 1 {
-		if isErrorInterface(factoryOutValue.Type().Out(0)) {
+	if outValue.Type().NumOut() == 1 {
+		if isErrorInterface(outValue.Type().Out(0)) {
 			return outValue, true
 		}
 	}

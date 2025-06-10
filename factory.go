@@ -107,9 +107,6 @@ func (f *Factory) factory() (*factory, error) {
 		return nil, errors.New("invalid factory func: no func specified")
 	}
 
-	// Prepare cancellable context for the factory services.
-	f.factoryCtx, f.ctxCancel = context.WithCancel(context.Background())
-
 	// Validate factory type and signature.
 	funcType := reflect.TypeOf(f.fn)
 	funcValue := reflect.ValueOf(f.fn)
