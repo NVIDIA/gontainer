@@ -30,20 +30,20 @@ func TestFactoryLoad(t *testing.T) {
 
 	opts := WithMetadata("test", "value")
 	factory := NewFactory(fun, opts)
+	state, err := factory.factory()
+	equal(t, err, nil)
 
-	equal(t, factory.load(), nil)
-	equal(t, factory.factoryFunc == nil, false)
-	equal(t, factory.factoryLoaded, true)
-	equal(t, factory.factorySpawned, false)
-	equal(t, factory.factoryCtx != nil, true)
-	equal(t, factory.ctxCancel != nil, true)
-	equal(t, factory.factoryType.String(), "func(string, string, string) (int, bool, error)")
-	equal(t, factory.factoryValue.String(), "<func(string, string, string) (int, bool, error) Value>")
-	equal(t, fmt.Sprint(factory.factoryInTypes), "[string string string]")
-	equal(t, fmt.Sprint(factory.factoryOutTypes), "[int bool]")
-	equal(t, factory.factoryOutError, true)
-	equal(t, len(factory.factoryOutValues), 0)
-	equal(t, factory.factoryMetadata["test"], "value")
+	equal(t, factory.metadata["test"], "value")
+	equal(t, factory.fn == nil, false)
+	equal(t, state.spawned, false)
+	equal(t, state.ctx != nil, true)
+	equal(t, state.cancel != nil, true)
+	equal(t, state.funcType.String(), "func(string, string, string) (int, bool, error)")
+	equal(t, state.funcValue.String(), "<func(string, string, string) (int, bool, error) Value>")
+	equal(t, fmt.Sprint(state.inTypes), "[string string string]")
+	equal(t, fmt.Sprint(state.outTypes), "[int bool]")
+	equal(t, state.outError, true)
+	equal(t, len(state.outValues), 0)
 }
 
 // TestFactoryInfo tests factories info.
