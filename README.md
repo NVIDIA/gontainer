@@ -176,7 +176,33 @@ There are several predefined by container service types that may be used as a de
 3. The `gontainer.Resolver` service provides a service to resolve dependencies dynamically. Thread safe.
 4. The `gontainer.Invoker` service provides a service to invoke functions dynamically. Thread safe.
 
-In addition, there are several generic types allowing to declare dependencies on a type.
+#### Transient Service Factories
+
+In the service container all factories are singletons by design: they are called exactly once (with the `container.Start()`)
+or zero-or-once (without start but via `resolver.Resolve()` or `invoker.Invoke()` calls) times. But sometimes it is necessary
+to create new service instance calling the factory multiple times, for example, to create a new service for each HTTP request.
+To achieve this, the service factory can return a function (this function will be still in the single instance) that produces
+a new service instance each time it is called and other factories could depend on this function by its type.
+
+```go
+container, err := gontainer.New(
+    // Return new function from the factory.
+	// It will produce new values each time.
+    gontainer.NewFactory(func() func() int {
+        return func() int { 
+			return 42
+		}
+    }),
+
+    // Depend on the function returned from the first factory.
+	// It will be called three times, producing three new values.
+    gontainer.NewFactory(func(funcFromFactory1 func() int) {
+        fmt.Println(funcFromFactory1())
+        fmt.Println(funcFromFactory1())
+        fmt.Println(funcFromFactory1())
+    }),
+)
+```
 
 #### Optional Dependency Declaration
 
@@ -239,16 +265,21 @@ func (s *MyService) Close() error {
 
 ### Service Functions
 
-The **Service Function** is a specialized form of service optimized for simpler tasks. Instead of returning a concrete
-type object or an interface, the service factory returns a function that conforms to `func() error` or `func()` type.
+The **Service Function** is a function with a signature `func() error` or `func()` returned from the factory.
+This function is executed in the background when the container starts, and it is awaited during the container close.
+The error value function returns is treated as if it were returned by a conventional `Close()` method of a service.
+The container close will wait until this function returns, ensuring that all background tasks are completed.
 
 The function serves two primary roles:
 
-* It encapsulates the behavior to execute when the container starts asynchronously to the `Start()` method.
+* It defines the code to execute in background when the container starts with the `Start()` method.
 * It returns an error, which is treated as if it were returned by a conventional `Close()` method.
 
 ```go
 // MyServiceFactory is an example of a service function usage.
+// Context here is the factory-level context. It starts when the
+// factory is invoked (on container start or on service resolve)
+// and is cancelled when the factory is closing.
 func MyServiceFactory(ctx context.Context) func() error {
     return func() error {
         // Await its order in container close.
@@ -259,12 +290,6 @@ func MyServiceFactory(ctx context.Context) func() error {
     }
 }
 ```
-
-In this design, the factory function is responsible for receiving the context. This context is canceled when the service
-needs to close, allowing the function to terminate gracefully.
-
-Errors returned by the function are processed as if they were errors returned by a standard `Close()` method to the container.
-This means the container will synchronously wait until a service function returns an error or nil before closing the next services.
 
 ### Events Broker
 
