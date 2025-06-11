@@ -56,12 +56,13 @@ Dependency injection service container for Golang projects.
   ```
 * [Transient service example](./examples/04_transient_services/main.go) – demonstrates how to return a function that can be called multiple times to produce transient services.
   ```
-  12:43:18 Creating new service container
-  12:43:18 Starting service container
-  12:43:18 Closing service container by defer
-  12:43:18 Starting service function with 42
-  12:43:18 Exiting from service function
-  12:43:18 Service container closed
+  11:19:22 Creating new service container
+  11:19:22 Starting service container
+  11:19:22 New value: 42
+  11:19:22 New value: 42
+  11:19:22 New value: 42
+  11:19:22 Closing service container by defer
+  11:19:22 Service container closed
   ```
 * [Service function example](./examples/05_service_functions/main.go) – demonstrates how to define a service function that could be used to organize the application entry point.
   ```

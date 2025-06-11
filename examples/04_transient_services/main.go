@@ -18,7 +18,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/NVIDIA/gontainer"
@@ -42,9 +41,9 @@ func main() {
 		// Depend on the function returned by the previous factory.
 		// This could be used to produce transient services.
 		gontainer.NewFactory(func(funcFromFactory1 func() int) {
-			fmt.Println(funcFromFactory1())
-			fmt.Println(funcFromFactory1())
-			fmt.Println(funcFromFactory1())
+			log.Printf("New value: %d", funcFromFactory1())
+			log.Printf("New value: %d", funcFromFactory1())
+			log.Printf("New value: %d", funcFromFactory1())
 		}),
 	)
 
@@ -69,6 +68,6 @@ func main() {
 		if err := container.Close(); err != nil {
 			log.Panicf("Failed to close service container: %s", err)
 		}
+		log.Println("Service container closed")
 	}()
-
 }
