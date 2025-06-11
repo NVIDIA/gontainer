@@ -31,7 +31,7 @@ func TestContainerLifecycle(t *testing.T) {
 	serviceStarted := atomic.Bool{}
 	serviceClosed := atomic.Bool{}
 
-	serviceWaitGroup := &sync.WaitGroup{}
+	var serviceWaitGroup sync.WaitGroup
 	serviceWaitGroup.Add(1)
 
 	svc1 := &testService1{}
