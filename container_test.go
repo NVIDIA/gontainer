@@ -20,9 +20,9 @@ package gontainer
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 )
 
 // TestContainerLifecycle tests container lifecycle.
@@ -30,6 +30,9 @@ func TestContainerLifecycle(t *testing.T) {
 	factoryStarted := atomic.Bool{}
 	serviceStarted := atomic.Bool{}
 	serviceClosed := atomic.Bool{}
+
+	serviceWaitGroup := &sync.WaitGroup{}
+	serviceWaitGroup.Add(1)
 
 	svc1 := &testService1{}
 	svc2 := &testService2{}
@@ -76,6 +79,7 @@ func TestContainerLifecycle(t *testing.T) {
 
 			// Service function.
 			return func() error {
+				serviceWaitGroup.Done()
 				serviceStarted.Store(true)
 				<-ctx.Done()
 				serviceClosed.Store(true)
@@ -99,8 +103,8 @@ func TestContainerLifecycle(t *testing.T) {
 	equal(t, len(container.Factories()), 11)
 	equal(t, len(container.Services()), 13)
 
-	// Let factory function start executing in the background.
-	time.Sleep(time.Millisecond)
+	// Let factory function start in background.
+	serviceWaitGroup.Wait()
 
 	equal(t, serviceStarted.Load(), true)
 	equal(t, serviceClosed.Load(), false)

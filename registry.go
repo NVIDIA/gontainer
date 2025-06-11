@@ -457,6 +457,11 @@ func isServiceFunc(outValue reflect.Value) (reflect.Value, bool) {
 		return reflect.Value{}, false
 	}
 
+	// The service func type must have no input arguments.
+	if outValue.Type().NumIn() > 0 {
+		return reflect.Value{}, false
+	}
+
 	// The service func type could be just a `func()` type.
 	if outValue.Type().NumOut() == 0 {
 		return outValue, true
