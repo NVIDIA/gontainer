@@ -423,10 +423,15 @@ func isEmptyInterface(typ reflect.Type) bool {
 	return typ.Kind() == reflect.Interface && typ.NumMethod() == 0
 }
 
+// isErrorInterface returns true when argument is an `error` interface.
+func isErrorInterface(typ reflect.Type) bool {
+	ctxType := reflect.TypeOf((*error)(nil)).Elem()
+	return typ.Kind() == reflect.Interface && typ.Implements(ctxType)
+}
+
 // isContextInterface returns true when argument is a context interface.
 func isContextInterface(typ reflect.Type) bool {
-	var ctx context.Context
-	ctxType := reflect.TypeOf(&ctx).Elem()
+	ctxType := reflect.TypeOf((*context.Context)(nil)).Elem()
 	return typ.Kind() == reflect.Interface && typ.Implements(ctxType)
 }
 
@@ -441,15 +446,36 @@ func isServiceFunc(outValue reflect.Value) (reflect.Value, bool) {
 	}
 
 	// Check if the result value kind is a func kind.
-	// The func type must have no user-defined methods,
-	// because otherwise it could be a service instance
-	// based on the func type but implements an interface.
-	if outValue.Kind() == reflect.Func {
-		if outValue.NumMethod() == 0 {
+	if outValue.Kind() != reflect.Func {
+		return reflect.Value{}, false
+	}
+
+	// The service func type must have no user-defined methods,
+	// Otherwise it could be a service instance based on the func type
+	// but with a several public methods implementing public interface.
+	if outValue.NumMethod() > 0 {
+		return reflect.Value{}, false
+	}
+
+	// The service func type must have no input arguments.
+	if outValue.Type().NumIn() > 0 {
+		return reflect.Value{}, false
+	}
+
+	// The service func type could be just a `func()` type.
+	if outValue.Type().NumOut() == 0 {
+		return outValue, true
+	}
+
+	// The service func type could be a `func() error` type.
+	if outValue.Type().NumOut() == 1 {
+		if isErrorInterface(outValue.Type().Out(0)) {
 			return outValue, true
 		}
 	}
 
+	// All other types like `func(name string) (MyType, error)`
+	// or `func() MyType` or are not service functions.
 	return reflect.Value{}, false
 }
 
@@ -475,6 +501,8 @@ func startServiceFunc(serviceFuncValue reflect.Value) (reflect.Value, error) {
 			funcResultChan <- nil
 		}()
 	default:
+		// This case must never be reached.
+		// Protected by the `isServiceFunc()`.
 		return reflect.Value{}, fmt.Errorf(
 			"unexpected service function signature: %T",
 			serviceFuncValue.Interface(),

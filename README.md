@@ -19,22 +19,58 @@ Dependency injection service container for Golang projects.
 ## Examples
 
 * [Console command example](./examples/01_console_command/main.go) – demonstrates how to build a simple console command. It shows how to use `Resolver` and `Invoker` services to organize the application entry point in a run-and-exit style.
-* [Daemon service example](./examples/02_daemon_service/main.go) – demonstrates how to maintain background services. It shows how to organize a daemon entry point and wait for graceful shutdown by subscribing to OS termination signals.
-* [Complete webapp example](./examples/03_complete_webapp/main.go) – demonstrates how to organize applications consists of multiple services. It provides basic config service, handles logging, setups HTTP server and initiates two endpoints.
-  Here is the log of the complete webapp example launch.
   ```
-  time=2025-06-05T15:19:48.373+02:00 level=INFO msg="Starting service container" service=logger
-  time=2025-06-05T15:19:48.373+02:00 level=INFO msg="Configuring app endpoints" service=app
-  time=2025-06-05T15:19:48.373+02:00 level=INFO msg="Configuring health endpoints" service=app
-  time=2025-06-05T15:19:48.373+02:00 level=INFO msg="Starting HTTP server" service=http address=127.0.0.1:8080
-  time=2025-06-05T15:19:48.374+02:00 level=INFO msg="Service container started" service=logger
-  ----------------- Application was started and now accepts HTTP requests -----------------
-  time=2025-06-05T15:19:54.716+02:00 level=INFO msg="Serving home page" service=app remote-addr=127.0.0.1:62640
-  time=2025-06-05T15:20:01.405+02:00 level=INFO msg="Serving health check" service=app remote-addr=127.0.0.1:62640
-  ----------------- CTRL+C was pressed or a TERM signal was sent to the process -----------------
-  time=2025-06-05T15:20:04.061+02:00 level=INFO msg="Closing service container" service=logger
-  time=2025-06-05T15:20:04.061+02:00 level=INFO msg="Closing HTTP server" service=http
-  time=2025-06-05T15:20:04.061+02:00 level=INFO msg="Service container closed" service=logger
+  12:51:32 Creating new service container
+  12:51:32 Hello from the Hello Service Bob
+  12:51:32 Hello from the Hello Service Bob
+  12:51:32 Closing service container by defer
+  12:51:32 Service container closed
+  ```
+* [Daemon service example](./examples/02_daemon_service/main.go) – demonstrates how to maintain background services. It shows how to organize a daemon entry point and wait for graceful shutdown by subscribing to OS termination signals.
+  ```
+  12:48:22 Creating service container instance
+  12:48:22 Starting service container
+  12:48:22 Starting listening on: http://127.0.0.1:8080
+  12:48:22 Starting serving HTTP requests
+  12:48:22 Awaiting service container done
+  ------ Application was started and now accepts HTTP requests -------------
+  ------ CTRL+C was pressed or a TERM signal was sent to the process -------
+  12:48:28 Service container done chan closed
+  12:48:28 Closing service container by defer
+  12:48:28 Service container closed
+  ```
+* [Complete webapp example](./examples/03_complete_webapp/main.go) – demonstrates how to organize web application with multiple services. It provides basic config service, handles logging, setups HTTP server and initiates two endpoints.
+  ```
+  15:19:48 INFO msg="Starting service container" service=logger
+  15:19:48 INFO msg="Configuring app endpoints" service=app
+  15:19:48 INFO msg="Configuring health endpoints" service=app
+  15:19:48 INFO msg="Starting HTTP server" service=http address=127.0.0.1:8080
+  15:19:48 INFO msg="Service container started" service=logger
+  ------ Application was started and now accepts HTTP requests -------------
+  15:19:54 INFO msg="Serving home page" service=app remote-addr=127.0.0.1:62640
+  15:20:01 INFO msg="Serving health check" service=app remote-addr=127.0.0.1:62640
+  ------ CTRL+C was pressed or a TERM signal was sent to the process -------
+  15:20:04 INFO msg="Closing service container" service=logger
+  15:20:04 INFO msg="Closing HTTP server" service=http
+  15:20:04 INFO msg="Service container closed" service=logger
+  ```
+* [Transient service example](./examples/04_transient_services/main.go) – demonstrates how to return a function that can be called multiple times to produce transient services.
+  ```
+  12:43:18 Creating new service container
+  12:43:18 Starting service container
+  12:43:18 Closing service container by defer
+  12:43:18 Starting service function with 42
+  12:43:18 Exiting from service function
+  12:43:18 Service container closed
+  ```
+* [Service function example](./examples/05_service_functions/main.go) – demonstrates how to define a service function that could be used to organize the application entry point.
+  ```
+  12:47:21 Creating new service container
+  12:47:21 Starting service container
+  12:47:21 Closing service container by defer
+  12:47:21 Starting service function with 42
+  12:47:21 Exiting from service function
+  12:47:21 Service container closed
   ```
 
 ## Quick Start
@@ -136,11 +172,37 @@ There are several predefined by container service types that may be used as a de
 1. The `context.Context` service provides the per-service context, inherited from the background context.
    This context is cancelled right before the service's `Close()` call and intended to be used with service functions.
 2. The `gontainer.Events` service provides the events broker. It can be used to send and receive events
-   inside service container between services or outside from the client code.
+   inside service container between services or outside from the client code. Thread safe.
 3. The `gontainer.Resolver` service provides a service to resolve dependencies dynamically. Thread safe.
 4. The `gontainer.Invoker` service provides a service to invoke functions dynamically. Thread safe.
 
-In addition, there are several generic types allowing to declare dependencies on a type.
+#### Transient Service Factories
+
+In the service container all factories are singletons by design: they are called exactly once (with the `container.Start()`)
+or zero-or-once (without start but via `resolver.Resolve()` or `invoker.Invoke()` calls) times. But sometimes it is necessary
+to create new service instance calling the factory multiple times, for example, to create a new service for each HTTP request.
+To achieve this, the service factory can return a function (this function will be still in the single instance) that produces
+a new service instance each time it is called and other factories could depend on this function by its type.
+
+```go
+container, err := gontainer.New(
+    // Return new function from the factory.
+	// It will produce new values each time.
+    gontainer.NewFactory(func() func() int {
+        return func() int { 
+			return 42
+		}
+    }),
+
+    // Depend on the function returned from the first factory.
+	// It will be called three times, producing three new values.
+    gontainer.NewFactory(func(funcFromFactory1 func() int) {
+        fmt.Println(funcFromFactory1())
+        fmt.Println(funcFromFactory1())
+        fmt.Println(funcFromFactory1())
+    }),
+)
+```
 
 #### Optional Dependency Declaration
 
@@ -203,16 +265,21 @@ func (s *MyService) Close() error {
 
 ### Service Functions
 
-The **Service Function** is a specialized form of service optimized for simpler tasks. Instead of returning a concrete
-type object or an interface, the service factory returns a function that conforms to `func() error` or `func()` type.
+The **Service Function** is a function with a signature `func() error` or `func()` returned from the factory.
+This function is executed in the background when the container starts, and it is awaited during the container close.
+The error value function returns is treated as if it were returned by a conventional `Close()` method of a service.
+The container close will wait until this function returns, ensuring that all background tasks are completed.
 
 The function serves two primary roles:
 
-* It encapsulates the behavior to execute when the container starts asynchronously to the `Start()` method.
+* It defines the code to execute in background when the container starts with the `Start()` method.
 * It returns an error, which is treated as if it were returned by a conventional `Close()` method.
 
 ```go
 // MyServiceFactory is an example of a service function usage.
+// Context here is the factory-level context. It starts when the
+// factory is invoked (on container start or on service resolve)
+// and is cancelled when the factory is closing.
 func MyServiceFactory(ctx context.Context) func() error {
     return func() error {
         // Await its order in container close.
@@ -223,12 +290,6 @@ func MyServiceFactory(ctx context.Context) func() error {
     }
 }
 ```
-
-In this design, the factory function is responsible for receiving the context. This context is canceled when the service
-needs to close, allowing the function to terminate gracefully.
-
-Errors returned by the function are processed as if they were errors returned by a standard `Close()` method to the container.
-This means the container will synchronously wait until a service function returns an error or nil before closing the next services.
 
 ### Events Broker
 

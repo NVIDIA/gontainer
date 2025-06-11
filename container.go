@@ -72,7 +72,7 @@ func New(factories ...*Factory) (result Container, err error) {
 	registry := &registry{events: events}
 
 	// Prepare service resolver instance.
-	resolver := &resolver{ctx: ctx, registry: registry}
+	resolver := &resolver{registry: registry}
 
 	// Prepare function invoker instance.
 	invoker := &invoker{resolver: resolver}
