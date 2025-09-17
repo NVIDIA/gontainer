@@ -22,9 +22,9 @@ import (
 	"reflect"
 )
 
-// Invoker defines an interface for invoking functions with automatic dependency resolution.
+// Invoker invokes functions with automatic dependency resolution.
 //
-// The Invoke method accepts a function `fn`, resolves its input parameters using the invoker’s
+// The Invoke method accepts a function `fn`, resolves its input parameters using the invoker's
 // dependency resolver, and then calls the function with the resolved arguments.
 //
 // If the container has not been started yet, dependency resolution happens in lazy mode — only
@@ -41,18 +41,12 @@ import (
 // An error is also returned if:
 //   - `fn` is not a function,
 //   - any dependency could not be resolved.
-type Invoker interface {
-	// Invoke invokes specified function.
-	Invoke(fn any) (InvokeResult, error)
-}
-
-// invoker implements invoker interface.
-type invoker struct {
-	resolver Resolver
+type Invoker struct {
+	resolver *Resolver
 }
 
 // Invoke invokes specified function.
-func (i *invoker) Invoke(fn any) (InvokeResult, error) {
+func (i *Invoker) Invoke(fn any) (*InvokeResult, error) {
 	// Get reflection of the fn.
 	fnValue := reflect.ValueOf(fn)
 	if fnValue.Kind() != reflect.Func {
@@ -71,7 +65,7 @@ func (i *invoker) Invoke(fn any) (InvokeResult, error) {
 
 	// Convert function results.
 	fnOutArgs := fnValue.Call(fnInArgs)
-	result := &invokeResult{
+	result := &InvokeResult{
 		values: make([]any, 0, len(fnOutArgs)),
 		err:    nil,
 	}
@@ -94,26 +88,17 @@ func (i *invoker) Invoke(fn any) (InvokeResult, error) {
 }
 
 // InvokeResult provides access to the invocation result.
-type InvokeResult interface {
-	// Values returns a slice of function result values.
-	Values() []any
-
-	// Error returns function result error, if any.
-	Error() error
-}
-
-// invokeResult implements corresponding interface.
-type invokeResult struct {
+type InvokeResult struct {
 	values []any
 	err    error
 }
 
-// Values implements corresponding interface method.
-func (r *invokeResult) Values() []any {
+// Values returns a slice of function result values.
+func (r *InvokeResult) Values() []any {
 	return r.values
 }
 
-// Error implements corresponding interface method.
-func (r *invokeResult) Error() error {
+// Error returns function result error, if any.
+func (r *InvokeResult) Error() error {
 	return r.err
 }

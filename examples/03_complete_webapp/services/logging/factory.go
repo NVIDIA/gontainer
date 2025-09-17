@@ -29,7 +29,7 @@ import (
 // WithSlogLogger returns a factory for the slog logger.
 func WithSlogLogger() *gontainer.Factory {
 	return gontainer.NewFactory(
-		func(confsvc *confmod.Config, events gontainer.Events) (*slog.Logger, error) {
+		func(confsvc *confmod.Config, events *gontainer.Events) (*slog.Logger, error) {
 			// Prepare logger config.
 			config := Config{}
 			if err := confsvc.Load(&config); err != nil {

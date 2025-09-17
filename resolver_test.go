@@ -26,7 +26,7 @@ import (
 func TestResolverService(t *testing.T) {
 	container, err := New(
 		NewFactory(func() string { return "string" }),
-		NewFactory(func(resolver Resolver) {
+		NewFactory(func(resolver *Resolver) {
 			var depExists string
 			equal(t, resolver.Resolve(&depExists), nil)
 			equal(t, depExists, "string")

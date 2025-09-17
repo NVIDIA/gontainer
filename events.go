@@ -24,7 +24,7 @@ import (
 	"sync"
 )
 
-// Events defines an interface for a lightweight event broker
+// Events is a lightweight event broker
 // used for decoupled communication between services within the container.
 //
 // It supports two types of event handlers:
@@ -33,32 +33,20 @@ import (
 //
 // Handlers may optionally return an error, which will be collected and joined
 // during the Trigger phase. All handlers for a given event are executed synchronously.
-type Events interface {
-	// Subscribe registers an event handler for the specified event name.
-	//
-	// The handler must be a function with one of the following signatures:
-	//   - `func(args ...any) [error]`;
-	//   - `func(T1, T2, ...) [error]`.
-	//
-	// If the handler returns an error, it will be captured when the event is triggered.
-	// Panics if the handler is not a function or has an unsupported signature.
-	Subscribe(name string, handlerFn any)
-
-	// Trigger dispatches the given event to all registered handlers.
-	//
-	// Handlers are called synchronously in the order they were registered.
-	// All returned errors are collected and joined into a single error.
-	Trigger(event Event) error
-}
-
-// events implements Events interface.
-type events struct {
+type Events struct {
 	mutex  sync.RWMutex
 	events map[string][]handler
 }
 
-// Subscribe subscribes event handler to the event.
-func (em *events) Subscribe(name string, handlerFn any) {
+// Subscribe registers an event handler for the specified event name.
+//
+// The handler must be a function with one of the following signatures:
+//   - `func(args ...any) [error]`;
+//   - `func(T1, T2, ...) [error]`.
+//
+// If the handler returns an error, it will be captured when the event is triggered.
+// Panics if the handler is not a function or has an unsupported signature.
+func (em *Events) Subscribe(name string, handlerFn any) {
 	em.mutex.Lock()
 	defer em.mutex.Unlock()
 
@@ -80,19 +68,22 @@ func (em *events) Subscribe(name string, handlerFn any) {
 	// Register event handler function.
 	if handlerType.NumIn() == 1 && handlerType.In(0) == anySliceType {
 		// Register a function that accepts a variable number of any arguments.
-		em.events[name] = append(em.events[name], func(event Event) error {
+		em.events[name] = append(em.events[name], func(event *Event) error {
 			return em.callAnyVarHandler(handlerValue, event.Args())
 		})
 	} else {
 		// Register a function that accepts concrete argument types.
-		em.events[name] = append(em.events[name], func(event Event) error {
+		em.events[name] = append(em.events[name], func(event *Event) error {
 			return em.callTypedHandler(handlerValue, event.Args())
 		})
 	}
 }
 
-// Trigger triggers specified event handlers.
-func (em *events) Trigger(event Event) error {
+// Trigger dispatches the given event to all registered handlers.
+//
+// Handlers are called synchronously in the order they were registered.
+// All returned errors are collected and joined into a single error.
+func (em *Events) Trigger(event *Event) error {
 	em.mutex.RLock()
 	defer em.mutex.RUnlock()
 
@@ -107,7 +98,7 @@ func (em *events) Trigger(event Event) error {
 }
 
 // callTypedHandler calls `func(TypeA, TypeB, TypeC) [error]` event handler.
-func (em *events) callTypedHandler(handler reflect.Value, args []any) error {
+func (em *Events) callTypedHandler(handler reflect.Value, args []any) error {
 	// Prepare slice of in arguments for handler.
 	handlerInArgs := make([]reflect.Value, 0, handler.Type().NumIn())
 
@@ -155,7 +146,7 @@ func (em *events) callTypedHandler(handler reflect.Value, args []any) error {
 }
 
 // callAnyVarHandler calls `func(...any) [error]` event handler.
-func (em *events) callAnyVarHandler(handler reflect.Value, args []any) error {
+func (em *Events) callAnyVarHandler(handler reflect.Value, args []any) error {
 	// Prepare slice of in arguments for handler.
 	handlerInArgs := make([]reflect.Value, 0, len(args))
 	for _, arg := range args {
@@ -167,7 +158,7 @@ func (em *events) callAnyVarHandler(handler reflect.Value, args []any) error {
 	return em.getCallOutError(handlerOutArgs)
 }
 
-func (em *events) getCallOutError(outArgs []reflect.Value) error {
+func (em *Events) getCallOutError(outArgs []reflect.Value) error {
 	if len(outArgs) == 1 {
 		// Use the value as an error.
 		// Ignore failed cast of nil error.
@@ -179,33 +170,24 @@ func (em *events) getCallOutError(outArgs []reflect.Value) error {
 }
 
 // Event declares service container events.
-type Event interface {
-	// Name returns event name.
-	Name() string
-
-	// Args returns event arguments.
-	Args() []any
-}
-
-// NewEvent returns new event instance.
-func NewEvent(name string, args ...any) Event {
-	return &event{name: name, args: args}
-}
-
-// handler declares event handler function.
-type handler func(event Event) error
-
-// event wraps string event.
-type event struct {
+type Event struct {
 	name string
 	args []any
 }
 
-// Name implements Event interface.
-func (e *event) Name() string { return e.name }
+// Name returns event name.
+func (e *Event) Name() string { return e.name }
 
-// Args implements Event interface.
-func (e *event) Args() []any { return e.args }
+// Args returns event arguments.
+func (e *Event) Args() []any { return e.args }
+
+// NewEvent returns new event instance.
+func NewEvent(name string, args ...any) *Event {
+	return &Event{name: name, args: args}
+}
+
+// handler declares event handler function.
+type handler func(event *Event) error
 
 // anySliceType contains reflection type for any slice variable.
 var anySliceType = reflect.TypeOf((*[]any)(nil)).Elem()

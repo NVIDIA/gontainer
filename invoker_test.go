@@ -27,13 +27,13 @@ func TestInvokerService(t *testing.T) {
 	tests := []struct {
 		name    string
 		haveFn  any
-		wantFn  func(t *testing.T, value InvokeResult)
+		wantFn  func(t *testing.T, value *InvokeResult)
 		wantErr bool
 	}{
 		{
 			name:   "ReturnNothing",
 			haveFn: func(var1 string, var2 int) {},
-			wantFn: func(t *testing.T, value InvokeResult) {
+			wantFn: func(t *testing.T, value *InvokeResult) {
 				equal(t, len(value.Values()), 0)
 				equal(t, value.Error(), nil)
 			},
@@ -44,7 +44,7 @@ func TestInvokerService(t *testing.T) {
 			haveFn: func(var1 string, var2 int) (string, int, bool) {
 				return var1 + "-X", var2 + 100, true
 			},
-			wantFn: func(t *testing.T, value InvokeResult) {
+			wantFn: func(t *testing.T, value *InvokeResult) {
 				equal(t, len(value.Values()), 3)
 				equal(t, value.Values()[0], "string-X")
 				equal(t, value.Values()[1], 223)
@@ -58,7 +58,7 @@ func TestInvokerService(t *testing.T) {
 			haveFn: func(var1 string, var2 int) (string, int, error) {
 				return var1 + "-X", var2 + 100, errors.New("failed")
 			},
-			wantFn: func(t *testing.T, value InvokeResult) {
+			wantFn: func(t *testing.T, value *InvokeResult) {
 				equal(t, len(value.Values()), 3)
 				equal(t, value.Values()[0], "string-X")
 				equal(t, value.Values()[1], 223)
@@ -73,7 +73,7 @@ func TestInvokerService(t *testing.T) {
 			haveFn: func(var1 string, var2 int) (error, error, error) {
 				return nil, errors.New("error-1"), errors.New("error-2")
 			},
-			wantFn: func(t *testing.T, value InvokeResult) {
+			wantFn: func(t *testing.T, value *InvokeResult) {
 				equal(t, len(value.Values()), 3)
 				equal(t, value.Values()[0], nil)
 				equal(t, value.Values()[1].(error).Error(), "error-1")
@@ -86,7 +86,7 @@ func TestInvokerService(t *testing.T) {
 		{
 			name:   "ReturnNilError",
 			haveFn: func(var1 string, var2 int) error { return nil },
-			wantFn: func(t *testing.T, value InvokeResult) {
+			wantFn: func(t *testing.T, value *InvokeResult) {
 				equal(t, len(value.Values()), 1)
 				equal(t, value.Values()[0], nil)
 				equal(t, value.Error(), nil)
