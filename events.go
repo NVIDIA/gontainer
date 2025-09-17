@@ -68,12 +68,12 @@ func (em *Events) Subscribe(name string, handlerFn any) {
 	// Register event handler function.
 	if handlerType.NumIn() == 1 && handlerType.In(0) == anySliceType {
 		// Register a function that accepts a variable number of any arguments.
-		em.events[name] = append(em.events[name], func(event Event) error {
+		em.events[name] = append(em.events[name], func(event *Event) error {
 			return em.callAnyVarHandler(handlerValue, event.Args())
 		})
 	} else {
 		// Register a function that accepts concrete argument types.
-		em.events[name] = append(em.events[name], func(event Event) error {
+		em.events[name] = append(em.events[name], func(event *Event) error {
 			return em.callTypedHandler(handlerValue, event.Args())
 		})
 	}
@@ -83,7 +83,7 @@ func (em *Events) Subscribe(name string, handlerFn any) {
 //
 // Handlers are called synchronously in the order they were registered.
 // All returned errors are collected and joined into a single error.
-func (em *Events) Trigger(event Event) error {
+func (em *Events) Trigger(event *Event) error {
 	em.mutex.RLock()
 	defer em.mutex.RUnlock()
 
@@ -170,33 +170,24 @@ func (em *Events) getCallOutError(outArgs []reflect.Value) error {
 }
 
 // Event declares service container events.
-type Event interface {
-	// Name returns event name.
-	Name() string
-
-	// Args returns event arguments.
-	Args() []any
-}
-
-// NewEvent returns new event instance.
-func NewEvent(name string, args ...any) Event {
-	return &event{name: name, args: args}
-}
-
-// handler declares event handler function.
-type handler func(event Event) error
-
-// event wraps string event.
-type event struct {
+type Event struct {
 	name string
 	args []any
 }
 
-// Name implements Event interface.
-func (e *event) Name() string { return e.name }
+// Name returns event name.
+func (e *Event) Name() string { return e.name }
 
-// Args implements Event interface.
-func (e *event) Args() []any { return e.args }
+// Args returns event arguments.
+func (e *Event) Args() []any { return e.args }
+
+// NewEvent returns new event instance.
+func NewEvent(name string, args ...any) *Event {
+	return &Event{name: name, args: args}
+}
+
+// handler declares event handler function.
+type handler func(event *Event) error
 
 // anySliceType contains reflection type for any slice variable.
 var anySliceType = reflect.TypeOf((*[]any)(nil)).Elem()

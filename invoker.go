@@ -46,7 +46,7 @@ type Invoker struct {
 }
 
 // Invoke invokes specified function.
-func (i *Invoker) Invoke(fn any) (InvokeResult, error) {
+func (i *Invoker) Invoke(fn any) (*InvokeResult, error) {
 	// Get reflection of the fn.
 	fnValue := reflect.ValueOf(fn)
 	if fnValue.Kind() != reflect.Func {
@@ -65,7 +65,7 @@ func (i *Invoker) Invoke(fn any) (InvokeResult, error) {
 
 	// Convert function results.
 	fnOutArgs := fnValue.Call(fnInArgs)
-	result := &invokeResult{
+	result := &InvokeResult{
 		values: make([]any, 0, len(fnOutArgs)),
 		err:    nil,
 	}
@@ -88,26 +88,17 @@ func (i *Invoker) Invoke(fn any) (InvokeResult, error) {
 }
 
 // InvokeResult provides access to the invocation result.
-type InvokeResult interface {
-	// Values returns a slice of function result values.
-	Values() []any
-
-	// Error returns function result error, if any.
-	Error() error
-}
-
-// invokeResult implements corresponding interface.
-type invokeResult struct {
+type InvokeResult struct {
 	values []any
 	err    error
 }
 
-// Values implements corresponding interface method.
-func (r *invokeResult) Values() []any {
+// Values returns a slice of function result values.
+func (r *InvokeResult) Values() []any {
 	return r.values
 }
 
-// Error implements corresponding interface method.
-func (r *invokeResult) Error() error {
+// Error returns function result error, if any.
+func (r *InvokeResult) Error() error {
 	return r.err
 }
