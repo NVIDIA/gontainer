@@ -44,7 +44,7 @@ const (
 
 // New returns new container instance with a set of configured services.
 // The `factories` specifies factories for services with dependency resolution.
-func New(factories ...*Factory) (result Container, err error) {
+func New(factories ...*Factory) (result *Container, err error) {
 	// Don't accept the context in args, since it mustn't be cancelled outside.
 	// Cancel of the root context will trigger cancel of all children contexts, but
 	// it is unwanted behavior: services should be cancelled in strict reverse order.
@@ -78,7 +78,7 @@ func New(factories ...*Factory) (result Container, err error) {
 	invoker := &invoker{resolver: resolver}
 
 	// Prepare service container instance.
-	container := &container{
+	container := &Container{
 		ctx:      ctx,
 		cancel:   cancel,
 		events:   events,
@@ -147,41 +147,7 @@ func New(factories ...*Factory) (result Container, err error) {
 //
 // The container also includes an internal events broker for decoupled communication
 // between services.
-type Container interface {
-	// Start initializes all registered services in dependency order.
-	// Services are instantiated via their factories.
-	// Returns an error if initialization fails.
-	Start() error
-
-	// Close shuts down all services in reverse order of their instantiation.
-	// This method blocks until all services are properly closed.
-	Close() error
-
-	// Done returns a channel that is closed after all services have been shut down.
-	// Useful for coordinating external shutdown logic.
-	Done() <-chan struct{}
-
-	// Factories returns all registered service factories.
-	Factories() []*Factory
-
-	// Services returns all currently instantiated services.
-	Services() []any
-
-	// Events returns the container-wide event broker instance.
-	Events() Events
-
-	// Resolver returns a service resolver for on-demand dependency injection.
-	// If the container is not yet started, only requested services and their
-	// transitive dependencies will be instantiated.
-	Resolver() Resolver
-
-	// Invoker returns a function invoker that can call user-provided functions
-	// with auto-injected dependencies. Behaves lazily if the container is not started.
-	Invoker() Invoker
-}
-
-// container implements service container.
-type container struct {
+type Container struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	closer sync.Once
@@ -200,8 +166,10 @@ type container struct {
 	registry *registry
 }
 
-// Start initializes every service in the container.
-func (c *container) Start() (resultErr error) {
+// Start initializes all registered services in dependency order.
+// Services are instantiated via their factories.
+// Returns an error if initialization fails.
+func (c *Container) Start() (resultErr error) {
 	// Trigger panic events in service container.
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -243,9 +211,9 @@ func (c *container) Start() (resultErr error) {
 	return nil
 }
 
-// Close closes service container with all services.
-// Blocks invocation until the container is closed.
-func (c *container) Close() (err error) {
+// Close shuts down all services in reverse order of their instantiation.
+// This method blocks until all services are properly closed.
+func (c *Container) Close() (err error) {
 	// Trigger panic events in service container.
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -290,13 +258,14 @@ func (c *container) Close() (err error) {
 	return nil
 }
 
-// Done is closing after closing of all services.
-func (c *container) Done() <-chan struct{} {
+// Done returns a channel that is closed after all services have been shut down.
+// Useful for coordinating external shutdown logic.
+func (c *Container) Done() <-chan struct{} {
 	return c.ctx.Done()
 }
 
-// Factories returns all defined factories.
-func (c *container) Factories() []*Factory {
+// Factories returns all registered service factories.
+func (c *Container) Factories() []*Factory {
 	// Acquire read lock.
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
@@ -310,8 +279,8 @@ func (c *container) Factories() []*Factory {
 	return factories
 }
 
-// Services returns all spawned services.
-func (c *container) Services() []any {
+// Services returns all currently instantiated services.
+func (c *Container) Services() []any {
 	// Acquire read lock.
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
@@ -332,8 +301,8 @@ func (c *container) Services() []any {
 	}
 }
 
-// Events returns events broker instance.
-func (c *container) Events() Events {
+// Events returns the container-wide event broker instance.
+func (c *Container) Events() Events {
 	// Acquire read lock.
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
@@ -346,8 +315,10 @@ func (c *container) Events() Events {
 	}
 }
 
-// Resolver returns service resolver instance.
-func (c *container) Resolver() Resolver {
+// Resolver returns a service resolver for on-demand dependency injection.
+// If the container is not yet started, only requested services and their
+// transitive dependencies will be instantiated.
+func (c *Container) Resolver() Resolver {
 	// Acquire read lock.
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
@@ -360,8 +331,9 @@ func (c *container) Resolver() Resolver {
 	}
 }
 
-// Invoker returns function invoker instance.
-func (c *container) Invoker() Invoker {
+// Invoker returns a function invoker that can call user-provided functions
+// with auto-injected dependencies. Behaves lazily if the container is not started.
+func (c *Container) Invoker() Invoker {
 	// Acquire read lock.
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()

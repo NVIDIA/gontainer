@@ -26,7 +26,7 @@ import (
 )
 
 // initCloseSignals creates a goroutine to listen for SIGTERM and SIGINT.
-func initCloseSignals(container gontainer.Container, errorFn func(err error)) {
+func initCloseSignals(container *gontainer.Container, errorFn func(err error)) {
 	go func() {
 		signalsChan := make(chan os.Signal)
 		signal.Notify(signalsChan, syscall.SIGTERM, syscall.SIGINT)
