@@ -33,7 +33,7 @@ func TestEvents(t *testing.T) {
 	testEvent6Args := [][]any(nil)
 	testEvent7Args := [][]any(nil)
 
-	ev := &events{events: make(map[string][]handler)}
+	ev := &Events{events: make(map[string][]handler)}
 	ev.Subscribe("TestEvent1", func(args ...any) {
 		testEvent1Args = append(testEvent1Args, args)
 	})

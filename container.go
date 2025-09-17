@@ -63,13 +63,13 @@ func New(factories ...*Factory) (result *Container, err error) {
 	}()
 
 	// Prepare events broker instance.
-	events := &events{
+	events := &Events{
 		mutex:  sync.RWMutex{},
 		events: make(map[string][]handler),
 	}
 
 	// Prepare services registry instance.
-	registry := &registry{events: events}
+	registry := &registry{}
 
 	// Prepare service resolver instance.
 	resolver := &resolver{registry: registry}
@@ -97,7 +97,7 @@ func New(factories ...*Factory) (result *Container, err error) {
 	}()
 
 	// Register events broker instance in the registry.
-	if factory, err := NewService[Events](events).factory(); err != nil {
+	if factory, err := NewService[*Events](events).factory(); err != nil {
 		return nil, fmt.Errorf("failed to register events manager: %w", err)
 	} else {
 		registry.registerFactory(factory)
@@ -154,7 +154,7 @@ type Container struct {
 	mutex  sync.RWMutex
 
 	// Events broker.
-	events Events
+	events *Events
 
 	// Service resolver.
 	resolver Resolver
@@ -302,7 +302,7 @@ func (c *Container) Services() []any {
 }
 
 // Events returns the container-wide event broker instance.
-func (c *Container) Events() Events {
+func (c *Container) Events() *Events {
 	// Acquire read lock.
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()

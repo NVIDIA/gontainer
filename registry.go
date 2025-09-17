@@ -30,7 +30,6 @@ import (
 type registry struct {
 	factories []*factory
 	sequence  []*factory
-	events    Events
 	mutex     sync.Mutex
 }
 
