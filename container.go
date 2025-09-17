@@ -75,7 +75,7 @@ func New(factories ...*Factory) (result *Container, err error) {
 	resolver := &Resolver{registry: registry}
 
 	// Prepare function invoker instance.
-	invoker := &invoker{resolver: resolver}
+	invoker := &Invoker{resolver: resolver}
 
 	// Prepare service container instance.
 	container := &Container{
@@ -111,7 +111,7 @@ func New(factories ...*Factory) (result *Container, err error) {
 	}
 
 	// Register function invoker instance in the registry.
-	if factory, err := NewService[Invoker](invoker).factory(); err != nil {
+	if factory, err := NewService[*Invoker](invoker).factory(); err != nil {
 		return nil, fmt.Errorf("failed to register function invoker: %w", err)
 	} else {
 		registry.registerFactory(factory)
@@ -160,7 +160,7 @@ type Container struct {
 	resolver *Resolver
 
 	// Function invoker.
-	invoker Invoker
+	invoker *Invoker
 
 	// Services registry.
 	registry *registry
@@ -333,7 +333,7 @@ func (c *Container) Resolver() *Resolver {
 
 // Invoker returns a function invoker that can call user-provided functions
 // with auto-injected dependencies. Behaves lazily if the container is not started.
-func (c *Container) Invoker() Invoker {
+func (c *Container) Invoker() *Invoker {
 	// Acquire read lock.
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
