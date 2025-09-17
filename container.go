@@ -72,7 +72,7 @@ func New(factories ...*Factory) (result *Container, err error) {
 	registry := &registry{}
 
 	// Prepare service resolver instance.
-	resolver := &resolver{registry: registry}
+	resolver := &Resolver{registry: registry}
 
 	// Prepare function invoker instance.
 	invoker := &invoker{resolver: resolver}
@@ -104,7 +104,7 @@ func New(factories ...*Factory) (result *Container, err error) {
 	}
 
 	// Register service resolver instance in the registry.
-	if factory, err := NewService[Resolver](resolver).factory(); err != nil {
+	if factory, err := NewService[*Resolver](resolver).factory(); err != nil {
 		return nil, fmt.Errorf("failed to register service resolver: %w", err)
 	} else {
 		registry.registerFactory(factory)
@@ -157,7 +157,7 @@ type Container struct {
 	events *Events
 
 	// Service resolver.
-	resolver Resolver
+	resolver *Resolver
 
 	// Function invoker.
 	invoker Invoker
@@ -318,7 +318,7 @@ func (c *Container) Events() *Events {
 // Resolver returns a service resolver for on-demand dependency injection.
 // If the container is not yet started, only requested services and their
 // transitive dependencies will be instantiated.
-func (c *Container) Resolver() Resolver {
+func (c *Container) Resolver() *Resolver {
 	// Acquire read lock.
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()

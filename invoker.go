@@ -48,7 +48,7 @@ type Invoker interface {
 
 // invoker implements invoker interface.
 type invoker struct {
-	resolver Resolver
+	resolver *Resolver
 }
 
 // Invoke invokes specified function.
