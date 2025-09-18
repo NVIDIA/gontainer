@@ -80,9 +80,9 @@ func main() {
 		log.Println("Service container closed")
 	}()
 
-	// Application entrypoint using the `Invoker` service.
-	// Invoker will resolve all dependencies for the function.
-	_, err = container.Invoker().Invoke(func(svc *HelloService) {
+	// Application entrypoint using container.Invoke.
+	// It will resolve all dependencies for the function.
+	_, err = container.Invoke(func(svc *HelloService) {
 		// Here the application bootstrap code could be located.
 		// It can access all services from the container.
 		// For example, HTTP server could be started here.
@@ -94,10 +94,10 @@ func main() {
 
 	// - or -
 
-	// Application entrypoint using the `Resolver` service.
-	// This code will manually resolve all dependencies.
+	// Application entrypoint using container.Resolve.
+	// This code will manually resolve the dependency.
 	var helloService *HelloService
-	err = container.Resolver().Resolve(&helloService)
+	err = container.Resolve(&helloService)
 	if err != nil {
 		log.Panicf("Failed to resolve: %s", err)
 	}

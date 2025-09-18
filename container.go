@@ -150,7 +150,6 @@ func (c *Container) Start() (resultErr error) {
 // Close shuts down all services in reverse order of their instantiation.
 // This method blocks until all services are properly closed.
 func (c *Container) Close() (err error) {
-
 	// Acquire write lock.
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -196,33 +195,18 @@ func (c *Container) Factories() []*Factory {
 	return factories
 }
 
-// Resolver returns a service resolver for on-demand dependency injection.
+// Resolve resolves a service dependency and stores it in the provided pointer.
+// The varPtr must be a pointer to the variable where the resolved service will be stored.
 // If the container is not yet started, only requested services and their
 // transitive dependencies will be instantiated.
-func (c *Container) Resolver() *Resolver {
-	// Acquire read lock.
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	select {
-	case <-c.ctx.Done():
-		return nil
-	default:
-		return c.resolver
-	}
+func (c *Container) Resolve(varPtr any) error {
+	return c.resolver.Resolve(varPtr)
 }
 
-// Invoker returns a function invoker that can call user-provided functions
-// with auto-injected dependencies. Behaves lazily if the container is not started.
-func (c *Container) Invoker() *Invoker {
-	// Acquire read lock.
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	select {
-	case <-c.ctx.Done():
-		return nil
-	default:
-		return c.invoker
-	}
+// Invoke calls the provided function with auto-injected dependencies.
+// The function's arguments will be resolved from the container.
+// If the container is not yet started, only requested services and their
+// transitive dependencies will be instantiated.
+func (c *Container) Invoke(fn any) (*InvokeResult, error) {
+	return c.invoker.Invoke(fn)
 }

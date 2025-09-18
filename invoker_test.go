@@ -108,7 +108,7 @@ func TestInvokerService(t *testing.T) {
 				equal(t, container.Close(), nil)
 			}()
 
-			result, err := container.Invoker().Invoke(tt.haveFn)
+			result, err := container.Invoke(tt.haveFn)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Invoke() error = %v, wantErr %v", err, tt.wantErr)
 				return
