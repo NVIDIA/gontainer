@@ -18,6 +18,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/NVIDIA/gontainer"
@@ -28,6 +29,9 @@ func main() {
 	// Order of factories definition is non-restrictive.
 	log.Println("Creating new service container")
 	container, err := gontainer.New(
+		// Root context for container.
+		context.Background(),
+
 		// Return a function that returns an int.
 		gontainer.NewFactory(func() func() int {
 			// From the container perspective this is a regular service.

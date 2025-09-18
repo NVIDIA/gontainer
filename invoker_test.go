@@ -18,6 +18,7 @@
 package gontainer
 
 import (
+	"context"
 	"errors"
 	"testing"
 )
@@ -97,6 +98,7 @@ func TestInvokerService(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			container, err := New(
+				context.Background(),
 				NewFactory(func() string { return "string" }),
 				NewFactory(func() int { return 123 }),
 			)

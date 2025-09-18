@@ -18,12 +18,14 @@
 package gontainer
 
 import (
+	"context"
 	"testing"
 )
 
 // TestResolverService tests resolver service.
 func TestResolverService(t *testing.T) {
 	container, err := New(
+		context.Background(),
 		NewFactory(func() string { return "string" }),
 		NewFactory(func(resolver *Resolver) {
 			var depExists string

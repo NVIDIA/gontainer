@@ -18,6 +18,7 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/NVIDIA/gontainer"
@@ -37,6 +38,9 @@ func init() {
 func main() {
 	// Initialize the service container.
 	container, err := gontainer.New(
+		// Root context for container.
+		context.Background(),
+
 		// Enable config service.
 		config.WithConfig(),
 

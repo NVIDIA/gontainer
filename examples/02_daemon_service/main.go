@@ -54,6 +54,9 @@ func main() {
 	// Order of factories definition is non-restrictive.
 	log.Println("Creating service container instance")
 	container, err := gontainer.New(
+		// Root context for container.
+		context.Background(),
+
 		// Inject singleton object.
 		gontainer.NewService(logger),
 
