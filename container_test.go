@@ -39,6 +39,7 @@ func TestContainerLifecycle(t *testing.T) {
 	})
 
 	container, err := New(
+		context.Background(),
 		NewService(float64(100500)),
 		NewFactory(func() string { return "string" }),
 		NewFactory(func() (int, int64) { return 123, 456 }),

@@ -25,15 +25,11 @@ import (
 
 // New returns new container instance with a set of configured services.
 // The `factories` specifies factories for services with dependency resolution.
-func New(factories ...*Factory) (result *Container, err error) {
-	// Don't accept the context in args, since it mustn't be cancelled outside.
-	// Cancel of the root context will trigger cancel of all children contexts, but
-	// it is unwanted behavior: services should be cancelled in strict reverse order.
-
-	// Prepare container context.
+func New(ctx context.Context, factories ...*Factory) (result *Container, err error) {
+	// Prepare container context ignoring the cancelling.
 	// When cancelled, it closes `container.Done()` channel
 	// and unblocks any waiting read from `container.Done()`.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 
 	// Cancel context only when returning an error.
 	// Otherwise, in will be cancelled by container.
