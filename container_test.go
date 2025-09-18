@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"sync"
 	"sync/atomic"
 	"testing"
 )
@@ -29,11 +28,7 @@ import (
 // TestContainerLifecycle tests container lifecycle.
 func TestContainerLifecycle(t *testing.T) {
 	factoryStarted := atomic.Bool{}
-	serviceStarted := atomic.Bool{}
 	serviceClosed := atomic.Bool{}
-
-	var serviceWaitGroup sync.WaitGroup
-	serviceWaitGroup.Add(1)
 
 	svc1 := &testService1{}
 	svc2 := &testService2{}
@@ -78,14 +73,7 @@ func TestContainerLifecycle(t *testing.T) {
 			equal(t, dep10.Get(), (func() error)(nil))
 			factoryStarted.Store(true)
 
-			// Service function.
-			return func() error {
-				serviceWaitGroup.Done()
-				serviceStarted.Store(true)
-				<-ctx.Done()
-				serviceClosed.Store(true)
-				return nil
-			}
+			return &testServiceWithClose{ctx: ctx, closed: &serviceClosed}
 		}),
 	)
 	equal(t, err, nil)
@@ -104,10 +92,6 @@ func TestContainerLifecycle(t *testing.T) {
 	equal(t, len(container.Factories()), 10)
 	equal(t, len(container.Services()), 12)
 
-	// Let factory function start in background.
-	serviceWaitGroup.Wait()
-
-	equal(t, serviceStarted.Load(), true)
 	equal(t, serviceClosed.Load(), false)
 
 	// Close all factories in the container.
@@ -148,6 +132,16 @@ func (t *testService4) Do1() {}
 type testService5 func() error
 
 func (t testService5) Do5() error { return t() }
+
+type testServiceWithClose struct {
+	ctx    context.Context
+	closed *atomic.Bool
+}
+
+func (t *testServiceWithClose) Close() error {
+	t.closed.Store(true)
+	return nil
+}
 
 func equal(t *testing.T, a, b any) {
 	t.Helper()

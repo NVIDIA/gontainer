@@ -63,15 +63,6 @@ Dependency injection service container for Golang projects.
   11:19:22 Closing service container by defer
   11:19:22 Service container closed
   ```
-* [Service function example](./examples/05_service_functions/main.go) – demonstrates how to define a service function that could be used to organize the application entry point.
-  ```
-  12:47:21 Creating new service container
-  12:47:21 Starting service container
-  12:47:21 Closing service container by defer
-  12:47:21 Starting service function with 42
-  12:47:21 Exiting from service function
-  12:47:21 Service container closed
-  ```
 
 ## Quick Start
 
@@ -170,7 +161,7 @@ to the container.
 There are several predefined by container service types that may be used as a dependencies in the factory arguments.
 
 1. The `context.Context` service provides the per-service context, inherited from the background context.
-   This context is cancelled right before the service's `Close()` call and intended to be used with service functions.
+   This context is cancelled right before the service's `Close()` call.
 2. The `gontainer.Resolver` service provides a service to resolve dependencies dynamically. Thread safe.
 3. The `gontainer.Invoker` service provides a service to invoke functions dynamically. Thread safe.
 
@@ -258,34 +249,6 @@ func (s *MyService) SayHello(name string) {
 func (s *MyService) Close() error {
    // Synchronous cleanup logic here.
    return nil
-}
-```
-
-### Service Functions
-
-The **Service Function** is a function with a signature `func() error` or `func()` returned from the factory.
-This function is executed in the background when the container starts, and it is awaited during the container close.
-The error value function returns is treated as if it were returned by a conventional `Close()` method of a service.
-The container close will wait until this function returns, ensuring that all background tasks are completed.
-
-The function serves two primary roles:
-
-* It defines the code to execute in background when the container starts with the `Start()` method.
-* It returns an error, which is treated as if it were returned by a conventional `Close()` method.
-
-```go
-// MyServiceFactory is an example of a service function usage.
-// Context here is the factory-level context. It starts when the
-// factory is invoked (on container start or on service resolve)
-// and is cancelled when the factory is closing.
-func MyServiceFactory(ctx context.Context) func() error {
-    return func() error {
-        // Await its order in container close.
-        <-ctx.Done()
-      
-        // Return nil from the `service.Close()`.
-        return nil
-    }
 }
 ```
 
