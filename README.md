@@ -13,7 +13,6 @@ Dependency injection service container for Golang projects.
 - 🚀 Eager or lazy services instantiation with automatic dependencies resolution and optional dependencies support.
 - 🛠 Automatic injection of dependencies for service factories, avoiding manual fetch through container API.
 - 🔄 Automatic reverse-to-instantiation order for service termination to ensure proper resource release and shutdown.
-- 📣 Built-in events broker service for inter-service container-wide communications and loose coupling between services.
 - 🤖 Clean and tested implementation based on reflection and generics. No external dependencies.
 
 ## Examples
@@ -172,10 +171,8 @@ There are several predefined by container service types that may be used as a de
 
 1. The `context.Context` service provides the per-service context, inherited from the background context.
    This context is cancelled right before the service's `Close()` call and intended to be used with service functions.
-2. The `gontainer.Events` service provides the events broker. It can be used to send and receive events
-   inside service container between services or outside from the client code. Thread safe.
-3. The `gontainer.Resolver` service provides a service to resolve dependencies dynamically. Thread safe.
-4. The `gontainer.Invoker` service provides a service to invoke functions dynamically. Thread safe.
+2. The `gontainer.Resolver` service provides a service to resolve dependencies dynamically. Thread safe.
+3. The `gontainer.Invoker` service provides a service to invoke functions dynamically. Thread safe.
 
 #### Transient Service Factories
 
@@ -292,44 +289,6 @@ func MyServiceFactory(ctx context.Context) func() error {
 }
 ```
 
-### Events Broker
-
-The **Events Broker** is an additional part of the service container architecture. It facilitates communication between services
-without them having to be directly aware of each other. The Events Broker works on a publisher-subscriber model, enabling services
-to publish events to, and subscribe to events from, a centralized broker.
-
-This mechanism allows services to remain decoupled while still being able to interact through a centralized medium.
-In particular, the `gontainer.Events` service provides an interface to the events broker and can be injected as a dependency in any service factory.
-
-#### Triggering Events
-
-To trigger an event, use the `Trigger()` method. Create an event using `NewEvent()` and pass the necessary arguments:
-
-```go
-events.Trigger(gontainer.NewEvent("Event1", event, arguments, here))
-```
-
-#### Subscribing to Events
-
-To subscribe to an event, use the `Subscribe()` method. Two types of handler functions are supported:
-
-* A function that accepts a variable number of any-typed arguments:
-  ```go
-  events.Subscribe("Event1", func(args ...any) {
-      // Handle the event with args slice.
-  })
-  ```
-* A function that accepts concrete argument types:
-  ```go
-  ev.Subscribe("Event1", func(x string, y int, z bool) {
-      // Handle the event with specific args.
-  })
-  ```
-  - The **number of arguments** in the event and the handler can differ because handlers are designed to be flexible and can process varying numbers and types of arguments, allowing for greater versatility in handling different event scenarios.
-  - The **types of arguments** in the event and the handler must be assignable. Otherwise, an error will be returned from a `Trigger()` call.
-  
-Every handler function could return an `error` which will be joined and returned from `Trigger()` call.
-
 ### Container Interface
 
 ```go
@@ -351,9 +310,6 @@ type Container interface {
     // Services returns all spawned services.
     Services() []any
 
-    // Events returns events broker instance.
-    Events() Events
-
     // Resolver returns service resolver instance.
     // If container is not started, only requested services
     // will be spawned on `resolver.Resolve(...)` call.
@@ -366,18 +322,6 @@ type Container interface {
 }
 ```
 
-### Container Events
-
-The service container emits several events during its lifecycle:
-
-| Event               | Description                                                                   |
-|---------------------|-------------------------------------------------------------------------------|
-| `ContainerStarting` | Emitted when the container's start method is invoked.                         |
-| `ContainerStarted`  | Emitted when the container's start method has completed.                      |
-| `ContainerClosing`  | Emitted when the container's close method is invoked.                         |
-| `ContainerClosed`   | Emitted when the container's close method has completed.                      |
-| `UnhandledPanic`    | Emitted when a panic occurs during container initialization, start, or close. |
-
 ### Container Errors
 
 The service container may return the following errors, which can be checked using `errors.Is`:
@@ -388,4 +332,3 @@ The service container may return the following errors, which can be checked usin
 | `ErrServiceNotResolved`     | Occurs when resolving a service fails due to an unregistered service type.            |
 | `ErrServiceDuplicated`      | Occurs when a service type duplicate found during the initialization procedure.       |
 | `ErrCircularDependency`     | Occurs when a circular dependency found during the initialization procedure.          |
-| `ErrHandlerArgTypeMismatch` | Occurs when an event handler's arguments do not match the event's expected arguments. |

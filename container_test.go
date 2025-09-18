@@ -20,6 +20,7 @@ package gontainer
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -91,7 +92,7 @@ func TestContainerLifecycle(t *testing.T) {
 	equal(t, container == nil, false)
 
 	// Assert factories and services.
-	equal(t, len(container.Factories()), 11)
+	equal(t, len(container.Factories()), 10)
 	equal(t, len(container.Services()), 0)
 
 	// Start all factories in the container.
@@ -100,8 +101,8 @@ func TestContainerLifecycle(t *testing.T) {
 	equal(t, serviceClosed.Load(), false)
 
 	// Assert factories and services.
-	equal(t, len(container.Factories()), 11)
-	equal(t, len(container.Services()), 13)
+	equal(t, len(container.Factories()), 10)
+	equal(t, len(container.Services()), 12)
 
 	// Let factory function start in background.
 	serviceWaitGroup.Wait()
@@ -121,7 +122,7 @@ func TestContainerLifecycle(t *testing.T) {
 	}
 
 	// Assert factories and services.
-	equal(t, len(container.Factories()), 11)
+	equal(t, len(container.Factories()), 10)
 	equal(t, len(container.Services()), 0)
 }
 
@@ -147,3 +148,10 @@ func (t *testService4) Do1() {}
 type testService5 func() error
 
 func (t testService5) Do5() error { return t() }
+
+func equal(t *testing.T, a, b any) {
+	t.Helper()
+	if !reflect.DeepEqual(a, b) {
+		t.Fatalf("equal failed: '%v' != '%v'", a, b)
+	}
+}

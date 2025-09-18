@@ -29,7 +29,7 @@ import (
 // WithSlogLogger returns a factory for the slog logger.
 func WithSlogLogger() *gontainer.Factory {
 	return gontainer.NewFactory(
-		func(confsvc *confmod.Config, events *gontainer.Events) (*slog.Logger, error) {
+		func(confsvc *confmod.Config) (*slog.Logger, error) {
 			// Prepare logger config.
 			config := Config{}
 			if err := confsvc.Load(&config); err != nil {
@@ -70,33 +70,10 @@ func WithSlogLogger() *gontainer.Factory {
 			logger := slog.New(handler)
 			loggerWithTag := logger.With("service", "logger")
 
-			// Log container starting message.
-			loggerWithTag.Info("Starting service container")
+			// Log service initialization.
+			loggerWithTag.Info("Logger service initialized")
 
-			// Register container started event handler.
-			events.Subscribe(gontainer.ContainerStarted, func(err error) {
-				if err != nil {
-					loggerWithTag.Error("Failed to start service container", slog.Any("error", err))
-				} else {
-					loggerWithTag.Info("Service container started")
-				}
-			})
-
-			// Register container closing event handler.
-			events.Subscribe(gontainer.ContainerClosing, func() {
-				loggerWithTag.Info("Closing service container")
-			})
-
-			// Register container closed event handler.
-			events.Subscribe(gontainer.ContainerClosed, func(err error) {
-				if err != nil {
-					loggerWithTag.Error("Failed to close service container", "error", err)
-				} else {
-					loggerWithTag.Info("Service container closed")
-				}
-			})
-
-			// Create new logger instance.
+			// Return logger instance.
 			return logger, nil
 		},
 	)
