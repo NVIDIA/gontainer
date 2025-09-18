@@ -20,26 +20,7 @@ package gontainer
 import (
 	"context"
 	"fmt"
-	"runtime/debug"
 	"sync"
-)
-
-// Events declaration.
-const (
-	// ContainerStarting declares container starting event.
-	ContainerStarting = "ContainerStarting"
-
-	// ContainerStarted declares container started event.
-	ContainerStarted = "ContainerStarted"
-
-	// ContainerClosing declares container closing event.
-	ContainerClosing = "ContainerClosing"
-
-	// ContainerClosed declares container closed event.
-	ContainerClosed = "ContainerClosed"
-
-	// UnhandledPanic declares unhandled panic in container.
-	UnhandledPanic = "UnhandledPanic"
 )
 
 // New returns new container instance with a set of configured services.
@@ -62,12 +43,6 @@ func New(factories ...*Factory) (result *Container, err error) {
 		}
 	}()
 
-	// Prepare events broker instance.
-	events := &Events{
-		mutex:  sync.RWMutex{},
-		events: make(map[string][]handler),
-	}
-
 	// Prepare services registry instance.
 	registry := &registry{}
 
@@ -81,26 +56,9 @@ func New(factories ...*Factory) (result *Container, err error) {
 	container := &Container{
 		ctx:      ctx,
 		cancel:   cancel,
-		events:   events,
 		resolver: resolver,
 		invoker:  invoker,
 		registry: registry,
-	}
-
-	// Trigger panic events in service container.
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			event := NewEvent(UnhandledPanic, recovered, string(debug.Stack()))
-			_ = container.events.Trigger(event)
-			panic(recovered)
-		}
-	}()
-
-	// Register events broker instance in the registry.
-	if factory, err := NewService[*Events](events).factory(); err != nil {
-		return nil, fmt.Errorf("failed to register events manager: %w", err)
-	} else {
-		registry.registerFactory(factory)
 	}
 
 	// Register service resolver instance in the registry.
@@ -144,17 +102,11 @@ func New(factories ...*Factory) (result *Container, err error) {
 // via Resolver or Invoker before the container is started. Services are
 // created using registered factories, and may optionally implement a Close()
 // method to participate in graceful shutdown.
-//
-// The container also includes an internal events broker for decoupled communication
-// between services.
 type Container struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	closer sync.Once
 	mutex  sync.RWMutex
-
-	// Events broker.
-	events *Events
 
 	// Service resolver.
 	resolver *Resolver
@@ -170,10 +122,8 @@ type Container struct {
 // Services are instantiated via their factories.
 // Returns an error if initialization fails.
 func (c *Container) Start() (resultErr error) {
-	// Trigger panic events in service container.
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			_ = c.events.Trigger(NewEvent(UnhandledPanic, recovered, string(debug.Stack())))
 			_ = c.Close()
 			panic(recovered)
 		}
@@ -190,18 +140,8 @@ func (c *Container) Start() (resultErr error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	// Trigger container starting event.
-	if err := c.events.Trigger(NewEvent(ContainerStarting)); err != nil {
-		return fmt.Errorf("failed to trigger container starting event: %w", err)
-	}
-
 	// Start all factories in the container.
 	startErr := c.registry.spawnFactories()
-
-	// Trigger container started event.
-	if err := c.events.Trigger(NewEvent(ContainerStarted, startErr)); err != nil {
-		return fmt.Errorf("failed to trigger container started event: %w", err)
-	}
 
 	// Handle container start error.
 	if startErr != nil {
@@ -214,13 +154,6 @@ func (c *Container) Start() (resultErr error) {
 // Close shuts down all services in reverse order of their instantiation.
 // This method blocks until all services are properly closed.
 func (c *Container) Close() (err error) {
-	// Trigger panic events in service container.
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			_ = c.events.Trigger(NewEvent(UnhandledPanic, recovered, string(debug.Stack())))
-			panic(recovered)
-		}
-	}()
 
 	// Acquire write lock.
 	c.mutex.Lock()
@@ -232,22 +165,10 @@ func (c *Container) Close() (err error) {
 		// It will unblock all concurrent close calls.
 		defer c.cancel()
 
-		// Trigger container closing event.
-		if triggerErr := c.events.Trigger(NewEvent(ContainerClosing)); triggerErr != nil {
-			err = fmt.Errorf("failed to trigger container closing event: %w", triggerErr)
-			return
-		}
-
 		// Close all spawned services in the registry.
 		closeErr := c.registry.closeFactories()
 		if closeErr != nil {
 			err = fmt.Errorf("failed to close factories: %w", closeErr)
-			return
-		}
-
-		// Trigger container closed event.
-		if triggerErr := c.events.Trigger(NewEvent(ContainerClosed, closeErr)); triggerErr != nil {
-			err = fmt.Errorf("failed to trigger container closed event: %w", triggerErr)
 			return
 		}
 	})
@@ -298,20 +219,6 @@ func (c *Container) Services() []any {
 			}
 		}
 		return services
-	}
-}
-
-// Events returns the container-wide event broker instance.
-func (c *Container) Events() *Events {
-	// Acquire read lock.
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	select {
-	case <-c.ctx.Done():
-		return nil
-	default:
-		return c.events
 	}
 }
 
