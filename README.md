@@ -85,6 +85,8 @@ Dependency injection service container for Golang projects.
 3. Register service factories in the container.
    ```go
    container, err := gontainer.New(
+      context.Background(),
+
       // Define MyService factory in the container.
       gontainer.NewFactory(NewMyService),
    
@@ -98,24 +100,24 @@ Dependency injection service container for Golang projects.
       log.Fatalf("Failed to init service container: %s", err)
    }
    ```
-5. Start the container and launch all factories.
+4. Start the container and launch all factories.
    ```go
    if err := container.Start(); err != nil {
       log.Fatalf("Failed to start service container: %s", err)
    }
    ```
-6. Alternatively to eager start with a `Start()` call it is possible to use `Resolver` or `Invoker` service. They will instantiate only the explicitly requested services and their transitive dependencies.
+5. Alternatively to eager start with a `Start()` call it is possible to use `Resolver` or `Invoker` service. They will instantiate only the explicitly requested services and their transitive dependencies.
    ```go
    var myService *MyService
-   if err := container.Resolver().Resolve(&MyService); err != nil {
+   if err := container.Resolver().Resolve(&myService); err != nil {
        log.Fatalf("Failed to resolve dependency: %s", err)
    }
-   myService.DoSomething()
+   myService.SayHello("World")
    ```
    or
    ```go
    if err := container.Invoker().Invoke(func(myService *MyService) {
-       myService.DoSomething()
+       myService.SayHello("World")
    }); err != nil {
        log.Fatalf("Failed to invoke a function: %s", err)
    }
@@ -160,10 +162,10 @@ to the container.
 
 There are several predefined by container service types that may be used as a dependencies in the factory arguments.
 
-1. The `context.Context` service provides the per-service context, inherited from the background context.
+1. The `context.Context` service provides the per-service context, inherited from the context passed to `New()`.
    This context is cancelled right before the service's `Close()` call.
-2. The `gontainer.Resolver` service provides a service to resolve dependencies dynamically. Thread safe.
-3. The `gontainer.Invoker` service provides a service to invoke functions dynamically. Thread safe.
+2. The `*gontainer.Resolver` service provides a service to resolve dependencies dynamically. Thread safe.
+3. The `*gontainer.Invoker` service provides a service to invoke functions dynamically. Thread safe.
 
 #### Transient Service Factories
 
@@ -175,6 +177,8 @@ a new service instance each time it is called and other factories could depend o
 
 ```go
 container, err := gontainer.New(
+    context.Background(),
+
     // Return new function from the factory.
 	// It will produce new values each time.
     gontainer.NewFactory(func() func() int {
@@ -252,37 +256,39 @@ func (s *MyService) Close() error {
 }
 ```
 
-### Container Interface
+### Container API
+
+The `Container` struct provides the following methods:
 
 ```go
-// Container defines service container interface.
-type Container interface {
-    // Start initializes every service in the container.
-    Start() error
+// New creates a new container instance with the given context and factories.
+func New(ctx context.Context, factories ...*Factory) (*Container, error)
 
-    // Close closes service container with all services.
-    // Blocks invocation until the container is closed.
-    Close() error
+// Start initializes every service in the container.
+func (c *Container) Start() error
 
-    // Done is closing after closing of all services.
-    Done() <-chan struct{}
+// Close closes service container with all services.
+// Blocks invocation until the container is closed.
+func (c *Container) Close() error
 
-    // Factories returns all defined factories.
-    Factories() []*Factory
+// Done returns a channel that is closed after all services have been shut down.
+func (c *Container) Done() <-chan struct{}
 
-    // Services returns all spawned services.
-    Services() []any
+// Factories returns all registered service factories.
+func (c *Container) Factories() []*Factory
 
-    // Resolver returns service resolver instance.
-    // If container is not started, only requested services
-    // will be spawned on `resolver.Resolve(...)` call.
-    Resolver() Resolver
+// Services returns all currently instantiated services.
+func (c *Container) Services() []any
 
-    // Invoker returns function invoker instance.
-    // If container is not started, only requested services
-    // will be spawned to invoke the func.
-    Invoker() Invoker
-}
+// Resolver returns a service resolver for on-demand dependency injection.
+// If container is not started, only requested services
+// will be spawned on `resolver.Resolve(...)` call.
+func (c *Container) Resolver() *Resolver
+
+// Invoker returns a function invoker that can call user-provided functions
+// with auto-injected dependencies. If container is not started, only requested 
+// services will be spawned to invoke the func.
+func (c *Container) Invoker() *Invoker
 ```
 
 ### Container Errors
