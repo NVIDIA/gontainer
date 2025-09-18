@@ -30,23 +30,19 @@ import (
 // If the container has not been started yet, dependency resolution happens in lazy mode — only
 // the required arguments and their transitive dependencies are instantiated on demand.
 //
-// The function may have one of the following return signatures:
-//   - no return values (i.e., `func(...)`),
-//   - a single `error` (i.e., `func(...) error`),
-//   - multiple return values, where the last one may be an `error` (i.e., `func(...) (T1, T2, ..., error)`).
+// The Invoke method returns:
+//   - []any - all values returned by the function (including any errors)
+//   - error - only if dependency resolution fails or fn is not a function
 //
-// If the last return value implements the `error` interface and is non-nil, it is returned.
-// All other return values are collected into the InvokeResult.
-//
-// An error is also returned if:
-//   - `fn` is not a function,
-//   - any dependency could not be resolved.
+// All return values from the invoked function are collected in the []any slice,
+// including any error values. The caller is responsible for checking and handling
+// these values as appropriate.
 type Invoker struct {
 	resolver *Resolver
 }
 
 // Invoke invokes specified function.
-func (i *Invoker) Invoke(fn any) (*InvokeResult, error) {
+func (i *Invoker) Invoke(fn any) ([]any, error) {
 	// Get reflection of the fn.
 	fnValue := reflect.ValueOf(fn)
 	if fnValue.Kind() != reflect.Func {
@@ -63,42 +59,12 @@ func (i *Invoker) Invoke(fn any) (*InvokeResult, error) {
 		fnInArgs = append(fnInArgs, fnArgPtrValue.Elem())
 	}
 
-	// Convert function results.
+	// Call the function and collect results.
 	fnOutArgs := fnValue.Call(fnInArgs)
-	result := &InvokeResult{
-		values: make([]any, 0, len(fnOutArgs)),
-		err:    nil,
-	}
-	for index, fnOut := range fnOutArgs {
-		// If it is the last return value.
-		if index == len(fnOutArgs)-1 {
-			// And type of the value is the error.
-			if fnOut.Type().Implements(errorType) {
-				// Use the value as an error.
-				// Ignore failed cast of nil error.
-				result.err, _ = fnOut.Interface().(error)
-			}
-		}
-
-		// Add value to the results slice.
-		result.values = append(result.values, fnOut.Interface())
+	values := make([]any, 0, len(fnOutArgs))
+	for _, fnOut := range fnOutArgs {
+		values = append(values, fnOut.Interface())
 	}
 
-	return result, nil
-}
-
-// InvokeResult provides access to the invocation result.
-type InvokeResult struct {
-	values []any
-	err    error
-}
-
-// Values returns a slice of function result values.
-func (r *InvokeResult) Values() []any {
-	return r.values
-}
-
-// Error returns function result error, if any.
-func (r *InvokeResult) Error() error {
-	return r.err
+	return values, nil
 }

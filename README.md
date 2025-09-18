@@ -106,23 +106,29 @@ Dependency injection service container for Golang projects.
       log.Fatalf("Failed to start service container: %s", err)
    }
    ```
-5. Alternatively to eager start with a `Start()` call it is possible to use `Resolver` or `Invoker` service. They will instantiate only the explicitly requested services and their transitive dependencies.
+5. Alternatively to eager start with a `Start()` call it is possible to resolve services on-demand. They will instantiate only the explicitly requested services and their transitive dependencies.
    ```go
    var myService *MyService
-   if err := container.Resolver().Resolve(&myService); err != nil {
+   if err := container.Resolve(&myService); err != nil {
        log.Fatalf("Failed to resolve dependency: %s", err)
    }
    myService.SayHello("World")
    ```
    or
    ```go
-   if err := container.Invoker().Invoke(func(myService *MyService) {
+   values, err := container.Invoke(func(myService *MyService) error {
        myService.SayHello("World")
-   }); err != nil {
+       return nil
+   })
+   if err != nil {
        log.Fatalf("Failed to invoke a function: %s", err)
    }
+   // Check function's returned error
+   if values[0] != nil {
+       log.Fatalf("Function returned error: %s", values[0])
+   }
    ```
-   `Resolver` and `Invoker` could also serve as an entry point to the application, especially when it's a simple console tool that runs a task and exits.
+   The `Resolve` and `Invoke` methods can serve as an entry point to the application, especially when it's a simple console tool that runs a task and exits.
    The [console command example](./examples/01_console_command/main.go) demonstrates this approach.
 
 ## Key Concepts
@@ -277,15 +283,16 @@ func (c *Container) Done() <-chan struct{}
 // Factories returns all registered service factories.
 func (c *Container) Factories() []*Factory
 
-// Resolver returns a service resolver for on-demand dependency injection.
-// If container is not started, only requested services
-// will be spawned on `resolver.Resolve(...)` call.
-func (c *Container) Resolver() *Resolver
+// Resolve resolves a service dependency and stores it in the provided pointer.
+// If the container is not yet started, only requested services and their
+// transitive dependencies will be instantiated.
+func (c *Container) Resolve(varPtr any) error
 
-// Invoker returns a function invoker that can call user-provided functions
-// with auto-injected dependencies. If container is not started, only requested 
-// services will be spawned to invoke the func.
-func (c *Container) Invoker() *Invoker
+// Invoke calls the provided function with auto-injected dependencies.
+// Returns all values returned by the function as []any, and an error if
+// dependency resolution fails. If the container is not yet started, only 
+// requested services and their transitive dependencies will be instantiated.
+func (c *Container) Invoke(fn any) ([]any, error)
 ```
 
 ### Container Errors

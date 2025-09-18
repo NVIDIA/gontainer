@@ -28,15 +28,14 @@ func TestInvokerService(t *testing.T) {
 	tests := []struct {
 		name    string
 		haveFn  any
-		wantFn  func(t *testing.T, value *InvokeResult)
+		wantFn  func(t *testing.T, values []any)
 		wantErr bool
 	}{
 		{
 			name:   "ReturnNothing",
 			haveFn: func(var1 string, var2 int) {},
-			wantFn: func(t *testing.T, value *InvokeResult) {
-				equal(t, len(value.Values()), 0)
-				equal(t, value.Error(), nil)
+			wantFn: func(t *testing.T, values []any) {
+				equal(t, len(values), 0)
 			},
 			wantErr: false,
 		},
@@ -45,27 +44,25 @@ func TestInvokerService(t *testing.T) {
 			haveFn: func(var1 string, var2 int) (string, int, bool) {
 				return var1 + "-X", var2 + 100, true
 			},
-			wantFn: func(t *testing.T, value *InvokeResult) {
-				equal(t, len(value.Values()), 3)
-				equal(t, value.Values()[0], "string-X")
-				equal(t, value.Values()[1], 223)
-				equal(t, value.Values()[2], true)
-				equal(t, value.Error(), nil)
+			wantFn: func(t *testing.T, values []any) {
+				equal(t, len(values), 3)
+				equal(t, values[0], "string-X")
+				equal(t, values[1], 223)
+				equal(t, values[2], true)
 			},
 			wantErr: false,
 		},
 		{
-			name: "ReturnNoValuesWithError",
+			name: "ReturnValuesWithError",
 			haveFn: func(var1 string, var2 int) (string, int, error) {
 				return var1 + "-X", var2 + 100, errors.New("failed")
 			},
-			wantFn: func(t *testing.T, value *InvokeResult) {
-				equal(t, len(value.Values()), 3)
-				equal(t, value.Values()[0], "string-X")
-				equal(t, value.Values()[1], 223)
-				equal(t, value.Values()[2].(error).Error(), "failed")
-				equal(t, value.Error().Error(), "failed")
-				equal(t, value.Error(), value.Values()[2])
+			wantFn: func(t *testing.T, values []any) {
+				equal(t, len(values), 3)
+				equal(t, values[0], "string-X")
+				equal(t, values[1], 223)
+				// Error is returned as a regular value
+				equal(t, values[2].(error).Error(), "failed")
 			},
 			wantErr: false,
 		},
@@ -74,23 +71,20 @@ func TestInvokerService(t *testing.T) {
 			haveFn: func(var1 string, var2 int) (error, error, error) {
 				return nil, errors.New("error-1"), errors.New("error-2")
 			},
-			wantFn: func(t *testing.T, value *InvokeResult) {
-				equal(t, len(value.Values()), 3)
-				equal(t, value.Values()[0], nil)
-				equal(t, value.Values()[1].(error).Error(), "error-1")
-				equal(t, value.Values()[2].(error).Error(), "error-2")
-				equal(t, value.Error().Error(), "error-2")
-				equal(t, value.Error(), value.Values()[2])
+			wantFn: func(t *testing.T, values []any) {
+				equal(t, len(values), 3)
+				equal(t, values[0], nil)
+				equal(t, values[1].(error).Error(), "error-1")
+				equal(t, values[2].(error).Error(), "error-2")
 			},
 			wantErr: false,
 		},
 		{
 			name:   "ReturnNilError",
 			haveFn: func(var1 string, var2 int) error { return nil },
-			wantFn: func(t *testing.T, value *InvokeResult) {
-				equal(t, len(value.Values()), 1)
-				equal(t, value.Values()[0], nil)
-				equal(t, value.Error(), nil)
+			wantFn: func(t *testing.T, values []any) {
+				equal(t, len(values), 1)
+				equal(t, values[0], nil)
 			},
 			wantErr: false,
 		},
@@ -108,13 +102,13 @@ func TestInvokerService(t *testing.T) {
 				equal(t, container.Close(), nil)
 			}()
 
-			result, err := container.Invoker().Invoke(tt.haveFn)
+			values, err := container.Invoke(tt.haveFn)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Invoke() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if tt.wantFn != nil {
-				tt.wantFn(t, result)
+				tt.wantFn(t, values)
 			}
 		})
 	}
