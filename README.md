@@ -277,9 +277,6 @@ func (c *Container) Done() <-chan struct{}
 // Factories returns all registered service factories.
 func (c *Container) Factories() []*Factory
 
-// Services returns all currently instantiated services.
-func (c *Container) Services() []any
-
 // Resolver returns a service resolver for on-demand dependency injection.
 // If container is not started, only requested services
 // will be spawned on `resolver.Resolve(...)` call.

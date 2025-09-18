@@ -79,20 +79,11 @@ func TestContainerLifecycle(t *testing.T) {
 	)
 	equal(t, err, nil)
 	equal(t, container == nil, false)
-
-	// Assert factories and services.
 	equal(t, len(container.Factories()), 10)
-	equal(t, len(container.Services()), 0)
 
 	// Start all factories in the container.
 	equal(t, container.Start(), nil)
 	equal(t, factoryStarted.Load(), true)
-	equal(t, serviceClosed.Load(), false)
-
-	// Assert factories and services.
-	equal(t, len(container.Factories()), 10)
-	equal(t, len(container.Services()), 12)
-
 	equal(t, serviceClosed.Load(), false)
 
 	// Close all factories in the container.
@@ -105,10 +96,6 @@ func TestContainerLifecycle(t *testing.T) {
 	default:
 		t.Fatalf("context is not closed")
 	}
-
-	// Assert factories and services.
-	equal(t, len(container.Factories()), 10)
-	equal(t, len(container.Services()), 0)
 }
 
 type testService1 struct{}
