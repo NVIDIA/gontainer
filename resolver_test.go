@@ -19,7 +19,6 @@ package gontainer
 
 import (
 	"testing"
-	"time"
 )
 
 // TestResolverService tests resolver service.
@@ -41,9 +40,6 @@ func TestResolverService(t *testing.T) {
 
 	// Start all factories in the container.
 	equal(t, container.Start(), nil)
-
-	// Let async service function launch.
-	time.Sleep(time.Millisecond)
 
 	// Close all factories in the container.
 	equal(t, container.Close(), nil)

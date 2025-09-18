@@ -184,7 +184,6 @@ func (r *registry) closeFactories() error {
 			service := outValue.Interface()
 
 			// Close service implementing `Close() error` interface.
-			// Service functions will wait for the function return.
 			if closer, ok := service.(interface{ Close() error }); ok {
 				if err := closer.Close(); err != nil {
 					errs = append(errs, fmt.Errorf(
@@ -379,17 +378,6 @@ func (r *registry) spawnFactory(factory *factory) error {
 		return fmt.Errorf("%w: %w", ErrFactoryReturnedError, err)
 	}
 
-	// Handle factory out functions as regular objects.
-	for outIndex, outValue := range outValues {
-		if serviceFuncValue, ok := isServiceFunc(outValue); ok {
-			serviceFuncResult, err := startServiceFunc(serviceFuncValue)
-			if err != nil {
-				return fmt.Errorf("failed to start factory func: %w", err)
-			}
-			outValues[outIndex] = serviceFuncResult
-		}
-	}
-
 	// Save the factory spawn status.
 	factory.setSpawned(true)
 
@@ -402,14 +390,6 @@ func (r *registry) spawnFactory(factory *factory) error {
 	r.mutex.Unlock()
 
 	return nil
-}
-
-// function represents service func return value wrapper.
-type funcResult chan error
-
-// Close awaits service function and returns result error.
-func (f funcResult) Close() error {
-	return <-f
 }
 
 // isNonEmptyInterface returns true when argument is an interface with methods.
@@ -432,84 +412,6 @@ func isErrorInterface(typ reflect.Type) bool {
 func isContextInterface(typ reflect.Type) bool {
 	ctxType := reflect.TypeOf((*context.Context)(nil)).Elem()
 	return typ.Kind() == reflect.Interface && typ.Implements(ctxType)
-}
-
-// isServiceFunc returns true when the argument is a service function.
-// The `outValue` can be an `any` type with a function in the value
-// (when the factory declares `any` return type), or the `function` type
-// (when the factory declares explicit return type).
-func isServiceFunc(outValue reflect.Value) (reflect.Value, bool) {
-	// Unbox the value if it is an any interface.
-	if isEmptyInterface(outValue.Type()) {
-		outValue = outValue.Elem()
-	}
-
-	// Check if the result value kind is a func kind.
-	if outValue.Kind() != reflect.Func {
-		return reflect.Value{}, false
-	}
-
-	// The service func type must have no user-defined methods,
-	// Otherwise it could be a service instance based on the func type
-	// but with a several public methods implementing public interface.
-	if outValue.NumMethod() > 0 {
-		return reflect.Value{}, false
-	}
-
-	// The service func type must have no input arguments.
-	if outValue.Type().NumIn() > 0 {
-		return reflect.Value{}, false
-	}
-
-	// The service func type could be just a `func()` type.
-	if outValue.Type().NumOut() == 0 {
-		return outValue, true
-	}
-
-	// The service func type could be a `func() error` type.
-	if outValue.Type().NumOut() == 1 {
-		if isErrorInterface(outValue.Type().Out(0)) {
-			return outValue, true
-		}
-	}
-
-	// All other types like `func(name string) (MyType, error)`
-	// or `func() MyType` or are not service functions.
-	return reflect.Value{}, false
-}
-
-// startServiceFunc wraps service function to the regular service object.
-func startServiceFunc(serviceFuncValue reflect.Value) (reflect.Value, error) {
-	// Prepare closable result chan as a service function replacement.
-	// The service function result error will be returned from the
-	// result wrapper chan `Close() error` method right to the
-	// service container on the termination stage.
-	funcResultChan := funcResult(make(chan error))
-
-	// Start the service function in background.
-	serviceFunc := serviceFuncValue.Interface()
-	switch serviceFunc := serviceFunc.(type) {
-	case func() error:
-		go func() {
-			err := serviceFunc()
-			funcResultChan <- err
-		}()
-	case func():
-		go func() {
-			serviceFunc()
-			funcResultChan <- nil
-		}()
-	default:
-		// This case must never be reached.
-		// Protected by the `isServiceFunc()`.
-		return reflect.Value{}, fmt.Errorf(
-			"unexpected service function signature: %T",
-			serviceFuncValue.Interface(),
-		)
-	}
-
-	// Return reflected value of the wrapper.
-	return reflect.ValueOf(funcResultChan), nil
 }
 
 // errorType contains reflection type for error variable.
