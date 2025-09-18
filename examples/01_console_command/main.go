@@ -82,7 +82,7 @@ func main() {
 
 	// Application entrypoint using container.Invoke.
 	// It will resolve all dependencies for the function.
-	_, err = container.Invoke(func(svc *HelloService) {
+	values, err := container.Invoke(func(svc *HelloService) {
 		// Here the application bootstrap code could be located.
 		// It can access all services from the container.
 		// For example, HTTP server could be started here.
@@ -91,6 +91,8 @@ func main() {
 	if err != nil {
 		log.Panicf("Failed to invoke: %s", err)
 	}
+	// values is empty since the function returns nothing
+	_ = values
 
 	// - or -
 

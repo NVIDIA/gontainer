@@ -116,10 +116,16 @@ Dependency injection service container for Golang projects.
    ```
    or
    ```go
-   if err := container.Invoke(func(myService *MyService) {
+   values, err := container.Invoke(func(myService *MyService) error {
        myService.SayHello("World")
-   }); err != nil {
+       return nil
+   })
+   if err != nil {
        log.Fatalf("Failed to invoke a function: %s", err)
+   }
+   // Check function's returned error
+   if values[0] != nil {
+       log.Fatalf("Function returned error: %s", values[0])
    }
    ```
    The `Resolve` and `Invoke` methods can serve as an entry point to the application, especially when it's a simple console tool that runs a task and exits.
@@ -283,9 +289,10 @@ func (c *Container) Factories() []*Factory
 func (c *Container) Resolve(varPtr any) error
 
 // Invoke calls the provided function with auto-injected dependencies.
-// If the container is not yet started, only requested services and their
-// transitive dependencies will be instantiated.
-func (c *Container) Invoke(fn any) (*InvokeResult, error)
+// Returns all values returned by the function as []any, and an error if
+// dependency resolution fails. If the container is not yet started, only 
+// requested services and their transitive dependencies will be instantiated.
+func (c *Container) Invoke(fn any) ([]any, error)
 ```
 
 ### Container Errors

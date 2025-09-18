@@ -200,6 +200,10 @@ func (c *Container) Factories() []*Factory {
 // If the container is not yet started, only requested services and their
 // transitive dependencies will be instantiated.
 func (c *Container) Resolve(varPtr any) error {
+	// Acquire read lock.
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
 	return c.resolver.Resolve(varPtr)
 }
 
@@ -207,6 +211,11 @@ func (c *Container) Resolve(varPtr any) error {
 // The function's arguments will be resolved from the container.
 // If the container is not yet started, only requested services and their
 // transitive dependencies will be instantiated.
-func (c *Container) Invoke(fn any) (*InvokeResult, error) {
+func (c *Container) Invoke(fn any) ([]any, error) {
+	// Acquire read lock.
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	// Invoke the function.
 	return c.invoker.Invoke(fn)
 }
