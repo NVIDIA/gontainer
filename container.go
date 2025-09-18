@@ -196,28 +196,6 @@ func (c *Container) Factories() []*Factory {
 	return factories
 }
 
-// Services returns all currently instantiated services.
-func (c *Container) Services() []any {
-	// Acquire read lock.
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	select {
-	case <-c.ctx.Done():
-		return nil
-	default:
-		services := make([]any, 0, len(c.registry.factories))
-		for _, factory := range c.registry.factories {
-			if factory.getSpawned() {
-				for _, serviceValue := range factory.getOutValues() {
-					services = append(services, serviceValue.Interface())
-				}
-			}
-		}
-		return services
-	}
-}
-
 // Resolver returns a service resolver for on-demand dependency injection.
 // If the container is not yet started, only requested services and their
 // transitive dependencies will be instantiated.
