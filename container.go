@@ -58,14 +58,14 @@ func New(ctx context.Context, factories ...*Factory) (result *Container, err err
 	}
 
 	// Register service resolver instance in the registry.
-	if factory, err := NewService[*Resolver](resolver).factory(); err != nil {
+	if factory, err := NewService(resolver).factory(); err != nil {
 		return nil, fmt.Errorf("failed to register service resolver: %w", err)
 	} else {
 		registry.registerFactory(factory)
 	}
 
 	// Register function invoker instance in the registry.
-	if factory, err := NewService[*Invoker](invoker).factory(); err != nil {
+	if factory, err := NewService(invoker).factory(); err != nil {
 		return nil, fmt.Errorf("failed to register function invoker: %w", err)
 	} else {
 		registry.registerFactory(factory)
@@ -114,10 +114,9 @@ type Container struct {
 	registry *registry
 }
 
-// Start initializes all registered services in dependency order.
-// Services are instantiated via their factories.
-// Returns an error if initialization fails.
+// Start initializes all registered services.
 func (c *Container) Start() (resultErr error) {
+	// Recover from panics during the start process.
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			_ = c.Close()
@@ -147,7 +146,8 @@ func (c *Container) Start() (resultErr error) {
 	return nil
 }
 
-// Close shuts down all services in reverse order of their instantiation.
+// Close closes the service container and all services.
+// Services close order is reverse to the instantiation order.
 // This method blocks until all services are properly closed.
 func (c *Container) Close() (err error) {
 	// Acquire write lock.
