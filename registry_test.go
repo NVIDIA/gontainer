@@ -34,9 +34,10 @@ func TestRegistryRegisterFactory(t *testing.T) {
 		return 1, nil
 	}
 
+	ctx := context.Background()
 	opts := WithMetadata("test", func() {})
 	source := NewFactory(fun, opts)
-	factory, err := source.factory()
+	factory, err := source.factory(ctx)
 	equal(t, err, nil)
 
 	registry := &registry{}
@@ -192,9 +193,10 @@ func TestRegistryValidateFactories(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
 			registry := &registry{}
 			for _, source := range tt.factories {
-				factory, err := source.factory()
+				factory, err := source.factory(ctx)
 				equal(t, err, nil)
 				equal(t, factory == nil, false)
 				registry.registerFactory(factory)
@@ -208,7 +210,8 @@ func TestRegistryValidateFactories(t *testing.T) {
 func TestRegistrySpawnFactories(t *testing.T) {
 	source := NewFactory(func() bool { return true })
 
-	factory, err := source.factory()
+	ctx := context.Background()
+	factory, err := source.factory(ctx)
 	equal(t, err, nil)
 	equal(t, factory == nil, false)
 
@@ -229,7 +232,8 @@ func TestRegistryResolveParallel(t *testing.T) {
 		return true
 	})
 
-	factory, err := source.factory()
+	ctx := context.Background()
+	factory, err := source.factory(ctx)
 	equal(t, err, nil)
 	equal(t, factory == nil, false)
 
@@ -285,9 +289,10 @@ func TestRegistryResolveFuncServices(t *testing.T) {
 		}),
 	}
 
+	ctx := context.Background()
 	registry := &registry{}
 	for _, source := range sources {
-		factory, err := source.factory()
+		factory, err := source.factory(ctx)
 		equal(t, err, nil)
 		equal(t, factory == nil, false)
 		registry.registerFactory(factory)
@@ -310,7 +315,8 @@ func TestRegistrySpawnWithErrors(t *testing.T) {
 		return false, errors.New("failed to create new service")
 	})
 
-	factory, err := source.factory()
+	ctx := context.Background()
+	factory, err := source.factory(ctx)
 	equal(t, err, nil)
 	equal(t, factory == nil, false)
 

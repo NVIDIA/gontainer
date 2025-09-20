@@ -77,7 +77,7 @@ func (f *Factory) Metadata() FactoryMetadata {
 // factory produces internal representation for the factory.
 // Separate internal representation is used to let single
 // factory instance be used in multiple containers.
-func (f *Factory) factory() (*factory, error) {
+func (f *Factory) factory(ctx context.Context) (*factory, error) {
 	// Check factory configured.
 	if f.fn == nil {
 		return nil, errors.New("func is nil")
@@ -116,7 +116,7 @@ func (f *Factory) factory() (*factory, error) {
 	}
 
 	// Prepare cancellable context for the factory services.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 
 	// Prepare registry factory instance.
 	return &factory{
