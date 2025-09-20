@@ -29,31 +29,7 @@ import (
 
 // FactoryFunc declares the type for a service factory function.
 // A factory function may accept dependencies as input parameters and
-// return zero or more service instances, optionally followed by an error.
-// The container validates its signature at runtime using reflection.
-//
-// Valid example signatures:
-//
-//	// No dependencies, no produced services.
-//	func()
-//
-//	// No dependencies, one produced service.
-//	func() *MyService
-//
-//	// One dependency, one produced service, an error.
-//	func(db *Database) (*Repo, error)
-//
-//	// Multiple dependencies, multiple produced services, an error.
-//	func(log *slog.Logger, db *Database) (*Repo1, *Repo2, error)
-//
-//	// Multiple dependencies, multiple produced services, no error.
-//	func(log *slog.Logger, db *Database) (*Repo1, *Repo2, *Repo3)
-//
-//	// One optional dependency, one produced service, an error.
-//	func(optionalDB gontainer.Optional[*Database]) (*Repo, error)
-//
-//	// One multiple dependency, one produced service, an error.
-//	func(multipleDBs gontainer.Multiple[IDatabase]) (*Repo, error)
+// must return exactly one service, optionally followed by an error.
 type FactoryFunc any
 
 // FactoryMetadata defines a key-value store for attaching metadata to a factory.
@@ -104,14 +80,14 @@ func (f *Factory) Metadata() FactoryMetadata {
 func (f *Factory) factory() (*factory, error) {
 	// Check factory configured.
 	if f.fn == nil {
-		return nil, errors.New("invalid factory func: no func specified")
+		return nil, errors.New("func is nil")
 	}
 
 	// Validate factory type and signature.
 	funcType := reflect.TypeOf(f.fn)
 	funcValue := reflect.ValueOf(f.fn)
 	if funcType.Kind() != reflect.Func {
-		return nil, fmt.Errorf("invalid factory func: not a function: %s", funcType)
+		return nil, fmt.Errorf("invalid type: %s", funcType)
 	}
 
 	// Index factory input types from the function signature.
@@ -122,15 +98,21 @@ func (f *Factory) factory() (*factory, error) {
 
 	// Index factory output types from the function signature.
 	outTypes := make([]reflect.Type, 0, funcType.NumOut())
-	outError := false
 	for index := 0; index < funcType.NumOut(); index++ {
-		if index != funcType.NumOut()-1 || funcType.Out(index) != errorType {
-			// Register regular factory output type.
-			outTypes = append(outTypes, funcType.Out(index))
-		} else {
-			// Register last output index as an error.
-			outError = true
-		}
+		outTypes = append(outTypes, funcType.Out(index))
+	}
+
+	// Validate factory output types.
+	switch {
+	// Factory returns exactly one service.
+	case len(outTypes) == 1 && !isEmptyInterface(outTypes[0]):
+
+	// Factory returns a service and an error.
+	case len(outTypes) == 2 && !isEmptyInterface(outTypes[0]) && isErrorInterface(outTypes[1]):
+
+	// Factory has invalid out signature.
+	default:
+		return nil, fmt.Errorf("invalid signature: %s", funcType)
 	}
 
 	// Prepare cancellable context for the factory services.
@@ -145,8 +127,7 @@ func (f *Factory) factory() (*factory, error) {
 		funcType:  funcType,
 		funcValue: funcValue,
 		inTypes:   inTypes,
-		outTypes:  outTypes,
-		outError:  outError,
+		outType:   outTypes[0],
 	}, nil
 }
 
@@ -285,14 +266,11 @@ type factory struct {
 	// Factory input types.
 	inTypes []reflect.Type
 
-	// Factory output types.
-	outTypes []reflect.Type
+	// Factory output type.
+	outType reflect.Type
 
-	// Factory output error.
-	outError bool
-
-	// Factory result values.
-	outValues []reflect.Value
+	// Factory output value.
+	outValue reflect.Value
 }
 
 // getSpawned returns factory spawned status in a thread-safe way.
@@ -309,16 +287,16 @@ func (f *factory) setSpawned(value bool) {
 	f.spawned = value
 }
 
-// getOutValues returns factory output values in a thread-safe way.
-func (f *factory) getOutValues() []reflect.Value {
+// getOutValue returns factory output value in a thread-safe way.
+func (f *factory) getOutValue() reflect.Value {
 	f.mutex.RLock()
 	defer f.mutex.RUnlock()
-	return f.outValues
+	return f.outValue
 }
 
-// setOutValues sets factory output values in a thread-safe way.
-func (f *factory) setOutValues(values []reflect.Value) {
+// setOutValue sets factory output value in a thread-safe way.
+func (f *factory) setOutValue(value reflect.Value) {
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
-	f.outValues = values
+	f.outValue = value
 }

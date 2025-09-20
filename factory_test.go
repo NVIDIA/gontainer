@@ -24,26 +24,20 @@ import (
 
 // TestFactoryLoad tests factory loading.
 func TestFactoryLoad(t *testing.T) {
-	fun := func(a, b, c string) (int, bool, error) {
-		return 1, true, nil
+	fun := func(a, b, c string) (int, error) {
+		return 100500, nil
 	}
 
-	opts := WithMetadata("test", "value")
-	factory := NewFactory(fun, opts)
+	factory := NewFactory(fun)
 	state, err := factory.factory()
-	equal(t, err, nil)
 
-	equal(t, factory.metadata["test"], "value")
-	equal(t, factory.fn == nil, false)
-	equal(t, state.spawned, false)
-	equal(t, state.ctx != nil, true)
-	equal(t, state.cancel != nil, true)
-	equal(t, state.funcType.String(), "func(string, string, string) (int, bool, error)")
-	equal(t, state.funcValue.String(), "<func(string, string, string) (int, bool, error) Value>")
+	equal(t, err, nil)
+	equal(t, state.funcType.String(), "func(string, string, string) (int, error)")
+	equal(t, state.funcValue.String(), "<func(string, string, string) (int, error) Value>")
 	equal(t, fmt.Sprint(state.inTypes), "[string string string]")
-	equal(t, fmt.Sprint(state.outTypes), "[int bool]")
-	equal(t, state.outError, true)
-	equal(t, len(state.outValues), 0)
+	equal(t, fmt.Sprint(state.outType), "int")
+	equal(t, state.spawned, false)
+	equal(t, state.outValue.IsValid(), false)
 }
 
 // TestFactoryInfo tests factories info.
