@@ -22,19 +22,24 @@ import (
 	"testing"
 )
 
-// TestResolverService tests resolver service.
+// TestResolverService tests resolver service resolve.
 func TestResolverService(t *testing.T) {
+	svc1 := float64(100500)
+	svc2 := float32(100501)
+
 	container, err := New(
 		context.Background(),
-		NewFactory(func() string { return "string" }),
-		NewFactory(func(resolver *Resolver) {
-			var depExists string
+		NewService(svc1),
+		NewService(svc2),
+		NewFactory(func(resolver *Resolver) bool {
+			var depExists float64
 			equal(t, resolver.Resolve(&depExists), nil)
-			equal(t, depExists, "string")
+			equal(t, depExists, svc1)
 
 			var depNotExists int
 			equal(t, resolver.Resolve(&depNotExists) != nil, true)
 			equal(t, depNotExists, 0)
+			return true
 		}),
 	)
 	equal(t, err, nil)

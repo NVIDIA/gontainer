@@ -136,31 +136,21 @@ Dependency injection service container for Golang projects.
 ### Service Factories
 
 The **Service Factory** is a key component of the service container, serving as a mechanism for creating service instances.
-A service factory is essentially a function that accepts other services as arguments and returns one or more service instances,
+A service factory is essentially a function that accepts other services as arguments and returns one service instance,
 optionally along with an error. Using service factory signature, the service container will resolve and spawn all dependency
 services using reflection and fail, if there are unresolvable dependencies.
 
 ```go
-// MyServiceFactory is an example of a service factory.
-func MyServiceFactory( /* service dependencies */) *MyService {
-   // Initialize service instance.
-   return new(MyService)
-}
-
 // MyServiceFactory depends on two services.
-func MyServiceFactory(svc1 MyService1, svc2 MyService2) MyService {...}
+func MyServiceFactory(svc1 *MyService1, svc2 *MyService2) *MyService {...}
 
-// MyServiceFactory provides two services.
-func MyServiceFactory() (MyService1, MyService2) {...}
+// MyServiceFactory returns a service with error handling.
+func MyServiceFactory() (*MyService, error) {...}
 
-// MyServiceFactory provides two services and return an error.
-func MyServiceFactory() (MyService1, MyService2, error) {...}
-
-// MyServiceFactory returns only an error.
-func MyServiceFactory() error {...}
-
-// MyServiceFactory provides nothing.
-func MyServiceFactory() {...}
+// Invalid patterns - these will be rejected:
+// func() (*Service1, *Service2) {...}         // Multiple outputs not allowed
+// func() error {...}                          // Must return exactly one service
+// func() {...}                                // Must return exactly one service
 ```
 
 The factory function's role is to perform any necessary initializations and return a fully-configured service instance

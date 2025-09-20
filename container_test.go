@@ -25,11 +25,8 @@ import (
 	"testing"
 )
 
-// TestContainerLifecycle tests container lifecycle.
-func TestContainerLifecycle(t *testing.T) {
-	factoryStarted := atomic.Bool{}
-	serviceClosed := atomic.Bool{}
-
+// TestContainer tests service container.
+func TestContainer(t *testing.T) {
 	svc1 := &testService1{}
 	svc2 := &testService2{}
 	svc3 := &testService3{}
@@ -38,14 +35,17 @@ func TestContainerLifecycle(t *testing.T) {
 		return fmt.Errorf("svc5 error")
 	})
 
+	started := atomic.Bool{}
 	container, err := New(
 		context.Background(),
 		NewService(float64(100500)),
 		NewFactory(func() string { return "string" }),
-		NewFactory(func() (int, int64) { return 123, 456 }),
+		NewFactory(func() int { return 123 }),
+		NewFactory(func() int64 { return 456 }),
 		NewFactory(func() *testService1 { return svc1 }),
 		NewFactory(func() *testService2 { return svc2 }),
-		NewFactory(func() (*testService3, *testService4) { return svc3, svc4 }),
+		NewFactory(func() *testService3 { return svc3 }),
+		NewFactory(func() *testService4 { return svc4 }),
 		NewFactory(func() testService5 { return svc5 }),
 		NewFactory(func(
 			ctx context.Context,
@@ -59,7 +59,7 @@ func TestContainerLifecycle(t *testing.T) {
 			dep8 Optional[testService5],
 			dep9 Optional[interface{ Do5() error }],
 			dep10 Optional[func() error],
-		) any {
+		) float32 {
 			equal(t, dep1, float64(100500))
 			equal(t, dep2, "string")
 			equal(t, dep3.Get(), 123)
@@ -72,23 +72,21 @@ func TestContainerLifecycle(t *testing.T) {
 			equal(t, dep8.Get().Do5().Error(), "svc5 error")
 			equal(t, dep9.Get().Do5().Error(), "svc5 error")
 			equal(t, dep10.Get(), (func() error)(nil))
-			factoryStarted.Store(true)
-
-			return &testServiceWithClose{ctx: ctx, closed: &serviceClosed}
+			started.Store(true)
+			return 123
 		}),
 	)
 	equal(t, err, nil)
 	equal(t, container == nil, false)
-	equal(t, len(container.Factories()), 10)
+	equal(t, len(container.Factories()), 12)
+	equal(t, started.Load(), false)
 
 	// Start all factories in the container.
 	equal(t, container.Start(), nil)
-	equal(t, factoryStarted.Load(), true)
-	equal(t, serviceClosed.Load(), false)
+	equal(t, started.Load(), true)
 
 	// Close all factories in the container.
 	equal(t, container.Close(), nil)
-	equal(t, serviceClosed.Load(), true)
 
 	// Assert context is closed.
 	select {
