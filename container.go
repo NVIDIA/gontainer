@@ -52,9 +52,9 @@ func New(ctx context.Context, factories ...*Factory) (result *Container, err err
 	container := &Container{
 		ctx:      ctx,
 		cancel:   cancel,
+		registry: registry,
 		resolver: resolver,
 		invoker:  invoker,
-		registry: registry,
 	}
 
 	// Register service resolver instance in the registry.
@@ -104,14 +104,14 @@ type Container struct {
 	closer sync.Once
 	mutex  sync.RWMutex
 
+	// Services registry.
+	registry *registry
+
 	// Service resolver.
 	resolver *Resolver
 
 	// Function invoker.
 	invoker *Invoker
-
-	// Services registry.
-	registry *registry
 }
 
 // Start initializes all registered services.
