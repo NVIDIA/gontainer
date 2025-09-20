@@ -58,14 +58,14 @@ func New(ctx context.Context, factories ...*Factory) (result *Container, err err
 	}
 
 	// Register service resolver instance in the registry.
-	if factory, err := NewService(resolver).factory(); err != nil {
+	if factory, err := NewService(resolver).factory(ctx); err != nil {
 		return nil, fmt.Errorf("failed to register service resolver: %w", err)
 	} else {
 		registry.registerFactory(factory)
 	}
 
 	// Register function invoker instance in the registry.
-	if factory, err := NewService(invoker).factory(); err != nil {
+	if factory, err := NewService(invoker).factory(ctx); err != nil {
 		return nil, fmt.Errorf("failed to register function invoker: %w", err)
 	} else {
 		registry.registerFactory(factory)
@@ -73,7 +73,7 @@ func New(ctx context.Context, factories ...*Factory) (result *Container, err err
 
 	// Register provided factories in the registry.
 	for _, source := range factories {
-		if factory, err := source.factory(); err != nil {
+		if factory, err := source.factory(ctx); err != nil {
 			return nil, fmt.Errorf("failed to register factory: %w", err)
 		} else {
 			registry.registerFactory(factory)

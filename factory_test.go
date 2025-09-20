@@ -18,6 +18,7 @@
 package gontainer
 
 import (
+	"context"
 	"fmt"
 	"testing"
 )
@@ -28,8 +29,9 @@ func TestFactoryLoad(t *testing.T) {
 		return 100500, nil
 	}
 
+	ctx := context.Background()
 	factory := NewFactory(fun)
-	state, err := factory.factory()
+	state, err := factory.factory(ctx)
 
 	equal(t, err, nil)
 	equal(t, state.funcType.String(), "func(string, string, string) (int, error)")
