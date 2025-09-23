@@ -272,8 +272,8 @@ type factory struct {
 	// Factory output type.
 	outType reflect.Type
 
-	// Factory result mutex.
-	outValuesMu sync.RWMutex
+	// Factory output mutex.
+	outValueMu sync.RWMutex
 
 	// Factory output value.
 	outValue reflect.Value
@@ -295,14 +295,14 @@ func (f *factory) setSpawned(value bool) {
 
 // getOutValue returns factory output value in a thread-safe way.
 func (f *factory) getOutValue() reflect.Value {
-	f.outValuesMu.RLock()
-	defer f.outValuesMu.RUnlock()
+	f.outValueMu.RLock()
+	defer f.outValueMu.RUnlock()
 	return f.outValue
 }
 
 // setOutValue sets factory output value in a thread-safe way.
 func (f *factory) setOutValue(value reflect.Value) {
-	f.outValuesMu.Lock()
-	defer f.outValuesMu.Unlock()
+	f.outValueMu.Lock()
+	defer f.outValueMu.Unlock()
 	f.outValue = value
 }
