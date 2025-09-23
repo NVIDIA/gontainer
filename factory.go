@@ -264,8 +264,11 @@ type factory struct {
 	// Factory source.
 	source *Factory
 
-	// Factory mutex.
-	mutex sync.RWMutex
+	// Factory spawn mutex.
+	spawnMu sync.Mutex
+
+	// Factory spawned mutex.
+	spawnedMu sync.RWMutex
 
 	// Factory is spawned.
 	spawned bool
@@ -291,34 +294,37 @@ type factory struct {
 	// Factory output error.
 	outError bool
 
+	// Factory result mutex.
+	outValuesMu sync.RWMutex
+
 	// Factory result values.
 	outValues []reflect.Value
 }
 
 // getSpawned returns factory spawned status in a thread-safe way.
 func (f *factory) getSpawned() bool {
-	f.mutex.RLock()
-	defer f.mutex.RUnlock()
+	f.spawnedMu.RLock()
+	defer f.spawnedMu.RUnlock()
 	return f.spawned
 }
 
 // setSpawned sets factory spawned status in a thread-safe way.
 func (f *factory) setSpawned(value bool) {
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
+	f.spawnedMu.Lock()
+	defer f.spawnedMu.Unlock()
 	f.spawned = value
 }
 
 // getOutValues returns factory output values in a thread-safe way.
 func (f *factory) getOutValues() []reflect.Value {
-	f.mutex.RLock()
-	defer f.mutex.RUnlock()
+	f.outValuesMu.RLock()
+	defer f.outValuesMu.RUnlock()
 	return f.outValues
 }
 
 // setOutValues sets factory output values in a thread-safe way.
 func (f *factory) setOutValues(values []reflect.Value) {
-	f.mutex.Lock()
-	defer f.mutex.Unlock()
+	f.outValuesMu.Lock()
+	defer f.outValuesMu.Unlock()
 	f.outValues = values
 }
