@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // TestContainer tests service container.
@@ -84,6 +85,7 @@ func TestContainer(t *testing.T) {
 	// Start all factories in the container.
 	equal(t, container.Start(), nil)
 	equal(t, started.Load(), true)
+	time.Sleep(time.Millisecond)
 
 	// Close all factories in the container.
 	equal(t, container.Close(), nil)

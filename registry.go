@@ -318,6 +318,10 @@ func (r *registry) spawnFactory(factory *factory) error {
 		return ErrStackLimitReached
 	}
 
+	// Lock the factory spawn mutex.
+	factory.spawnMu.Lock()
+	defer factory.spawnMu.Unlock()
+
 	// Check factory already spawned.
 	if factory.getSpawned() {
 		return nil

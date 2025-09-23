@@ -227,7 +227,9 @@ func TestRegistrySpawnFactories(t *testing.T) {
 // TestRegistryResolveParallel tests corresponding registry method.
 // This test must be run with the race detector (`-race` flag).
 func TestRegistryResolveParallel(t *testing.T) {
+	invocations := atomic.Int32{}
 	source := NewFactory(func() bool {
+		invocations.Add(1)
 		time.Sleep(10 * time.Millisecond)
 		return true
 	})
@@ -253,6 +255,7 @@ func TestRegistryResolveParallel(t *testing.T) {
 
 	wg.Wait()
 	equal(t, factory.getSpawned(), true)
+	equal(t, invocations.Load(), int32(1))
 }
 
 // TestRegistrySpawnWithNil tests resolving of function services.
