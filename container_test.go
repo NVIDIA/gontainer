@@ -23,6 +23,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // TestContainerLifecycle tests container lifecycle.
@@ -98,6 +99,7 @@ func TestContainerLifecycle(t *testing.T) {
 	equal(t, container.Start(), nil)
 	equal(t, factoryStarted.Load(), true)
 	equal(t, serviceClosed.Load(), false)
+	time.Sleep(time.Millisecond)
 
 	// Assert factories and services.
 	equal(t, len(container.Factories()), 11)
