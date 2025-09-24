@@ -20,6 +20,7 @@ package gontainer
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 )
 
@@ -91,25 +92,27 @@ func TestInvokerService(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			container, err := New(
+			started := atomic.Bool{}
+
+			err := Run(
 				context.Background(),
 				NewFactory(func() string { return "string" }),
 				NewFactory(func() int { return 123 }),
+				NewFunction(func(invoker *Invoker) {
+					started.Store(true)
+
+					values, err := invoker.Invoke(tt.haveFn)
+					if (err != nil) != tt.wantErr {
+						t.Errorf("Invoke() error = %v, wantErr %v", err, tt.wantErr)
+						return
+					}
+					if tt.wantFn != nil {
+						tt.wantFn(t, values)
+					}
+				}),
 			)
 			equal(t, err, nil)
-			equal(t, container == nil, false)
-			defer func() {
-				equal(t, container.Close(), nil)
-			}()
-
-			values, err := container.Invoke(tt.haveFn)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Invoke() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if tt.wantFn != nil {
-				tt.wantFn(t, values)
-			}
+			equal(t, started.Load(), true)
 		})
 	}
 }

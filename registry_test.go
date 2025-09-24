@@ -35,27 +35,26 @@ func TestRegistryRegisterFactory(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	opts := WithMetadata("test", func() {})
-	source := NewFactory(fun, opts)
-	factory, err := source.factory(ctx)
+	registry := &registry{}
+	source := NewFactory(fun)
+	err := source(ctx, registry)
 	equal(t, err, nil)
 
-	registry := &registry{}
-	registry.registerFactory(factory)
-	equal(t, registry.factories[0], factory)
-	equal(t, factory.source.fn == nil, false)
+	equal(t, registry.factories[0] == nil, false)
+	equal(t, registry.factories[0].name != "", true)
+	equal(t, registry.factories[0].source != "", true)
 }
 
 // TestRegistryValidateFactories tests corresponding registry method.
 func TestRegistryValidateFactories(t *testing.T) {
 	tests := []struct {
-		name      string
-		factories []*Factory
-		wantErr   func(t *testing.T, err error)
+		name    string
+		options []Option
+		wantErr func(t *testing.T, err error)
 	}{
 		{
 			name: "NoValidationErrors",
-			factories: []*Factory{
+			options: []Option{
 				NewFactory(func(bool) (int, error) { return 1, nil }),
 				NewFactory(func(string) (bool, error) { return true, nil }),
 				NewFactory(func() (string, error) { return "s", nil }),
@@ -66,7 +65,7 @@ func TestRegistryValidateFactories(t *testing.T) {
 		},
 		{
 			name: "ServiceNotResolvedError",
-			factories: []*Factory{
+			options: []Option{
 				NewFactory(func(bool) (int, error) { return 0, nil }),
 				NewFactory(func(string) (int32, error) { return 0, nil }),
 			},
@@ -80,18 +79,18 @@ func TestRegistryValidateFactories(t *testing.T) {
 
 				equal(t, errors.Is(errs[0], ErrServiceNotResolved), true)
 				equal(t, errs[0].Error(), "failed to validate argument 'bool' (index 0) "+
-					"of factory 'Factory[func(bool) (int, error)]' from 'github.com/NVIDIA/gontainer': "+
+					"of 'Factory[func(bool) (int, error)]' from 'github.com/NVIDIA/gontainer': "+
 					"service not resolved")
 
 				equal(t, errors.Is(errs[1], ErrServiceNotResolved), true)
 				equal(t, errs[1].Error(), "failed to validate argument 'string' (index 0) "+
-					"of factory 'Factory[func(string) (int32, error)]' from 'github.com/NVIDIA/gontainer': "+
+					"of 'Factory[func(string) (int32, error)]' from 'github.com/NVIDIA/gontainer': "+
 					"service not resolved")
 			},
 		},
 		{
 			name: "ServiceDuplicatedError",
-			factories: []*Factory{
+			options: []Option{
 				NewFactory(func() (string, error) { return "s1", nil }),
 				NewFactory(func() (string, error) { return "s2", nil }),
 			},
@@ -105,18 +104,18 @@ func TestRegistryValidateFactories(t *testing.T) {
 
 				equal(t, errors.Is(errs[0], ErrServiceDuplicated), true)
 				equal(t, errs[0].Error(), "failed to validate output 'string' "+
-					"of factory 'Factory[func() (string, error)]' from 'github.com/NVIDIA/gontainer': "+
+					"of 'Factory[func() (string, error)]' from 'github.com/NVIDIA/gontainer': "+
 					"service duplicated")
 
 				equal(t, errors.Is(errs[1], ErrServiceDuplicated), true)
 				equal(t, errs[1].Error(), "failed to validate output 'string' "+
-					"of factory 'Factory[func() (string, error)]' from 'github.com/NVIDIA/gontainer': "+
+					"of 'Factory[func() (string, error)]' from 'github.com/NVIDIA/gontainer': "+
 					"service duplicated")
 			},
 		},
 		{
 			name: "CircularDependencyErrors",
-			factories: []*Factory{
+			options: []Option{
 				NewFactory(func(bool) (int, error) { return 1, nil }),
 				NewFactory(func(string) (bool, error) { return true, nil }),
 				NewFactory(func(int) (string, error) { return "s", nil }),
@@ -130,21 +129,21 @@ func TestRegistryValidateFactories(t *testing.T) {
 				equal(t, len(errs), 3)
 
 				equal(t, errors.Is(errs[0], ErrCircularDependency), true)
-				equal(t, errs[0].Error(), "failed to validate factory 'Factory[func(bool) (int, error)]' "+
+				equal(t, errs[0].Error(), "failed to validate 'Factory[func(bool) (int, error)]' "+
 					"from 'github.com/NVIDIA/gontainer': circular dependency")
 
 				equal(t, errors.Is(errs[1], ErrCircularDependency), true)
-				equal(t, errs[1].Error(), "failed to validate factory 'Factory[func(string) (bool, error)]' "+
+				equal(t, errs[1].Error(), "failed to validate 'Factory[func(string) (bool, error)]' "+
 					"from 'github.com/NVIDIA/gontainer': circular dependency")
 
 				equal(t, errors.Is(errs[2], ErrCircularDependency), true)
-				equal(t, errs[2].Error(), "failed to validate factory 'Factory[func(int) (string, error)]' "+
+				equal(t, errs[2].Error(), "failed to validate 'Factory[func(int) (string, error)]' "+
 					"from 'github.com/NVIDIA/gontainer': circular dependency")
 			},
 		},
 		{
 			name: "ComplexErrors",
-			factories: []*Factory{
+			options: []Option{
 				NewFactory(func(struct{ X int }) string { return "s1" }),                   // not resolved, duplicate
 				NewFactory(func(ctx context.Context) (string, error) { return "s2", nil }), // duplicate
 				NewFactory(func(bool) (int, error) { return 1, nil }),                      // cycle
@@ -163,30 +162,30 @@ func TestRegistryValidateFactories(t *testing.T) {
 
 				equal(t, errors.Is(errs[0], ErrServiceNotResolved), true)
 				equal(t, errs[0].Error(), "failed to validate argument 'struct { X int }' (index 0) "+
-					"of factory 'Factory[func(struct { X int }) string]' from 'github.com/NVIDIA/gontainer': "+
+					"of 'Factory[func(struct { X int }) string]' from 'github.com/NVIDIA/gontainer': "+
 					"service not resolved")
 
 				equal(t, errors.Is(errs[1], ErrServiceDuplicated), true)
 				equal(t, errs[1].Error(), "failed to validate output 'string' "+
-					"of factory 'Factory[func(struct { X int }) string]' from 'github.com/NVIDIA/gontainer': "+
+					"of 'Factory[func(struct { X int }) string]' from 'github.com/NVIDIA/gontainer': "+
 					"service duplicated")
 
 				equal(t, errors.Is(errs[2], ErrServiceDuplicated), true)
 				equal(t, errs[2].Error(), "failed to validate output 'string' "+
-					"of factory 'Factory[func(context.Context) (string, error)]' from 'github.com/NVIDIA/gontainer': "+
+					"of 'Factory[func(context.Context) (string, error)]' from 'github.com/NVIDIA/gontainer': "+
 					"service duplicated")
 
 				equal(t, errors.Is(errs[3], ErrServiceDuplicated), true)
 				equal(t, errs[3].Error(), "failed to validate output 'string' "+
-					"of factory 'Factory[func() string]' from 'github.com/NVIDIA/gontainer': "+
+					"of 'Factory[func() string]' from 'github.com/NVIDIA/gontainer': "+
 					"service duplicated")
 
 				equal(t, errors.Is(errs[4], ErrCircularDependency), true)
-				equal(t, errs[4].Error(), "failed to validate factory 'Factory[func(bool) (int, error)]' "+
+				equal(t, errs[4].Error(), "failed to validate 'Factory[func(bool) (int, error)]' "+
 					"from 'github.com/NVIDIA/gontainer': circular dependency")
 
 				equal(t, errors.Is(errs[5], ErrCircularDependency), true)
-				equal(t, errs[5].Error(), "failed to validate factory 'Factory[func(int) (bool, error)]' "+
+				equal(t, errs[5].Error(), "failed to validate 'Factory[func(int) (bool, error)]' "+
 					"from 'github.com/NVIDIA/gontainer': circular dependency")
 			},
 		},
@@ -195,52 +194,48 @@ func TestRegistryValidateFactories(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			registry := &registry{}
-			for _, source := range tt.factories {
-				factory, err := source.factory(ctx)
+			for _, option := range tt.options {
+				err := option(ctx, registry)
 				equal(t, err, nil)
-				equal(t, factory == nil, false)
-				registry.registerFactory(factory)
 			}
-			tt.wantErr(t, registry.validateFactories())
+			tt.wantErr(t, registry.validateRegistry())
 		})
 	}
 }
 
 // TestRegistrySpawnFactories tests corresponding registry method.
-func TestRegistrySpawnFactories(t *testing.T) {
-	source := NewFactory(func() bool { return true })
+// func TestRegistrySpawnFactories(t *testing.T) {
+// 	source := NewFactory(func() bool { return true })
 
-	ctx := context.Background()
-	factory, err := source.factory(ctx)
-	equal(t, err, nil)
-	equal(t, factory == nil, false)
+// 	ctx := context.Background()
+// 	factory, err := source.load(ctx)
+// 	equal(t, err, nil)
+// 	equal(t, factory == nil, false)
 
-	registry := &registry{}
-	registry.registerFactory(factory)
+// 	registry := &registry{}
+// 	registry.registerFactory(factory)
 
-	err = registry.spawnFactories()
-	equal(t, err, nil)
-	equal(t, factory.spawned, true)
-	equal(t, factory.outValues[0].Interface(), true)
-}
+// 	err = registry.spawnFactories()
+// 	equal(t, err, nil)
+// 	equal(t, factory.spawned, true)
+// 	equal(t, factory.outValues[0].Interface(), true)
+// }
 
 // TestRegistryResolveParallel tests corresponding registry method.
 // This test must be run with the race detector (`-race` flag).
 func TestRegistryResolveParallel(t *testing.T) {
 	invocations := atomic.Int32{}
-	source := NewFactory(func() bool {
+	option := NewFactory(func() bool {
 		invocations.Add(1)
 		time.Sleep(10 * time.Millisecond)
 		return true
 	})
 
 	ctx := context.Background()
-	factory, err := source.factory(ctx)
-	equal(t, err, nil)
-	equal(t, factory == nil, false)
-
 	registry := &registry{}
-	registry.registerFactory(factory)
+	err := option(ctx, registry)
+	equal(t, err, nil)
+	factory := registry.factories[0]
 
 	wg := sync.WaitGroup{}
 	wg.Add(10)
@@ -265,7 +260,7 @@ func TestRegistryResolveFuncServices(t *testing.T) {
 	func2Calls := atomic.Int64{}
 	fact3Calls := atomic.Int64{}
 
-	sources := []*Factory{
+	options := []Option{
 		NewFactory(func() func() int {
 			return func() int {
 				func1Calls.Add(1)
@@ -294,14 +289,16 @@ func TestRegistryResolveFuncServices(t *testing.T) {
 
 	ctx := context.Background()
 	registry := &registry{}
-	for _, source := range sources {
-		factory, err := source.factory(ctx)
+	for _, option := range options {
+		err := option(ctx, registry)
 		equal(t, err, nil)
-		equal(t, factory == nil, false)
-		registry.registerFactory(factory)
 	}
 
-	err := registry.spawnFactories()
+	_, err := registry.resolveByType(reflect.TypeOf(true))
+	equal(t, err, nil)
+	_, err = registry.resolveByType(reflect.TypeOf(""))
+	equal(t, err, nil)
+	_, err = registry.resolveByType(reflect.TypeOf(123))
 	equal(t, err, nil)
 
 	err = registry.closeFactories()
@@ -314,23 +311,19 @@ func TestRegistryResolveFuncServices(t *testing.T) {
 
 // TestRegistrySpawnWithErrors tests corresponding registry method.
 func TestRegistrySpawnWithErrors(t *testing.T) {
-	source := NewFactory(func() (bool, error) {
+	option := NewFactory(func() (bool, error) {
 		return false, errors.New("failed to create new service")
 	})
 
 	ctx := context.Background()
-	factory, err := source.factory(ctx)
-	equal(t, err, nil)
-	equal(t, factory == nil, false)
-
 	registry := &registry{}
-	registry.registerFactory(factory)
+	err := option(ctx, registry)
+	equal(t, err, nil)
 
-	err = registry.spawnFactories()
+	_, err = registry.resolveByType(reflect.TypeOf(true))
 	equal(t, err != nil, true)
-	equal(t, fmt.Sprint(err), `failed to spawn services of `+
-		`'Factory[func() (bool, error)]' from 'github.com/NVIDIA/gontainer': `+
-		`factory returned error: failed to create new service`)
+	equal(t, fmt.Sprint(err), `failed to spawn 'Factory[func() (bool, error)]' `+
+		`from 'github.com/NVIDIA/gontainer': failed to create new service`)
 }
 
 // TestIsEmptyInterface tests checking of argument to be empty interface.

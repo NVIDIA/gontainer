@@ -26,19 +26,18 @@ import (
 
 // TestFactoryLoad tests factory loading.
 func TestFactoryLoad(t *testing.T) {
-	fun := func(a, b, c string) (int, error) {
+	function := func(a, b, c string) (int, error) {
 		return 100500, nil
 	}
 
 	ctx := context.Background()
-	factory := NewFactory(fun)
-	state, err := factory.factory(ctx)
-
+	funcValue := reflect.ValueOf(function)
+	state, err := newFactory(ctx, "name", "source", funcValue, nil, nil, nil)
 	equal(t, err, nil)
 	equal(t, state.funcType.String(), "func(string, string, string) (int, error)")
 	equal(t, state.funcValue.String(), "<func(string, string, string) (int, error) Value>")
 	equal(t, fmt.Sprint(state.inTypes), "[string string string]")
-	equal(t, fmt.Sprint(state.outType), "int")
+	equal(t, fmt.Sprint(state.outTypes), "[int error]")
 	equal(t, state.spawned, false)
 	equal(t, state.outValues, []reflect.Value(nil))
 }
@@ -53,7 +52,7 @@ func TestFactoryInfo(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		arg1  *Factory
+		arg1  Option
 		want1 string
 		want2 string
 	}{
@@ -84,33 +83,23 @@ func TestFactoryInfo(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got1 := tt.arg1.Name()
+			ctx := context.Background()
+			registry := &registry{}
+			err := tt.arg1(ctx, registry)
+			equal(t, err, nil)
+			equal(t, len(registry.factories), 1)
+			factory := registry.factories[0]
+
+			got1 := factory.name
 			if got1 != tt.want1 {
 				t.Errorf("Factory.Name() got = %v, want %v", got1, tt.want1)
 			}
-			got2 := tt.arg1.Source()
+			got2 := factory.source
 			if got2 != tt.want2 {
 				t.Errorf("Factory.Source() got = %v, want %v", got2, tt.want2)
 			}
 		})
 	}
-}
-
-// TestFactoryMetadata tests factory metadata attachment.
-func TestFactoryMetadata(t *testing.T) {
-	fun := func(a, b, c string) (int, bool, error) {
-		return 1, true, nil
-	}
-
-	var opts []FactoryOpt
-	opts = append(opts, WithMetadata("key1", "value1"))
-	opts = append(opts, WithMetadata("key2", 123456))
-	factory := NewFactory(fun, opts...)
-
-	equal(t, factory.Metadata(), FactoryMetadata{
-		"key1": "value1",
-		"key2": 123456,
-	})
 }
 
 type globalType struct{}

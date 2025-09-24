@@ -291,7 +291,6 @@ The service container may return the following errors, which can be checked usin
 
 | Error                       | Description                                                                           |
 |-----------------------------|---------------------------------------------------------------------------------------|
-| `ErrFactoryReturnedError`   | Occurs when the factory function returns an error during invocation.                  |
 | `ErrServiceNotResolved`     | Occurs when resolving a service fails due to an unregistered service type.            |
 | `ErrServiceDuplicated`      | Occurs when a service type duplicate found during the initialization procedure.       |
 | `ErrCircularDependency`     | Occurs when a circular dependency found during the initialization procedure.          |
