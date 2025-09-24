@@ -54,8 +54,13 @@ func (r *registry) validateRegistry() error {
 	// Prepare result errors slice.
 	var errs []error
 
+	// Combine all factories and functions for validation.
+	factoriesAndFunctions := make([]*factory, 0, len(r.factories)+len(r.functions))
+	factoriesAndFunctions = append(factoriesAndFunctions, r.factories...)
+	factoriesAndFunctions = append(factoriesAndFunctions, r.functions...)
+
 	// Validate all input types are resolvable.
-	for _, factory := range r.factories {
+	for _, factory := range factoriesAndFunctions {
 		for index, inType := range factory.inTypes {
 			// Is this type a special factory context type?
 			if isContextInterface(inType) {
@@ -153,16 +158,16 @@ func (r *registry) invokeFunctions() error {
 
 	// Invoke all functions in the registry.
 	for _, factory := range r.functions {
-		outValues, err := r.invokeFactory(factory)
+		// Invoke the factory.
+		err := r.invokeFactory(factory)
 		if err != nil {
 			errs = append(errs, err)
 		}
 
-		if len(outValues) == 1 && !outValues[0].IsNil() {
-			err, _ := outValues[0].Interface().(error)
-			if err != nil {
-				errs = append(errs, err)
-			}
+		// Handle factory error.
+		err = factory.getOutError()
+		if err != nil {
+			errs = append(errs, err)
 		}
 	}
 
@@ -287,7 +292,8 @@ func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, err
 	// Spawn all found factories.
 	for _, factory := range factories {
 		// Handle found factory definition.
-		if err := r.spawnFactory(factory); err != nil {
+		err := r.spawnFactory(factory)
+		if err != nil {
 			return nil, fmt.Errorf(
 				"failed to spawn '%s' from '%s': %w",
 				factory.name, factory.source, err,
@@ -295,7 +301,8 @@ func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, err
 		}
 
 		// Handle error returned by the factory.
-		if err := factory.getOutError(); err != nil {
+		err = factory.getOutError()
+		if err != nil {
 			return nil, fmt.Errorf(
 				"failed to spawn '%s' from '%s': %w",
 				factory.name, factory.source, err,
@@ -346,16 +353,13 @@ func (r *registry) spawnFactory(factory *factory) error {
 	}
 
 	// Invoke the factory.
-	outValues, err := r.invokeFactory(factory)
+	err := r.invokeFactory(factory)
 	if err != nil {
 		return err
 	}
 
 	// Save the factory spawn status.
 	factory.setSpawned(true)
-
-	// Save the factory out values.
-	factory.setOutValues(outValues)
 
 	// Save the factory spawn order.
 	r.mutex.Lock()
@@ -366,7 +370,7 @@ func (r *registry) spawnFactory(factory *factory) error {
 }
 
 // invokeFactory calls the factory function and returns output values.
-func (r *registry) invokeFactory(factory *factory) ([]reflect.Value, error) {
+func (r *registry) invokeFactory(factory *factory) error {
 	// Get or spawn factory input values recursively.
 	inValues := make([]reflect.Value, 0, len(factory.inTypes))
 	for _, inType := range factory.inTypes {
@@ -380,7 +384,7 @@ func (r *registry) invokeFactory(factory *factory) ([]reflect.Value, error) {
 		// Resolve factory input dependency.
 		inValue, err := r.resolveService(inType)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve service: %w", err)
+			return fmt.Errorf("failed to resolve service: %w", err)
 		}
 
 		// Append resolved input value.
@@ -390,8 +394,11 @@ func (r *registry) invokeFactory(factory *factory) ([]reflect.Value, error) {
 	// Call the factory using input arguments.
 	outValues := factory.funcValue.Call(inValues)
 
-	// Return factory output values.
-	return outValues, nil
+	// Set factory output values.
+	factory.setOutValues(outValues)
+
+	// Factory invoked successfully.
+	return nil
 }
 
 // isEmptyInterface returns true when argument is an `any` interface.
