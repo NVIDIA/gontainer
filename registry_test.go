@@ -221,7 +221,7 @@ func TestRegistrySpawnFactories(t *testing.T) {
 	err = registry.spawnFactories()
 	equal(t, err, nil)
 	equal(t, factory.spawned, true)
-	equal(t, factory.outValue.Interface(), true)
+	equal(t, factory.outValues[0].Interface(), true)
 }
 
 // TestRegistryResolveParallel tests corresponding registry method.

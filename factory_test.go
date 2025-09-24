@@ -20,6 +20,7 @@ package gontainer
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"testing"
 )
 
@@ -39,7 +40,7 @@ func TestFactoryLoad(t *testing.T) {
 	equal(t, fmt.Sprint(state.inTypes), "[string string string]")
 	equal(t, fmt.Sprint(state.outType), "int")
 	equal(t, state.spawned, false)
-	equal(t, state.outValue.IsValid(), false)
+	equal(t, state.outValues, []reflect.Value(nil))
 }
 
 // TestFactoryInfo tests factories info.

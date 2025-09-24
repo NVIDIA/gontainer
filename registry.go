@@ -172,7 +172,8 @@ func (r *registry) closeFactories() error {
 		factory.cancel()
 
 		// Handle the single spawned factory output value.
-		outValue := factory.getOutValue()
+		outValue := factory.getOutValues()[0]
+
 		// Get the factory result object interface.
 		service := outValue.Interface()
 
@@ -280,7 +281,7 @@ func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, err
 		}
 
 		// Handle service from factory output (single value).
-		services = append(services, factory.getOutValue())
+		services = append(services, factory.getOutValues()[0])
 	}
 
 	return services, nil
@@ -359,7 +360,7 @@ func (r *registry) spawnFactory(factory *factory) error {
 	factory.setSpawned(true)
 
 	// Save the factory out values.
-	factory.setOutValue(outValues[0])
+	factory.setOutValues(outValues)
 
 	// Save the factory spawn order.
 	r.mutex.Lock()

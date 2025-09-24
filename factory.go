@@ -276,7 +276,7 @@ type factory struct {
 	outValueMu sync.RWMutex
 
 	// Factory output value.
-	outValue reflect.Value
+	outValues []reflect.Value
 }
 
 // getSpawned returns factory spawned status in a thread-safe way.
@@ -293,16 +293,16 @@ func (f *factory) setSpawned(value bool) {
 	f.spawned = value
 }
 
-// getOutValue returns factory output value in a thread-safe way.
-func (f *factory) getOutValue() reflect.Value {
+// getOutValues returns factory output values in a thread-safe way.
+func (f *factory) getOutValues() []reflect.Value {
 	f.outValueMu.RLock()
 	defer f.outValueMu.RUnlock()
-	return f.outValue
+	return f.outValues
 }
 
-// setOutValue sets factory output value in a thread-safe way.
-func (f *factory) setOutValue(value reflect.Value) {
+// setOutValues sets factory output values in a thread-safe way.
+func (f *factory) setOutValues(values []reflect.Value) {
 	f.outValueMu.Lock()
 	defer f.outValueMu.Unlock()
-	f.outValue = value
+	f.outValues = values
 }
