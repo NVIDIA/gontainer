@@ -46,9 +46,8 @@ func (s *HelloService) SayHello() {
 
 func main() {
 	// Initialize service container.
-	// Order of factories definition is non-restrictive.
-	log.Println("Creating new service container")
-	container, err := gontainer.New(
+	log.Println("Running service container")
+	err := gontainer.Run(
 		// Root context for container.
 		context.Background(),
 
@@ -61,49 +60,14 @@ func main() {
 		gontainer.NewFactory(func(svc *NameService) *HelloService {
 			return &HelloService{nameService: svc}
 		}),
+
+		// Function to use the HelloService instance.
+		gontainer.NewFunction(func(svc *HelloService) {
+			svc.SayHello()
+		}),
 	)
-
-	// Validate the container's proper handling of all factory functions.
-	// Errors may point to bad function signatures or unresolvable dependencies.
 	if err != nil {
-		log.Panicf("Failed to create service container: %s", err)
+		log.Panicf("Failed to run service container: %s", err)
 	}
-
-	// Close defined services in reverse-to-instantiation order.
-	// Every service can define it's own `Close() error` method.
-	// The `container.Close()` can be called several times.
-	defer func() {
-		log.Println("Closing service container by defer")
-		if err := container.Close(); err != nil {
-			log.Panicf("Failed to close service container: %s", err)
-		}
-		log.Println("Service container closed")
-	}()
-
-	// Application entrypoint using container.Invoke.
-	// It will resolve all dependencies for the function.
-	values, err := container.Invoke(func(svc *HelloService) {
-		// Here the application bootstrap code could be located.
-		// It can access all services from the container.
-		// For example, HTTP server could be started here.
-		svc.SayHello()
-	})
-	if err != nil {
-		log.Panicf("Failed to invoke: %s", err)
-	}
-	// values is empty since the function returns nothing
-	_ = values
-
-	// - or -
-
-	// Application entrypoint using container.Resolve.
-	// This code will manually resolve the dependency.
-	var helloService *HelloService
-	err = container.Resolve(&helloService)
-	if err != nil {
-		log.Panicf("Failed to resolve: %s", err)
-	}
-
-	// Manually call the service code.
-	helloService.SayHello()
+	log.Println("Service container has run successfully")
 }
