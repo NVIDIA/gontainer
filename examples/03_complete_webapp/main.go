@@ -20,6 +20,8 @@ package main
 import (
 	"context"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/NVIDIA/gontainer"
 	"github.com/NVIDIA/gontainer/examples/03_complete_webapp/services/app"
@@ -36,8 +38,12 @@ func init() {
 }
 
 func main() {
+	// Prepare close signals channel.
+	signals := make(chan os.Signal)
+	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
+
 	// Initialize the service container.
-	container, err := gontainer.New(
+	err := gontainer.Run(
 		// Root context for container.
 		context.Background(),
 
@@ -59,35 +65,9 @@ func main() {
 		// Enable application entrypoint factory.
 		// This service factory starts serving request.
 		// It is guaranteed to be the last called factory.
-		app.WithAppEntryPoint(),
+		app.WithAppEntryPoint(signals),
 	)
 	if err != nil {
-		panicf("Failed to create service container: %s", err)
+		panicf("Failed to run service container: %s", err)
 	}
-
-	// Initialize the container deferred close.
-	// Note: the `container.Close()` is also called from the `initCloseSignals()` func.
-	// It is OK to call it twice and guarantees that the container will be closed even
-	// if the `initCloseSignals()` fails or some else part of code will try to close it
-	// or the final `<-container.Done()` blocking read will be removed from the code.
-	defer func() {
-		if err := container.Close(); err != nil {
-			panicf("Failed to close service container: %s", err)
-		}
-	}()
-
-	// Instantiate all services in the container.
-	// This means: call all factory functions with the step of
-	// reordering of factories based on dependencies graph.
-	if err := container.Start(); err != nil {
-		panicf("Failed to start service container: %s", err)
-	}
-
-	// Initialize closing of container by a signal.
-	initCloseSignals(container, func(err error) {
-		panicf("Failed to close service container: %s", err)
-	})
-
-	// Wait for a container close by a signal.
-	<-container.Done()
 }

@@ -20,67 +20,72 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/NVIDIA/gontainer"
 )
-
-// MyService performs some crucial tasks.
-type MyService struct{}
-
-// SayHello outputs a friendly greeting.
-func (s *MyService) SayHello(name string) string {
-	return "Hello, " + name
-}
 
 // MyServer wraps HTTP Server.
 type MyServer struct {
 	server *http.Server
 }
 
-// Close implements close interface.
+// Serve starts serving requests on the socket.
+func (s *MyServer) Serve(socket net.Listener) error {
+	return s.server.Serve(socket)
+}
+
+// Close shuts down the server.
 func (s *MyServer) Close() error {
 	return s.server.Shutdown(context.Background())
 }
 
 func main() {
+	// Prepare close signals channel.
+	signals := make(chan os.Signal)
+	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
+
 	// Prepare external to container object.
 	logger := log.New(os.Stderr, "", log.LstdFlags)
 
-	// Initialize service container.
-	// Order of factories definition is non-restrictive.
-	log.Println("Creating service container instance")
-	container, err := gontainer.New(
+	// Run the service container.
+	log.Println("Running service container")
+	err := gontainer.Run(
 		// Root context for container.
 		context.Background(),
 
 		// Inject singleton object.
 		gontainer.NewService(logger),
 
-		// Factory function to create an instance of MyService.
-		gontainer.NewFactory(func() *MyService {
-			return new(MyService)
-		}),
+		// Provide MyServer factory.
+		gontainer.NewFactory(func(logger *log.Logger) (*MyServer, error) {
+			logger.Println("Creating new HTTP server with handlers")
 
-		// Factory function to create an instance of MyServer.
-		gontainer.NewFactory(func(logger *log.Logger, svc *MyService) (*MyServer, error) {
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				log.Printf("Received http request: %v", r.URL.Path)
-				_, _ = w.Write([]byte(svc.SayHello("Username")))
+				_, _ = w.Write([]byte("Hello, Username"))
 			})
 
-			logger.Println("Starting listening on: http://127.0.0.1:8080")
+			server := &http.Server{Handler: handler}
+			return &MyServer{server}, nil
+		}),
+
+		gontainer.NewFunction(func(logger *log.Logger, server *MyServer) error {
+			logger.Println("Opening listening socket on http://127.0.0.1:8080")
 			socket, err := net.Listen("tcp", "127.0.0.1:8080")
 			if err != nil {
-				return nil, err
+				logger.Printf("Failed to open listening socket: %s", err)
+				return fmt.Errorf("failed to open listening socket: %w", err)
 			}
 
-			logger.Println("Starting serving HTTP requests")
-			server := &http.Server{Handler: handler}
 			go func() {
+				logger.Println("Starting serving HTTP requests")
 				if err := server.Serve(socket); err != nil {
 					if !errors.Is(err, http.ErrServerClosed) {
 						logger.Printf("Error serving HTTP requests: %s", err)
@@ -88,41 +93,16 @@ func main() {
 				}
 			}()
 
-			return &MyServer{server}, nil
+			// Wait for the close signal.
+			<-signals
+
+			logger.Println("Close signal received, exiting")
+			return nil
 		}),
 	)
-
-	// Validate the container's proper handling of all factory functions.
-	// Errors may point to bad function signatures or unresolvable dependencies.
 	if err != nil {
-		log.Panicf("Failed to create service container: %s", err)
+		log.Panicf("Failed to run service container: %s", err)
 	}
 
-	// Close defined services in reverse-to-instantiation order.
-	// Every service can define it's own `Close() error` method.
-	// The `container.Close()` can be called several times.
-	defer func() {
-		log.Println("Closing service container by defer")
-		if err := container.Close(); err != nil {
-			log.Panicf("Failed to close service container: %s", err)
-		}
-		log.Println("Service container closed")
-	}()
-
-	// Instantiate all services within the container.
-	// This call will wait until all factories returns.
-	log.Println("Starting service container")
-	if err := container.Start(); err != nil {
-		log.Panicf("Failed to start service container: %s", err)
-	}
-
-	// Initialize closing of container by a signal.
-	initCloseSignals(container, func(err error) {
-		log.Panicf("Failed to close service container: %s", err)
-	})
-
-	// Wait for close by signal.
-	log.Println("Awaiting service container done")
-	<-container.Done()
-	log.Println("Service container done chan closed")
+	log.Println("Service container has run successfully")
 }

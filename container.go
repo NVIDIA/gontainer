@@ -116,6 +116,10 @@ func NewFactory(function any) Option {
 			getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
 			getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
 			getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
+
+		// Factory signature is invalid.
+		default:
+			return fmt.Errorf("invalid signature: %s", funcType)
 		}
 
 		// Load the factory internal representation.
@@ -213,6 +217,10 @@ func NewFunction(function any) Option {
 			getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
 			getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 			getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+
+		// Function signature is invalid.
+		default:
+			return fmt.Errorf("invalid signature: %s", funcType)
 		}
 
 		// Load the factory internal representation.

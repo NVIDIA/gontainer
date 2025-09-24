@@ -22,7 +22,7 @@ import (
 )
 
 // WithConfig returns a factory for the Config service.
-func WithConfig() *gontainer.Factory {
+func WithConfig() gontainer.Option {
 	return gontainer.NewFactory(func() *Config {
 		return NewConfig()
 	})

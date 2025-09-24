@@ -79,7 +79,7 @@ func (s *Server) Close() error {
 }
 
 // WithHTTPServer returns a factory for the HTTP server service.
-func WithHTTPServer() *gontainer.Factory {
+func WithHTTPServer() gontainer.Option {
 	return gontainer.NewFactory(
 		func(logger *slog.Logger, confsvc *confmod.Config) (*Server, error) {
 			// Prepare HTTP server config.
