@@ -27,7 +27,7 @@ import (
 )
 
 // WithAppEndpoints returns a factory which configures app endpoints.
-func WithAppEndpoints() *gontainer.Factory {
+func WithAppEndpoints() gontainer.Option {
 	return gontainer.NewFactory(
 		func(logger *slog.Logger, server *httpsvr.Server) {
 			logger = logger.With("service", "app")
@@ -43,7 +43,7 @@ func WithAppEndpoints() *gontainer.Factory {
 }
 
 // WithHealthEndpoints returns a factory which configures health check endpoints.
-func WithHealthEndpoints() *gontainer.Factory {
+func WithHealthEndpoints() gontainer.Option {
 	return gontainer.NewFactory(
 		func(logger *slog.Logger, server *httpsvr.Server) {
 			logger = logger.With("service", "app")
@@ -59,7 +59,7 @@ func WithHealthEndpoints() *gontainer.Factory {
 }
 
 // WithAppEntryPoint returns a factory which performs final app start and waits for termination.
-func WithAppEntryPoint(terminate <-chan os.Signal) *gontainer.Factory {
+func WithAppEntryPoint(terminate <-chan os.Signal) gontainer.Option {
 	return gontainer.NewFactory(
 		func(logger *slog.Logger, server *httpsvr.Server) error {
 			// Start serving requests.

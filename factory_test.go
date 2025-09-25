@@ -20,6 +20,7 @@ package gontainer
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"testing"
 )
 
@@ -30,16 +31,19 @@ func TestFactoryLoad(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	factory := NewFactory(fun)
-	state, err := factory.factory(ctx)
+	option := NewFactory(fun)
+	registry := &registry{}
+	equal(t, option(ctx, registry), nil)
+	factory := registry.factories[0]
 
-	equal(t, err, nil)
-	equal(t, state.funcType.String(), "func(string, string, string) (int, error)")
-	equal(t, state.funcValue.String(), "<func(string, string, string) (int, error) Value>")
-	equal(t, fmt.Sprint(state.inTypes), "[string string string]")
-	equal(t, fmt.Sprint(state.outType), "int")
-	equal(t, state.spawned, false)
-	equal(t, state.outValue.IsValid(), false)
+	equal(t, factory.funcType.String(), "func(string, string, string) (int, error)")
+	equal(t, factory.funcValue.String(), "<func(string, string, string) (int, error) Value>")
+	equal(t, fmt.Sprint(factory.inTypes), "[string string string]")
+	equal(t, fmt.Sprint(factory.outTypes), "[int error]")
+	equal(t, fmt.Sprint(factory.getOutType()), "int")
+	equal(t, factory.isSpawned, false)
+	equal(t, factory.outValues, []reflect.Value(nil))
+	equal(t, factory.getOutValue().IsValid(), false)
 }
 
 // TestFactoryInfo tests factories info.
@@ -52,7 +56,7 @@ func TestFactoryInfo(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		arg1  *Factory
+		arg1  Option
 		want1 string
 		want2 string
 	}{
@@ -83,14 +87,13 @@ func TestFactoryInfo(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got1 := tt.arg1.Name()
-			if got1 != tt.want1 {
-				t.Errorf("Factory.Name() got = %v, want %v", got1, tt.want1)
-			}
-			got2 := tt.arg1.Source()
-			if got2 != tt.want2 {
-				t.Errorf("Factory.Source() got = %v, want %v", got2, tt.want2)
-			}
+			ctx := context.Background()
+			registry := &registry{}
+			equal(t, tt.arg1(ctx, registry), nil)
+
+			factory := registry.factories[0]
+			equal(t, factory.name, tt.want1)
+			equal(t, factory.source, tt.want2)
 		})
 	}
 }
