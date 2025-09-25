@@ -26,7 +26,7 @@ import (
 	"sync"
 )
 
-// registry contains all defined factories metadata.
+// registry contains all defined factories.
 type registry struct {
 	factories []*factory
 	sequence  []*factory
