@@ -19,8 +19,6 @@ package gontainer
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"reflect"
 	"runtime"
 	"strings"
@@ -43,83 +41,6 @@ type Factory struct {
 
 	// Factory function location.
 	source string
-}
-
-// Name returns factory function name.
-func (f *Factory) Name() string {
-	return f.name
-}
-
-// Source returns factory function source.
-func (f *Factory) Source() string {
-	return f.source
-}
-
-// factory produces internal representation for the factory.
-// Separate internal representation is used to let single
-// factory instance be used in multiple containers.
-func (f *Factory) factory(ctx context.Context) (*factory, error) {
-	// Check factory configured.
-	if f.fn == nil {
-		return nil, errors.New("func is nil")
-	}
-
-	// Validate factory type and signature.
-	funcType := reflect.TypeOf(f.fn)
-	funcValue := reflect.ValueOf(f.fn)
-	if funcType.Kind() != reflect.Func {
-		return nil, fmt.Errorf("invalid type: %s", funcType)
-	}
-
-	// Index factory input types from the function signature.
-	inTypes := make([]reflect.Type, 0, funcType.NumIn())
-	for index := 0; index < funcType.NumIn(); index++ {
-		inTypes = append(inTypes, funcType.In(index))
-	}
-
-	// Index factory output types from the function signature.
-	outTypes := make([]reflect.Type, 0, funcType.NumOut())
-	for index := 0; index < funcType.NumOut(); index++ {
-		outTypes = append(outTypes, funcType.Out(index))
-	}
-
-	var outType reflect.Type
-
-	// Validate factory output types.
-	switch {
-	// Factory returns nothing.
-	case len(outTypes) == 0:
-
-	// Factory returns only error.
-	case len(outTypes) == 1 && isErrorInterface(outTypes[0]):
-
-	// Factory returns exactly one service.
-	case len(outTypes) == 1 && !isEmptyInterface(outTypes[0]):
-		outType = outTypes[0]
-
-	// Factory returns a service and an error.
-	case len(outTypes) == 2 && !isEmptyInterface(outTypes[0]) && isErrorInterface(outTypes[1]):
-		outType = outTypes[0]
-
-	// Factory has invalid out signature.
-	default:
-		return nil, fmt.Errorf("invalid signature: %s", funcType)
-	}
-
-	// Prepare cancellable context for the factory services.
-	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-
-	// Prepare registry factory instance.
-	return &factory{
-		source:    f,
-		spawned:   false,
-		ctx:       ctx,
-		cancel:    cancel,
-		funcType:  funcType,
-		funcValue: funcValue,
-		inTypes:   inTypes,
-		outType:   outType,
-	}, nil
 }
 
 // getFuncSource returns func source path.
@@ -159,25 +80,69 @@ func splitFuncName(funcFullName string) (string, string) {
 	return packageName, funcName
 }
 
+// newFactory loads factory function to the internal representation.
+func newFactory(
+	ctx context.Context, name, source string, funcValue reflect.Value,
+	getOutType getOutTypeFn, getOutValue getOutValueFn, getOutError getOutErrorFn,
+) (*factory, error) {
+	// Prepare function reflect type.
+	funcType := funcValue.Type()
+
+	// Index factory input types from the function signature.
+	inTypes := make([]reflect.Type, 0, funcType.NumIn())
+	for index := 0; index < funcType.NumIn(); index++ {
+		inTypes = append(inTypes, funcType.In(index))
+	}
+
+	// Index factory output types from the function signature.
+	outTypes := make([]reflect.Type, 0, funcType.NumOut())
+	for index := 0; index < funcType.NumOut(); index++ {
+		outTypes = append(outTypes, funcType.Out(index))
+	}
+
+	// Prepare cancellable context for the factory services.
+	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+
+	// Prepare registry factory instance.
+	return &factory{
+		ctx:       ctx,
+		cancel:    cancel,
+		name:      name,
+		source:    source,
+		funcType:  funcType,
+		funcValue: funcValue,
+		inTypes:   inTypes,
+		outTypes:  outTypes,
+
+		// Signature-dependent.
+		getOutTypeFn:  getOutType,
+		getOutValueFn: getOutValue,
+		getOutErrorFn: getOutError,
+	}, nil
+}
+
 // factory is the factory internal representation.
 type factory struct {
-	// Factory source.
-	source *Factory
-
-	// Factory spawn mutex.
-	spawnMu sync.Mutex
-
-	// Factory spawned mutex.
-	spawnedMu sync.RWMutex
-
-	// Factory is spawned.
-	spawned bool
-
 	// Factory context value.
 	ctx context.Context
 
 	// Factory context cancel.
 	cancel context.CancelFunc
+
+	// Factory func name.
+	name string
+
+	// Factory func source.
+	source string
+
+	// Factory spawn mutex.
+	spawnMu sync.Mutex
+
+	// Factory is spawned mutex.
+	isSpawnedMu sync.RWMutex
+
+	// Factory is spawned.
+	isSpawned bool
 
 	// Factory function type.
 	funcType reflect.Type
@@ -188,40 +153,99 @@ type factory struct {
 	// Factory input types.
 	inTypes []reflect.Type
 
-	// Factory output type.
-	outType reflect.Type
+	// Factory output types.
+	outTypes []reflect.Type
 
 	// Factory output mutex.
-	outValueMu sync.RWMutex
+	outValuesMu sync.RWMutex
 
-	// Factory output value.
-	outValue reflect.Value
+	// Factory output values.
+	outValues []reflect.Value
+
+	// Factory output type getter.
+	getOutTypeFn getOutTypeFn
+
+	// Factory output value getter.
+	getOutValueFn getOutValueFn
+
+	// Factory output error getter.
+	getOutErrorFn getOutErrorFn
 }
 
-// getSpawned returns factory spawned status in a thread-safe way.
-func (f *factory) getSpawned() bool {
-	f.spawnedMu.RLock()
-	defer f.spawnedMu.RUnlock()
-	return f.spawned
+// getIsSpawned returns factory spawned status in a thread-safe way.
+func (f *factory) getIsSpawned() bool {
+	f.isSpawnedMu.RLock()
+	defer f.isSpawnedMu.RUnlock()
+	return f.isSpawned
 }
 
-// setSpawned sets factory spawned status in a thread-safe way.
-func (f *factory) setSpawned(value bool) {
-	f.spawnedMu.Lock()
-	defer f.spawnedMu.Unlock()
-	f.spawned = value
+// setIsSpawned sets factory spawned status in a thread-safe way.
+func (f *factory) setIsSpawned(value bool) {
+	f.isSpawnedMu.Lock()
+	defer f.isSpawnedMu.Unlock()
+	f.isSpawned = value
+}
+
+// getOutValues returns factory output values in a thread-safe way.
+func (f *factory) getOutValues() []reflect.Value {
+	f.outValuesMu.RLock()
+	defer f.outValuesMu.RUnlock()
+	return f.outValues
+}
+
+// setOutValues sets factory output values in a thread-safe way.
+func (f *factory) setOutValues(values []reflect.Value) {
+	f.outValuesMu.Lock()
+	defer f.outValuesMu.Unlock()
+	f.outValues = values
+}
+
+// getOutType returns factory output type in a thread-safe way.
+func (f *factory) getOutType() reflect.Type {
+	return f.getOutTypeFn(f.outTypes)
 }
 
 // getOutValue returns factory output value in a thread-safe way.
 func (f *factory) getOutValue() reflect.Value {
-	f.outValueMu.RLock()
-	defer f.outValueMu.RUnlock()
-	return f.outValue
+	if !f.getIsSpawned() {
+		return reflect.Value{}
+	}
+
+	// Get the factory output value.
+	outValues := f.getOutValues()
+	return f.getOutValueFn(outValues)
 }
 
-// setOutValue sets factory output value in a thread-safe way.
-func (f *factory) setOutValue(value reflect.Value) {
-	f.outValueMu.Lock()
-	defer f.outValueMu.Unlock()
-	f.outValue = value
+// getOutError returns factory output error in a thread-safe way.
+func (f *factory) getOutError() error {
+	// Get the factory output value.
+	outValues := f.getOutValues()
+	outValue := f.getOutErrorFn(outValues)
+
+	// Check if the value is valid.
+	if !outValue.IsValid() {
+		return nil
+	}
+
+	// Check if the value is nil.
+	if outValue.IsNil() {
+		return nil
+	}
+
+	// Check if the value is an error.
+	if err, ok := outValue.Interface().(error); ok {
+		return err
+	}
+
+	// Return nil.
+	return nil
 }
+
+// getOutTypeFn is the function type for getting an output type.
+type getOutTypeFn func([]reflect.Type) reflect.Type
+
+// getOutValueFn is the function type for getting an output value.
+type getOutValueFn func([]reflect.Value) reflect.Value
+
+// getOutErrorFn is the function type for getting an output error.
+type getOutErrorFn func([]reflect.Value) reflect.Value

@@ -24,7 +24,7 @@ import (
 )
 
 // Run runs a container with a set of configured factories.
-func Run(ctx context.Context, factories ...*Factory) error {
+func Run(ctx context.Context, options ...Option) error {
 	// Prepare container context ignoring the cancelling.
 	// When cancelled, it closes `container.Done()` channel
 	// and unblocks any waiting read from `container.Done()`.
@@ -41,25 +41,19 @@ func Run(ctx context.Context, factories ...*Factory) error {
 	invoker := &Invoker{resolver: resolver}
 
 	// Register service resolver instance in the registry.
-	if factory, err := NewService(resolver).factory(ctx); err != nil {
-		return fmt.Errorf("failed to register service resolver: %w", err)
-	} else {
-		registry.registerFactory(factory)
+	if err := NewService(resolver)(ctx, registry); err != nil {
+		return fmt.Errorf("failed to register resolver: %w", err)
 	}
 
 	// Register function invoker instance in the registry.
-	if factory, err := NewService(invoker).factory(ctx); err != nil {
-		return fmt.Errorf("failed to register function invoker: %w", err)
-	} else {
-		registry.registerFactory(factory)
+	if err := NewService(invoker)(ctx, registry); err != nil {
+		return fmt.Errorf("failed to register invoker: %w", err)
 	}
 
 	// Register provided factories in the registry.
-	for _, source := range factories {
-		if factory, err := source.factory(ctx); err != nil {
-			return fmt.Errorf("failed to register factory: %w", err)
-		} else {
-			registry.registerFactory(factory)
+	for _, option := range options {
+		if err := option(ctx, registry); err != nil {
+			return fmt.Errorf("failed to apply option: %w", err)
 		}
 	}
 
@@ -82,30 +76,87 @@ func Run(ctx context.Context, factories ...*Factory) error {
 	return nil
 }
 
-// NewFactory creates a new service factory using the provided factory function.
+// Option defines an option for the service container.
+type Option func(ctx context.Context, registry *registry) error
+
+// NewFactory creates a new service load using the provided load function.
 //
-// The factory function must be a valid function. It may accept dependencies as input parameters,
-// and return one or more service instances, optionally followed by an error as the last return value.
-//
-// The resulting Factory can be registered in the container.
+// The load function must be a function. It may accept dependencies as input parameters and return
+// exactly one service instances, optionally followed by an error as the second return value.
 //
 // Example:
 //
-//	gontainer.NewFactory(func(db *Database) (*Handler, error), gontainer.WithTag("http"))
-func NewFactory(function any) *Factory {
+//	gontainer.NewFactory(func(db *Database) (*Handler, error) { ... })
+//	gontainer.NewFactory(func(db *Database) *Handler { ... })
+func NewFactory(function any) Option {
 	funcValue := reflect.ValueOf(function)
-	factory := &Factory{
-		fn:     function,
-		name:   fmt.Sprintf("Factory[%s]", funcValue.Type()),
-		source: getFuncSource(funcValue),
+	funcType := reflect.TypeOf(function)
+
+	// Prepare factory description.
+	name := fmt.Sprintf("Factory[%s]", funcValue.Type())
+	source := getFuncSource(funcValue)
+
+	// Prepare option callback.
+	return func(ctx context.Context, registry *registry) error {
+		// Validate function type.
+		if funcType.Kind() != reflect.Func {
+			return fmt.Errorf("invalid type: %s", funcType)
+		}
+
+		// Prepare default value and error getters.
+		var getOutType getOutTypeFn
+		var getOutValue getOutValueFn
+		var getOutError getOutErrorFn
+
+		// Prepare value and error getters.
+		switch {
+		// Factory returns nothing.
+		case funcType.NumOut() == 0:
+			getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
+			getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+			getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+
+		// Factory returns only error.
+		case funcType.NumOut() == 1 && isErrorInterface(funcType.Out(0)):
+			getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
+			getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+			getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+
+		// Factory returns exactly one service.
+		case funcType.NumOut() == 1 && !isEmptyInterface(funcType.Out(0)):
+			getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
+			getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+			getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+
+		// Factory returns a service and an error.
+		case funcType.NumOut() == 2 && !isEmptyInterface(funcType.Out(0)) && isErrorInterface(funcType.Out(1)):
+			getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
+			getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+			getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
+
+		// Factory signature is invalid.
+		default:
+			return fmt.Errorf("invalid signature: %s", funcType)
+		}
+
+		// Load the factory internal representation.
+		state, err := newFactory(ctx, name, source, funcValue, getOutType, getOutValue, getOutError)
+		if err != nil {
+			return fmt.Errorf("failed to load factory '%s': %w", name, err)
+		}
+
+		// Register factory in the registry.
+		registry.registerFactory(state)
+
+		// Factory registered.
+		return nil
 	}
-	return factory
 }
 
-// NewService creates a new service factory that always returns the given singleton value.
+// NewService creates a new service load that always returns the given singleton value.
 //
 // This is a convenience helper for registering preconstructed service instances
-// as factories. The returned factory produces the same instance on every invocation.
+// as factories. The returned load produces the same instance on every invocation.
 //
 // This is useful for registering constants, mocks, or externally constructed values.
 //
@@ -113,12 +164,35 @@ func NewFactory(function any) *Factory {
 //
 //	logger := NewLogger()
 //	gontainer.NewService(logger)
-func NewService[T any](service T) *Factory {
-	dataType := reflect.TypeOf(&service).Elem()
-	factory := &Factory{
-		fn:     func() T { return service },
-		name:   fmt.Sprintf("Service[%s]", dataType),
-		source: dataType.PkgPath(),
+func NewService[T any](service T) Option {
+	function := func() T { return service }
+	funcValue := reflect.ValueOf(function)
+	funcType := reflect.TypeOf(function)
+	serviceType := reflect.TypeOf(&service).Elem()
+
+	// Prepare factory description.
+	name := fmt.Sprintf("Service[%s]", serviceType)
+	source := serviceType.PkgPath()
+
+	// Prepare option callback.
+	return func(ctx context.Context, registry *registry) error {
+		// Prepare value and error getters.
+		getOutType := func(outTypes []reflect.Type) reflect.Type { return funcType.Out(0) }
+		getOutValue := func(outValues []reflect.Value) reflect.Value {
+			return outValues[0]
+		}
+		getOutError := func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+
+		// Load the factory internal representation.
+		state, err := newFactory(ctx, name, source, funcValue, getOutType, getOutValue, getOutError)
+		if err != nil {
+			return fmt.Errorf("failed to load factory '%s': %w", name, err)
+		}
+
+		// Register factory in the registry.
+		registry.registerFactory(state)
+
+		// Factory registered.
+		return nil
 	}
-	return factory
 }
