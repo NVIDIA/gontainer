@@ -28,24 +28,39 @@ import (
 // registry contains all defined factories.
 type registry struct {
 	factories []*factory
+	functions []*factory
 	sequence  []*factory
 	mutex     sync.Mutex
 }
 
 // registerFactory registers factory in the registry.
 func (r *registry) registerFactory(factory *factory) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	r.factories = append(r.factories, factory)
 }
 
-// validateFactories validates registered factories.
+// registerFunction registers function in the registry.
+func (r *registry) registerFunction(factory *factory) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.functions = append(r.functions, factory)
+}
+
+// validateRegistry validates all registered state.
 // Validate checks for availability of all non-optional types
 // and for possible circular dependencies between factories.
-func (r *registry) validateFactories() error {
+func (r *registry) validateRegistry() error {
 	// Prepare result errors slice.
 	var errs []error
 
+	// Combine all factories and functions for validation.
+	factoriesAndFunctions := make([]*factory, 0, len(r.factories)+len(r.functions))
+	factoriesAndFunctions = append(factoriesAndFunctions, r.factories...)
+	factoriesAndFunctions = append(factoriesAndFunctions, r.functions...)
+
 	// Validate all input types are resolvable.
-	for _, factory := range r.factories {
+	for _, factory := range factoriesAndFunctions {
 		for index, inType := range factory.inTypes {
 			// Is this type a special factory context type?
 			if isContextInterface(inType) {
@@ -64,9 +79,9 @@ func (r *registry) validateFactories() error {
 				continue
 			}
 
-			// Is a factory for this type could be resolved?
-			typeFactories := r.findFactories(inType)
-			if len(typeFactories) == 0 {
+			// Could a factory for this type be resolved?
+			factories := r.findFactories(inType)
+			if len(factories) == 0 {
 				errs = append(errs, fmt.Errorf(
 					"failed to validate argument '%s' (index %d) of '%s' from '%s': %w",
 					inType, index, factory.name, factory.source, ErrServiceNotResolved,
@@ -141,24 +156,32 @@ func (r *registry) validateFactories() error {
 	return errors.Join(errs...)
 }
 
-// spawnFactories spawns all factories in the registry.
-func (r *registry) spawnFactories() error {
-	// Spawn all factories with registration order.
-	// If the factory requires a dependency not yet spawned,
-	// but found in the registry, then it will be spawned
-	// before the current factory and this fact will be
-	// recorded in the `sequence` slice.
-	for _, factory := range r.factories {
-		if err := r.spawnFactory(factory); err != nil {
-			return fmt.Errorf(
-				"failed to spawn services of '%s' from '%s': %w",
+// invokeFunctions invokes registered functions.
+func (r *registry) invokeFunctions() error {
+	// Prepare result errors slice.
+	var errs []error
+
+	// Invoke all functions in the registry.
+	for _, factory := range r.functions {
+		// Invoke the factory.
+		if err := r.invokeFactory(factory); err != nil {
+			errs = append(errs, fmt.Errorf(
+				"failed to invoke '%s' from '%s': %w",
 				factory.name, factory.source, err,
-			)
+			))
+		}
+
+		// Handle factory error.
+		if err := factory.getOutError(); err != nil {
+			errs = append(errs, fmt.Errorf(
+				"failed to invoke '%s' from '%s': %w: %w",
+				factory.name, factory.source, ErrFunctionReturnedError, err,
+			))
 		}
 	}
 
-	// Only the first error is returned.
-	return nil
+	// Join all found errors.
+	return errors.Join(errs...)
 }
 
 // closeFactories closes all factories in the reverse order.
@@ -171,27 +194,19 @@ func (r *registry) closeFactories() error {
 		factory := r.sequence[index]
 
 		// Cancel factory context before calling close on services.
-		// This allows background factory functions to unblock from
-		// the waiting of context done channel and finish work.
+		// This allows background goroutines to unblock from
+		// waiting of context done channels and finish work.
 		factory.cancel()
 
-		// Skip factories without output type.
-		if factory.getOutType() == nil {
-			continue
-		}
-
-		// Handle the single spawned factory output value.
-		outValue := factory.getOutValue()
-
 		// Get the factory result object interface.
-		service := outValue.Interface()
+		service := factory.getOutValue().Interface()
 
 		// Close service implementing `Close() error` interface.
 		if closer, ok := service.(interface{ Close() error }); ok {
 			if err := closer.Close(); err != nil {
 				errs = append(errs, fmt.Errorf(
-					"failed to close service '%s' of '%s' from '%s': %w",
-					outValue.Type(), factory.name, factory.source, err),
+					"failed to close service '%T' of '%s' from '%s': %w",
+					service, factory.name, factory.source, err),
 				)
 			}
 		}
@@ -279,21 +294,33 @@ func (r *registry) resolveRegular(serviceType reflect.Type) (reflect.Value, erro
 
 // resolveByType resolves all service fits to specified type.
 func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, error) {
-	// Lookup factory definition by an output service type.
+	// Lookup factory definition by an output type.
 	factories := r.findFactories(serviceType)
-	services := make([]reflect.Value, 0, len(factories))
+	resolvedValues := make([]reflect.Value, 0, len(factories))
 
+	// Spawn all found factories.
 	for _, factory := range factories {
 		// Handle found factory definition.
 		if err := r.spawnFactory(factory); err != nil {
-			return nil, fmt.Errorf("failed to spawn factory '%s': %w", factory.funcType, err)
+			return nil, fmt.Errorf(
+				"failed to spawn '%s' from '%s': %w",
+				factory.name, factory.source, err,
+			)
 		}
 
-		// Handle service from factory output (single value).
-		services = append(services, factory.getOutValue())
+		// Handle error returned by the factory.
+		if err := factory.getOutError(); err != nil {
+			return nil, fmt.Errorf(
+				"failed to spawn '%s' from '%s': %w: %w",
+				factory.name, factory.source, ErrFactoryReturnedError, err,
+			)
+		}
+
+		// Handle the factory result output.
+		resolvedValues = append(resolvedValues, factory.getOutValue())
 	}
 
-	return services, nil
+	return resolvedValues, nil
 }
 
 // findFactories lookups for all factories for an output type in the registry.
@@ -302,11 +329,6 @@ func (r *registry) findFactories(serviceType reflect.Type) []*factory {
 
 	// Lookup for factories in the registry.
 	for _, factory := range r.factories {
-		// Skip factories without output type.
-		if factory.getOutType() == nil {
-			continue
-		}
-
 		// Desired service type matched.
 		if factory.getOutType() == serviceType {
 			factories = append(factories, factory)
@@ -337,6 +359,25 @@ func (r *registry) spawnFactory(factory *factory) error {
 		return nil
 	}
 
+	// Invoke the factory.
+	err := r.invokeFactory(factory)
+	if err != nil {
+		return err
+	}
+
+	// Save the factory spawn status.
+	factory.setIsSpawned(true)
+
+	// Save the factory spawn order.
+	r.mutex.Lock()
+	r.sequence = append(r.sequence, factory)
+	r.mutex.Unlock()
+
+	return nil
+}
+
+// invokeFactory calls the factory function and returns output values.
+func (r *registry) invokeFactory(factory *factory) error {
 	// Get or spawn factory input values recursively.
 	inValues := make([]reflect.Value, 0, len(factory.inTypes))
 	for _, inType := range factory.inTypes {
@@ -353,6 +394,7 @@ func (r *registry) spawnFactory(factory *factory) error {
 			return fmt.Errorf("failed to resolve service: %w", err)
 		}
 
+		// Append resolved input value.
 		inValues = append(inValues, inValue)
 	}
 
@@ -362,20 +404,28 @@ func (r *registry) spawnFactory(factory *factory) error {
 	// Set factory output values.
 	factory.setOutValues(outValues)
 
-	// Handle error returned by the factory.
-	if err := factory.getOutError(); err != nil {
-		return fmt.Errorf("%w: %w", ErrFactoryReturnedError, err)
+	// Factory invoked successfully.
+	return nil
+}
+
+// isUsefulService returns true if the type is a useful service.
+func isUsefulService(typ reflect.Type) bool {
+	// Any objects are not useful services.
+	if isEmptyInterface(typ) {
+		return false
 	}
 
-	// Set the factory spawn status.
-	factory.setIsSpawned(true)
+	// Contexts are not useful services.
+	if isContextInterface(typ) {
+		return false
+	}
 
-	// Save the factory spawn order.
-	r.mutex.Lock()
-	r.sequence = append(r.sequence, factory)
-	r.mutex.Unlock()
+	// Errors are not useful services.
+	if isErrorInterface(typ) {
+		return false
+	}
 
-	return nil
+	return true
 }
 
 // isEmptyInterface returns true when argument is an `any` interface.

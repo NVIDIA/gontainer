@@ -57,14 +57,14 @@ func Run(ctx context.Context, options ...Option) error {
 		}
 	}
 
-	// Validate all factories in the registry.
-	if err := registry.validateFactories(); err != nil {
-		return fmt.Errorf("failed to validate factories: %w", err)
+	// Validate all factories in the container.
+	if err := registry.validateRegistry(); err != nil {
+		return fmt.Errorf("failed to validate container: %w", err)
 	}
 
 	// Start all factories in the container.
-	if err := registry.spawnFactories(); err != nil {
-		return fmt.Errorf("failed to spawn factories: %w", err)
+	if err := registry.invokeFunctions(); err != nil {
+		return fmt.Errorf("failed to invoke functions: %w", err)
 	}
 
 	// Close all factories in the container.
@@ -110,26 +110,14 @@ func NewFactory(function any) Option {
 
 		// Prepare value and error getters.
 		switch {
-		// Factory returns nothing.
-		case funcType.NumOut() == 0:
-			getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
-			getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
-			getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
-
-		// Factory returns only error.
-		case funcType.NumOut() == 1 && isErrorInterface(funcType.Out(0)):
-			getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
-			getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
-			getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
-
 		// Factory returns exactly one service.
-		case funcType.NumOut() == 1 && !isEmptyInterface(funcType.Out(0)):
+		case funcType.NumOut() == 1 && isUsefulService(funcType.Out(0)):
 			getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
 			getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
 			getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 
 		// Factory returns a service and an error.
-		case funcType.NumOut() == 2 && !isEmptyInterface(funcType.Out(0)) && isErrorInterface(funcType.Out(1)):
+		case funcType.NumOut() == 2 && isUsefulService(funcType.Out(0)) && isErrorInterface(funcType.Out(1)):
 			getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
 			getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
 			getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
@@ -191,6 +179,65 @@ func NewService[T any](service T) Option {
 
 		// Register factory in the registry.
 		registry.registerFactory(state)
+
+		// Factory registered.
+		return nil
+	}
+}
+
+// NewFunction creates a new factory which will be called by the container.
+//
+// Example:
+//
+//	gontainer.NewFunction(func(db *Database) error { ... })
+//	gontainer.NewFunction(func(db *Database) { ... })
+func NewFunction(function any) Option {
+	funcValue := reflect.ValueOf(function)
+	funcType := reflect.TypeOf(function)
+
+	// Prepare factory description.
+	name := fmt.Sprintf("Function[%s]", funcValue.Type())
+	source := getFuncSource(funcValue)
+
+	// Prepare option callback.
+	return func(ctx context.Context, registry *registry) error {
+		// Validate function type.
+		if funcType.Kind() != reflect.Func {
+			return fmt.Errorf("invalid type: %s", funcType)
+		}
+
+		// Prepare default value and error getters.
+		var getOutType getOutTypeFn
+		var getOutValue getOutValueFn
+		var getOutError getOutErrorFn
+
+		// Prepare value and error getters.
+		switch {
+		// Function returns nothing.
+		case funcType.NumOut() == 0:
+			getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
+			getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+			getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+
+		// Function returns an error.
+		case funcType.NumOut() == 1 && isErrorInterface(funcType.Out(0)):
+			getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
+			getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+			getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+
+		// Function signature is invalid.
+		default:
+			return fmt.Errorf("invalid signature: %s", funcType)
+		}
+
+		// Load the factory internal representation.
+		state, err := newFactory(ctx, name, source, funcValue, getOutType, getOutValue, getOutError)
+		if err != nil {
+			return fmt.Errorf("failed to load factory '%s': %w", name, err)
+		}
+
+		// Register factory in the registry.
+		registry.registerFunction(state)
 
 		// Factory registered.
 		return nil

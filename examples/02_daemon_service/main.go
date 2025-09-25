@@ -85,7 +85,7 @@ func main() {
 		}),
 
 		// Factory to start serving HTTP requests and wait for termination.
-		gontainer.NewFactory(func(logger *log.Logger, server *MyServer) error {
+		gontainer.NewFunction(func(logger *log.Logger, server *MyServer) error {
 			logger.Println("Starting listening on: http://127.0.0.1:8080")
 			socket, err := net.Listen("tcp", "127.0.0.1:8080")
 			if err != nil {

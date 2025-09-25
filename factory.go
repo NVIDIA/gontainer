@@ -25,24 +25,6 @@ import (
 	"sync"
 )
 
-// Factory declares a service factory definition used by the container to construct services.
-//
-// A Factory wraps a factory function along with its input/output type information and internal
-// state used during service resolution and lifecycle management.
-//
-// It is created using NewFactory or NewService, and typically registered into the container
-// to enable dependency injection and lifecycle control.
-type Factory struct {
-	// Factory function.
-	fn any
-
-	// Factory function name.
-	name string
-
-	// Factory function location.
-	source string
-}
-
 // getFuncSource returns func source path.
 func getFuncSource(funcValue reflect.Value) string {
 	fullFuncName := runtime.FuncForPC(funcValue.Pointer()).Name()

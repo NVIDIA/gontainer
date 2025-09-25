@@ -100,7 +100,7 @@ Dependency injection service container for Golang projects.
       gontainer.NewFactory(NewMyService),
    
       // Use Resolver to resolve services on-demand.
-      gontainer.NewFactory(func(resolver *gontainer.Resolver) error {
+      gontainer.NewFunction(func(resolver *gontainer.Resolver) error {
          var myService *MyService
          if err := resolver.Resolve(&myService); err != nil {
              return err
@@ -119,7 +119,7 @@ Dependency injection service container for Golang projects.
       gontainer.NewFactory(NewMyService),
    
       // Use Invoker to call functions with auto-injection.
-      gontainer.NewFactory(func(invoker *gontainer.Invoker) error {
+      gontainer.NewFunction(func(invoker *gontainer.Invoker) error {
          values, err := invoker.Invoke(func(myService *MyService) error {
              myService.SayHello("World")
              return nil
@@ -192,7 +192,7 @@ err := gontainer.Run(
 
     // Depend on the function returned from the first factory.
 	// It will be called three times, producing three new values.
-    gontainer.NewFactory(func(funcFromFactory1 func() int) {
+    gontainer.NewFunction(func(funcFromFactory1 func() int) {
         fmt.Println(funcFromFactory1())
         fmt.Println(funcFromFactory1())
         fmt.Println(funcFromFactory1())
@@ -299,9 +299,10 @@ func (i *Invoker) Invoke(fn any) ([]any, error)
 
 The service container may return the following errors, which can be checked using `errors.Is`:
 
-| Error                       | Description                                                                           |
-|-----------------------------|---------------------------------------------------------------------------------------|
-| `ErrFactoryReturnedError`   | Occurs when the factory function returns an error during invocation.                  |
-| `ErrServiceNotResolved`     | Occurs when resolving a service fails due to an unregistered service type.            |
-| `ErrServiceDuplicated`      | Occurs when a service type duplicate found during the initialization procedure.       |
-| `ErrCircularDependency`     | Occurs when a circular dependency found during the initialization procedure.          |
+| Error                      | Description                                                                     |
+|----------------------------|---------------------------------------------------------------------------------|
+| `ErrFactoryReturnedError`  | Occurs when the service factory returns an error during invocation.             |
+| `ErrFunctionReturnedError` | Occurs when the container function returns an error during invocation.          |
+| `ErrServiceNotResolved`    | Occurs when resolving a service fails due to an unregistered service type.      |
+| `ErrServiceDuplicated`     | Occurs when a service type duplicate found during the initialization procedure. |
+| `ErrCircularDependency`    | Occurs when a circular dependency found during the initialization procedure.    |

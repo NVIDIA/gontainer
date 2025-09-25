@@ -81,7 +81,7 @@ func TestFactoryInfo(t *testing.T) {
 		{
 			name:  "FactoryGlobalFunc",
 			arg1:  NewFactory(globalFunc),
-			want1: "Factory[func(string)]",
+			want1: "Factory[func(string) bool]",
 			want2: "github.com/NVIDIA/gontainer",
 		},
 	}
@@ -100,7 +100,9 @@ func TestFactoryInfo(t *testing.T) {
 
 type globalType struct{}
 
-func globalFunc(string) {}
+func globalFunc(string) bool {
+	return true
+}
 
 // TestSplitFuncName tests splitting of function name.
 func TestSplitFuncName(t *testing.T) {
