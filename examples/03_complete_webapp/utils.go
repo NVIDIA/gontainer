@@ -19,33 +19,7 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
-
-	"github.com/NVIDIA/gontainer"
 )
-
-// initCloseSignals creates a goroutine to listen for SIGTERM and SIGINT.
-func initCloseSignals(container *gontainer.Container, errorFn func(err error)) {
-	go func() {
-		signalsChan := make(chan os.Signal)
-		signal.Notify(signalsChan, syscall.SIGTERM, syscall.SIGINT)
-		for {
-			select {
-			case _ = <-signalsChan:
-				// Initiate container close.
-				if err := container.Close(); err != nil {
-					errorFn(err)
-				}
-				return
-			case <-container.Done():
-				// Release goroutine.
-				return
-			}
-		}
-	}()
-}
 
 // panicf panics with formatted error message.
 func panicf(format string, values ...any) {

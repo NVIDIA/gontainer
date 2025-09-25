@@ -20,6 +20,7 @@ package app
 import (
 	"log/slog"
 	"net/http"
+	"os"
 
 	"github.com/NVIDIA/gontainer"
 	"github.com/NVIDIA/gontainer/examples/03_complete_webapp/services/httpsvr"
@@ -28,7 +29,7 @@ import (
 // WithAppEndpoints returns a factory which configures app endpoints.
 func WithAppEndpoints() *gontainer.Factory {
 	return gontainer.NewFactory(
-		func(logger *slog.Logger, server *httpsvr.Server) {
+		func(logger *slog.Logger, server *httpsvr.Server) float32 {
 			logger = logger.With("service", "app")
 			logger.Info("Configuring app endpoints")
 			server.GetMux().HandleFunc(
@@ -37,6 +38,7 @@ func WithAppEndpoints() *gontainer.Factory {
 					_, _ = w.Write([]byte("Hello, world!"))
 				},
 			)
+			return 0
 		},
 	)
 }
@@ -44,7 +46,7 @@ func WithAppEndpoints() *gontainer.Factory {
 // WithHealthEndpoints returns a factory which configures health check endpoints.
 func WithHealthEndpoints() *gontainer.Factory {
 	return gontainer.NewFactory(
-		func(logger *slog.Logger, server *httpsvr.Server) {
+		func(logger *slog.Logger, server *httpsvr.Server) float64 {
 			logger = logger.With("service", "app")
 			logger.Info("Configuring health endpoints")
 			server.GetMux().HandleFunc(
@@ -53,16 +55,25 @@ func WithHealthEndpoints() *gontainer.Factory {
 					_, _ = w.Write([]byte("Alive!"))
 				},
 			)
+			return 0
 		},
 	)
 }
 
-// WithAppEntryPoint returns a factory which performs final app start.
-func WithAppEntryPoint() *gontainer.Factory {
+// WithAppEntryPoint returns a factory which performs final app start and waits for termination.
+func WithAppEntryPoint(terminate <-chan os.Signal) *gontainer.Factory {
 	return gontainer.NewFactory(
-		func(server *httpsvr.Server) error {
+		func(logger *slog.Logger, server *httpsvr.Server) (bool, error) {
 			// Start serving requests.
-			return server.Start()
+			if err := server.Start(); err != nil {
+				return false, err
+			}
+
+			// Wait for termination signal.
+			<-terminate
+			logger.Info("Terminating by signal")
+
+			return false, nil
 		},
 	)
 }
