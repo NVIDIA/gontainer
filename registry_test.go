@@ -299,6 +299,25 @@ func TestRegistryResolveFuncServices(t *testing.T) {
 	equal(t, fact3Calls.Load(), int64(1))
 }
 
+// TestRegistryResolveWithErrors tests corresponding registry method.
+func TestRegistryResolveWithErrors(t *testing.T) {
+	source := NewFactory(func() (bool, error) {
+		return true, errors.New("some function-specific error message")
+	})
+
+	ctx := context.Background()
+	registry := &registry{}
+	equal(t, source(ctx, registry), nil)
+
+	value, err := registry.resolveService(reflect.TypeOf(true))
+	equal(t, err != nil, true)
+	equal(t, value.IsValid(), false)
+	equal(t, fmt.Sprint(err), `failed to spawn `+
+		`'Factory[func() (bool, error)]' from 'github.com/NVIDIA/gontainer': `+
+		`factory returned error: some function-specific error message`)
+	equal(t, errors.Is(err, ErrFactoryReturnedError), true)
+}
+
 // TestRegistryInvokeWithErrors tests corresponding registry method.
 func TestRegistryInvokeWithErrors(t *testing.T) {
 	source := NewFunction(func() error {
@@ -313,7 +332,8 @@ func TestRegistryInvokeWithErrors(t *testing.T) {
 	equal(t, err != nil, true)
 	equal(t, fmt.Sprint(err), `failed to invoke `+
 		`'Function[func() error]' from 'github.com/NVIDIA/gontainer': `+
-		`some function-specific error message`)
+		`function returned error: some function-specific error message`)
+	equal(t, errors.Is(err, ErrFunctionReturnedError), true)
 }
 
 // TestIsEmptyInterface tests checking of argument to be empty interface.

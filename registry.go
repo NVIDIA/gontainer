@@ -165,14 +165,17 @@ func (r *registry) invokeFunctions() error {
 	for _, factory := range r.functions {
 		// Invoke the factory.
 		if err := r.invokeFactory(factory); err != nil {
-			errs = append(errs, err)
+			errs = append(errs, fmt.Errorf(
+				"failed to invoke '%s' from '%s': %w",
+				factory.name, factory.source, err,
+			))
 		}
 
 		// Handle factory error.
 		if err := factory.getOutError(); err != nil {
 			errs = append(errs, fmt.Errorf(
-				"failed to invoke '%s' from '%s': %w",
-				factory.name, factory.source, err,
+				"failed to invoke '%s' from '%s': %w: %w",
+				factory.name, factory.source, ErrFunctionReturnedError, err,
 			))
 		}
 	}
@@ -308,8 +311,8 @@ func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, err
 		// Handle error returned by the factory.
 		if err := factory.getOutError(); err != nil {
 			return nil, fmt.Errorf(
-				"failed to spawn '%s' from '%s': %w",
-				factory.name, factory.source, err,
+				"failed to spawn '%s' from '%s': %w: %w",
+				factory.name, factory.source, ErrFactoryReturnedError, err,
 			)
 		}
 
@@ -403,6 +406,26 @@ func (r *registry) invokeFactory(factory *factory) error {
 
 	// Factory invoked successfully.
 	return nil
+}
+
+// isUsefulService returns true if the type is a useful service.
+func isUsefulService(typ reflect.Type) bool {
+	// Any objects are not useful services.
+	if isEmptyInterface(typ) {
+		return false
+	}
+
+	// Contexts are not useful services.
+	if isContextInterface(typ) {
+		return false
+	}
+
+	// Errors are not useful services.
+	if isErrorInterface(typ) {
+		return false
+	}
+
+	return true
 }
 
 // isEmptyInterface returns true when argument is an `any` interface.

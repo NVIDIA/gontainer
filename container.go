@@ -111,13 +111,13 @@ func NewFactory(function any) Option {
 		// Prepare value and error getters.
 		switch {
 		// Factory returns exactly one service.
-		case funcType.NumOut() == 1 && !isEmptyInterface(funcType.Out(0)):
+		case funcType.NumOut() == 1 && isUsefulService(funcType.Out(0)):
 			getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
 			getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
 			getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 
 		// Factory returns a service and an error.
-		case funcType.NumOut() == 2 && !isEmptyInterface(funcType.Out(0)) && isErrorInterface(funcType.Out(1)):
+		case funcType.NumOut() == 2 && isUsefulService(funcType.Out(0)) && isErrorInterface(funcType.Out(1)):
 			getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
 			getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
 			getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[1] }

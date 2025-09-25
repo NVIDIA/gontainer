@@ -21,6 +21,12 @@ import (
 	"errors"
 )
 
+// ErrFactoryReturnedError declares factory returned error.
+var ErrFactoryReturnedError = errors.New("factory returned error")
+
+// ErrFunctionReturnedError declares function returned error.
+var ErrFunctionReturnedError = errors.New("function returned error")
+
 // ErrServiceDuplicated declares service duplicated error.
 var ErrServiceDuplicated = errors.New("service duplicated")
 
