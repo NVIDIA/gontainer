@@ -43,11 +43,6 @@ type MyServer struct {
 	server *http.Server
 }
 
-// Close implements close interface.
-func (s *MyServer) Close() error {
-	return s.server.Shutdown(context.Background())
-}
-
 func main() {
 	// Prepare terminate signals channel.
 	terminate := make(chan os.Signal)
@@ -114,10 +109,12 @@ func main() {
 			select {
 			case err := <-errsChan:
 				logger.Printf("Exiting from serving with error: %s", err)
-				return err
+				closeErr := server.server.Shutdown(context.Background())
+				return errors.Join(err, closeErr)
 			case <-terminate:
 				logger.Println("Exiting from serving by signal")
-				return nil
+				closeErr := server.server.Shutdown(context.Background())
+				return closeErr
 			}
 		}),
 	)
