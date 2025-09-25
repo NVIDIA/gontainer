@@ -299,27 +299,32 @@ func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, err
 
 // findFactoriesFor lookups for all factories for an output type in the registry.
 func (r *registry) findFactoriesFor(serviceType reflect.Type) []*factory {
-	var records []*factory
+	var factories []*factory
 
 	// Lookup for factories in the registry.
-	for _, record := range r.factories {
+	for _, factory := range r.factories {
+		// Skip factories without output type.
+		if factory.outType == nil {
+			continue
+		}
+
 		// Desired service type matched.
-		if record.outType == serviceType {
-			records = append(records, record)
+		if factory.outType == serviceType {
+			factories = append(factories, factory)
 			continue
 		}
 
 		// Desired service type implements an interface.
 		if serviceType.Kind() == reflect.Interface {
-			if record.outType.Implements(serviceType) {
-				records = append(records, record)
+			if factory.outType.Implements(serviceType) {
+				factories = append(factories, factory)
 				continue
 			}
 		}
 	}
 
 	// Return matched factories.
-	return records
+	return factories
 }
 
 // spawnFactory instantiates specified factory definition.
