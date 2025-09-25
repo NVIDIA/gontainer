@@ -18,7 +18,6 @@
 package app
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -29,7 +28,7 @@ import (
 
 // WithAppEndpoints returns a factory which configures app endpoints.
 func WithAppEndpoints() gontainer.Option {
-	return gontainer.NewFunction(
+	return gontainer.NewFactory(
 		func(logger *slog.Logger, server *httpsvr.Server) {
 			logger = logger.With("service", "app")
 			logger.Info("Configuring app endpoints")
@@ -45,7 +44,7 @@ func WithAppEndpoints() gontainer.Option {
 
 // WithHealthEndpoints returns a factory which configures health check endpoints.
 func WithHealthEndpoints() gontainer.Option {
-	return gontainer.NewFunction(
+	return gontainer.NewFactory(
 		func(logger *slog.Logger, server *httpsvr.Server) {
 			logger = logger.With("service", "app")
 			logger.Info("Configuring health endpoints")
@@ -59,26 +58,18 @@ func WithHealthEndpoints() gontainer.Option {
 	)
 }
 
-// WithAppEntryPoint returns a factory which performs final app start.
-func WithAppEntryPoint(signals chan os.Signal) gontainer.Option {
-	return gontainer.NewFunction(
+// WithAppEntryPoint returns a factory which performs final app start and waits for termination.
+func WithAppEntryPoint(terminate <-chan os.Signal) gontainer.Option {
+	return gontainer.NewFactory(
 		func(logger *slog.Logger, server *httpsvr.Server) error {
 			// Start serving requests.
-			err := server.Start()
-			if err != nil {
-				return fmt.Errorf("failed to start http server: %w", err)
+			if err := server.Start(); err != nil {
+				return err
 			}
 
-			// Log app start.
-			logger.Info("Application started")
-
 			// Wait for termination signal.
-			<-signals
-
-			// Log app termination.
-			logger.Info("Termination signal received, exiting")
-
-			// Exit without error.
+			<-terminate
+			logger.Info("Terminating by signal")
 			return nil
 		},
 	)

@@ -20,14 +20,14 @@ package main
 import (
 	"context"
 	"log"
-	"math/rand/v2"
+	"math/rand"
 
 	"github.com/NVIDIA/gontainer"
 )
 
 func main() {
-	// Run service container.
-	log.Println("Running service container")
+	// Execute service container.
+	log.Println("Executing service container")
 	err := gontainer.Run(
 		// Root context for container.
 		context.Background(),
@@ -38,20 +38,27 @@ func main() {
 			// Container factory returns this service as a singleton:
 			// once on the eager container start or once on the lazy
 			// service resolution via resolver or invoker components.
-			return func() int { return rand.Int() }
+			return func() int {
+				return rand.Int()
+			}
 		}),
 
 		// This factory is called once on the container start.
 		// Depend on the function returned by the previous factory.
 		// This could be used to produce transient services.
-		gontainer.NewFunction(func(funcFromFactory1 func() int) {
+		gontainer.NewFactory(func(funcFromFactory1 func() int) error {
 			log.Printf("New value: %d", funcFromFactory1())
 			log.Printf("New value: %d", funcFromFactory1())
 			log.Printf("New value: %d", funcFromFactory1())
+			return nil
 		}),
 	)
+
+	// Check if service container run failed.
 	if err != nil {
-		log.Panicf("Failed to run service container: %s", err)
+		log.Panicf("Service container failed: %s", err)
 	}
-	log.Println("Service container has run successfully")
+
+	// Service container successfully executed.
+	log.Println("Service container executed")
 }

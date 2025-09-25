@@ -23,8 +23,7 @@ import (
 	"reflect"
 )
 
-// Run executes service container instance with a set of configured services.
-// The `factories` specifies factories for services with dependency resolution.
+// Run runs a container with a set of configured factories.
 func Run(ctx context.Context, options ...Option) error {
 	// Prepare container context ignoring the cancelling.
 	// When cancelled, it closes `container.Done()` channel
@@ -32,22 +31,26 @@ func Run(ctx context.Context, options ...Option) error {
 	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancel()
 
-	// Prepare services registry.
+	// Prepare services registry instance.
 	registry := &registry{}
 
-	// Register service resolver.
+	// Prepare service resolver instance.
 	resolver := &Resolver{registry: registry}
-	if err := NewService(resolver)(ctx, registry); err != nil {
-		return fmt.Errorf("failed to register service resolver: %w", err)
-	}
 
-	// Register function invoker.
+	// Prepare function invoker instance.
 	invoker := &Invoker{resolver: resolver}
-	if err := NewService(invoker)(ctx, registry); err != nil {
-		return fmt.Errorf("failed to register function invoker: %w", err)
+
+	// Register service resolver instance in the registry.
+	if err := NewService(resolver)(ctx, registry); err != nil {
+		return fmt.Errorf("failed to register resolver: %w", err)
 	}
 
-	// Register provided factories.
+	// Register function invoker instance in the registry.
+	if err := NewService(invoker)(ctx, registry); err != nil {
+		return fmt.Errorf("failed to register invoker: %w", err)
+	}
+
+	// Register provided factories in the registry.
 	for _, option := range options {
 		if err := option(ctx, registry); err != nil {
 			return fmt.Errorf("failed to apply option: %w", err)
@@ -55,15 +58,21 @@ func Run(ctx context.Context, options ...Option) error {
 	}
 
 	// Validate all factories in the registry.
-	if err := registry.validateRegistry(); err != nil {
-		return fmt.Errorf("failed to validate container: %w", err)
+	if err := registry.validateFactories(); err != nil {
+		return fmt.Errorf("failed to validate factories: %w", err)
 	}
 
 	// Start all factories in the container.
-	if err := registry.invokeFunctions(); err != nil {
-		return fmt.Errorf("failed to invoke functions: %w", err)
+	if err := registry.spawnFactories(); err != nil {
+		return fmt.Errorf("failed to spawn factories: %w", err)
 	}
 
+	// Close all factories in the container.
+	if err := registry.closeFactories(); err != nil {
+		return fmt.Errorf("failed to close factories: %w", err)
+	}
+
+	// Service container executed.
 	return nil
 }
 
@@ -72,12 +81,8 @@ type Option func(ctx context.Context, registry *registry) error
 
 // NewFactory creates a new service load using the provided load function.
 //
-// The load function must be a valid function. It may accept dependencies as input parameters,
-// and return one or more service instances, optionally followed by an error as the last return value.
-//
-// Optional configuration can be applied via load options (`FactoryOpt`), such as providing additional metadata.
-//
-// The resulting Factory can be registered in the container.
+// The load function must be a function. It may accept dependencies as input parameters and return
+// exactly one service instances, optionally followed by an error as the second return value.
 //
 // Example:
 //
@@ -105,6 +110,18 @@ func NewFactory(function any) Option {
 
 		// Prepare value and error getters.
 		switch {
+		// Factory returns nothing.
+		case funcType.NumOut() == 0:
+			getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
+			getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+			getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+
+		// Factory returns only error.
+		case funcType.NumOut() == 1 && isErrorInterface(funcType.Out(0)):
+			getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
+			getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+			getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+
 		// Factory returns exactly one service.
 		case funcType.NumOut() == 1 && !isEmptyInterface(funcType.Out(0)):
 			getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
@@ -161,7 +178,9 @@ func NewService[T any](service T) Option {
 	return func(ctx context.Context, registry *registry) error {
 		// Prepare value and error getters.
 		getOutType := func(outTypes []reflect.Type) reflect.Type { return funcType.Out(0) }
-		getOutValue := func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+		getOutValue := func(outValues []reflect.Value) reflect.Value {
+			return outValues[0]
+		}
 		getOutError := func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 
 		// Load the factory internal representation.

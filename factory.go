@@ -25,6 +25,43 @@ import (
 	"sync"
 )
 
+// getFuncSource returns func source path.
+func getFuncSource(funcValue reflect.Value) string {
+	fullFuncName := runtime.FuncForPC(funcValue.Pointer()).Name()
+	funcPackage, _ := splitFuncName(fullFuncName)
+	return funcPackage
+}
+
+// splitFuncName splits specified func name to package and a name.
+func splitFuncName(funcFullName string) (string, string) {
+	// Split the full function name with package by dots.
+	fullNameChunks := strings.Split(funcFullName, ".")
+	if len(fullNameChunks) < 2 {
+		return "", funcFullName
+	}
+
+	// Find the index of the last element containing "/".
+	lastPackageChunkIndex := len(fullNameChunks) - 1
+	for ; lastPackageChunkIndex >= 0; lastPackageChunkIndex-- {
+		// Is this chunk the rightest part of a package name with dots?
+		if strings.Contains(fullNameChunks[lastPackageChunkIndex], "/") {
+			break
+		}
+	}
+
+	// If the name contains no package path.
+	if lastPackageChunkIndex == -1 {
+		packageName := fullNameChunks[0]
+		funcName := strings.Join(fullNameChunks[1:], ".")
+		return packageName, funcName
+	}
+
+	// Prepare package name and function name.
+	packageName := strings.Join(fullNameChunks[:lastPackageChunkIndex+1], ".")
+	funcName := strings.Join(fullNameChunks[lastPackageChunkIndex+1:], ".")
+	return packageName, funcName
+}
+
 // newFactory loads factory function to the internal representation.
 func newFactory(
 	ctx context.Context, name, source string, funcValue reflect.Value,
@@ -66,44 +103,7 @@ func newFactory(
 	}, nil
 }
 
-// getFuncSource returns func source path.
-func getFuncSource(funcValue reflect.Value) string {
-	fullFuncName := runtime.FuncForPC(funcValue.Pointer()).Name()
-	funcPackage, _ := splitFuncName(fullFuncName)
-	return funcPackage
-}
-
-// splitFuncName splits specified func name to package and a name.
-func splitFuncName(funcFullName string) (string, string) {
-	// Split the full function name with package by dots.
-	fullNameChunks := strings.Split(funcFullName, ".")
-	if len(fullNameChunks) < 2 {
-		return "", funcFullName
-	}
-
-	// Find the index of the last element containing "/".
-	lastPackageChunkIndex := len(fullNameChunks) - 1
-	for ; lastPackageChunkIndex >= 0; lastPackageChunkIndex-- {
-		// Is this chunk the rightest part of a package name with dots?
-		if strings.Contains(fullNameChunks[lastPackageChunkIndex], "/") {
-			break
-		}
-	}
-
-	// If the name contains no package path.
-	if lastPackageChunkIndex == -1 {
-		packageName := fullNameChunks[0]
-		funcName := strings.Join(fullNameChunks[1:], ".")
-		return packageName, funcName
-	}
-
-	// Prepare package name and function name.
-	packageName := strings.Join(fullNameChunks[:lastPackageChunkIndex+1], ".")
-	funcName := strings.Join(fullNameChunks[lastPackageChunkIndex+1:], ".")
-	return packageName, funcName
-}
-
-// factory is the factory representation.
+// factory is the factory internal representation.
 type factory struct {
 	// Factory context value.
 	ctx context.Context
@@ -120,11 +120,11 @@ type factory struct {
 	// Factory spawn mutex.
 	spawnMu sync.Mutex
 
-	// Factory spawned mutex.
-	spawnedMu sync.RWMutex
+	// Factory is spawned mutex.
+	isSpawnedMu sync.RWMutex
 
 	// Factory is spawned.
-	spawned bool
+	isSpawned bool
 
 	// Factory function type.
 	funcType reflect.Type
@@ -154,18 +154,18 @@ type factory struct {
 	getOutErrorFn getOutErrorFn
 }
 
-// getSpawned returns factory spawned status in a thread-safe way.
-func (f *factory) getSpawned() bool {
-	f.spawnedMu.RLock()
-	defer f.spawnedMu.RUnlock()
-	return f.spawned
+// getIsSpawned returns factory spawned status in a thread-safe way.
+func (f *factory) getIsSpawned() bool {
+	f.isSpawnedMu.RLock()
+	defer f.isSpawnedMu.RUnlock()
+	return f.isSpawned
 }
 
-// setSpawned sets factory spawned status in a thread-safe way.
-func (f *factory) setSpawned(value bool) {
-	f.spawnedMu.Lock()
-	defer f.spawnedMu.Unlock()
-	f.spawned = value
+// setIsSpawned sets factory spawned status in a thread-safe way.
+func (f *factory) setIsSpawned(value bool) {
+	f.isSpawnedMu.Lock()
+	defer f.isSpawnedMu.Unlock()
+	f.isSpawned = value
 }
 
 // getOutValues returns factory output values in a thread-safe way.
@@ -189,7 +189,7 @@ func (f *factory) getOutType() reflect.Type {
 
 // getOutValue returns factory output value in a thread-safe way.
 func (f *factory) getOutValue() reflect.Value {
-	if !f.getSpawned() {
+	if !f.getIsSpawned() {
 		return reflect.Value{}
 	}
 
@@ -200,10 +200,6 @@ func (f *factory) getOutValue() reflect.Value {
 
 // getOutError returns factory output error in a thread-safe way.
 func (f *factory) getOutError() error {
-	if !f.getSpawned() {
-		return nil
-	}
-
 	// Get the factory output value.
 	outValues := f.getOutValues()
 	outValue := f.getOutErrorFn(outValues)

@@ -38,11 +38,11 @@ func init() {
 }
 
 func main() {
-	// Prepare close signals channel.
-	signals := make(chan os.Signal)
-	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
+	// Prepare terminate signals channel.
+	terminate := make(chan os.Signal)
+	signal.Notify(terminate, syscall.SIGTERM, syscall.SIGINT)
 
-	// Initialize the service container.
+	// Execute service container.
 	err := gontainer.Run(
 		// Root context for container.
 		context.Background(),
@@ -63,11 +63,11 @@ func main() {
 		app.WithHealthEndpoints(),
 
 		// Enable application entrypoint factory.
-		// This service factory starts serving request.
-		// It is guaranteed to be the last called factory.
-		app.WithAppEntryPoint(signals),
+		app.WithAppEntryPoint(terminate),
 	)
+
+	// Check if service container run failed.
 	if err != nil {
-		panicf("Failed to run service container: %s", err)
+		panicf("Service container failed: %s", err)
 	}
 }

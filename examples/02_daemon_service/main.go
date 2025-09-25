@@ -20,7 +20,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -31,31 +30,34 @@ import (
 	"github.com/NVIDIA/gontainer"
 )
 
+// MyService performs some crucial tasks.
+type MyService struct{}
+
+// SayHello outputs a friendly greeting.
+func (s *MyService) SayHello(name string) string {
+	return "Hello, " + name
+}
+
 // MyServer wraps HTTP Server.
 type MyServer struct {
 	server *http.Server
 }
 
-// Serve starts serving requests on the socket.
-func (s *MyServer) Serve(socket net.Listener) error {
-	return s.server.Serve(socket)
-}
-
-// Close shuts down the server.
+// Close implements close interface.
 func (s *MyServer) Close() error {
 	return s.server.Shutdown(context.Background())
 }
 
 func main() {
-	// Prepare close signals channel.
-	signals := make(chan os.Signal)
-	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
+	// Prepare terminate signals channel.
+	terminate := make(chan os.Signal)
+	signal.Notify(terminate, syscall.SIGTERM, syscall.SIGINT)
 
 	// Prepare external to container object.
 	logger := log.New(os.Stderr, "", log.LstdFlags)
 
-	// Run the service container.
-	log.Println("Running service container")
+	// Execute service container.
+	log.Println("Executing service container")
 	err := gontainer.Run(
 		// Root context for container.
 		context.Background(),
@@ -63,46 +65,68 @@ func main() {
 		// Inject singleton object.
 		gontainer.NewService(logger),
 
-		// Provide MyServer factory.
-		gontainer.NewFactory(func(logger *log.Logger) (*MyServer, error) {
-			logger.Println("Creating new HTTP server with handlers")
-
-			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				log.Printf("Received http request: %v", r.URL.Path)
-				_, _ = w.Write([]byte("Hello, Username"))
-			})
-
-			server := &http.Server{Handler: handler}
-			return &MyServer{server}, nil
+		// Factory function to create an instance of MyService.
+		gontainer.NewFactory(func() *MyService {
+			return new(MyService)
 		}),
 
-		gontainer.NewFunction(func(logger *log.Logger, server *MyServer) error {
-			logger.Println("Opening listening socket on http://127.0.0.1:8080")
+		// Factory function to create an instance of MyServer.
+		gontainer.NewFactory(func(logger *log.Logger, svc *MyService) (*MyServer, error) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				log.Printf("Received http request: %v", r.URL.Path)
+				_, _ = w.Write([]byte(svc.SayHello("Username")))
+			})
+
+			return &MyServer{
+				&http.Server{
+					Handler: handler,
+				},
+			}, nil
+		}),
+
+		// Factory to start serving HTTP requests and wait for termination.
+		gontainer.NewFactory(func(logger *log.Logger, server *MyServer) error {
+			logger.Println("Starting listening on: http://127.0.0.1:8080")
 			socket, err := net.Listen("tcp", "127.0.0.1:8080")
 			if err != nil {
-				logger.Printf("Failed to open listening socket: %s", err)
-				return fmt.Errorf("failed to open listening socket: %w", err)
+				return err
 			}
 
+			// Prepare error channel.
+			errsChan := make(chan error, 1)
+
+			// Start serving HTTP requests.
 			go func() {
+				// Close error channel after server shutdown.
+				defer close(errsChan)
+
+				// Start serving HTTP requests on the socket.
 				logger.Println("Starting serving HTTP requests")
-				if err := server.Serve(socket); err != nil {
+				if err := server.server.Serve(socket); err != nil {
 					if !errors.Is(err, http.ErrServerClosed) {
 						logger.Printf("Error serving HTTP requests: %s", err)
 					}
+					errsChan <- err
 				}
 			}()
 
-			// Wait for the close signal.
-			<-signals
-
-			logger.Println("Close signal received, exiting")
-			return nil
+			// Wait for termination.
+			select {
+			case err := <-errsChan:
+				logger.Printf("Exiting from serving with error: %s", err)
+				return err
+			case <-terminate:
+				logger.Println("Exiting from serving by signal")
+				return nil
+			}
 		}),
 	)
+
+	// Check if service container run failed.
 	if err != nil {
-		log.Panicf("Failed to run service container: %s", err)
+		log.Panicf("Service container failed: %s", err)
 	}
 
-	log.Println("Service container has run successfully")
+	// Service container successfully executed.
+	log.Println("Service container executed")
 }

@@ -35,14 +35,12 @@ func TestRegistryRegisterFactory(t *testing.T) {
 	}
 
 	ctx := context.Background()
+	option := NewFactory(fun)
 	registry := &registry{}
-	source := NewFactory(fun)
-	err := source(ctx, registry)
-	equal(t, err, nil)
-
-	equal(t, registry.factories[0] == nil, false)
-	equal(t, registry.factories[0].name != "", true)
-	equal(t, registry.factories[0].source != "", true)
+	equal(t, option(ctx, registry), nil)
+	factory := registry.factories[0]
+	equal(t, factory.funcValue.IsValid(), true)
+	equal(t, factory.funcValue.Kind(), reflect.Func)
 }
 
 // TestRegistryValidateFactories tests corresponding registry method.
@@ -195,37 +193,37 @@ func TestRegistryValidateFactories(t *testing.T) {
 			ctx := context.Background()
 			registry := &registry{}
 			for _, option := range tt.options {
-				err := option(ctx, registry)
-				equal(t, err, nil)
+				equal(t, option(ctx, registry), nil)
 			}
-			tt.wantErr(t, registry.validateRegistry())
+			tt.wantErr(t, registry.validateFactories())
 		})
 	}
 }
 
 // TestRegistrySpawnFactories tests corresponding registry method.
-// func TestRegistrySpawnFactories(t *testing.T) {
-// 	source := NewFactory(func() bool { return true })
+func TestRegistrySpawnFactories(t *testing.T) {
+	option := NewFactory(func() bool {
+		return true
+	})
 
-// 	ctx := context.Background()
-// 	factory, err := source.load(ctx)
-// 	equal(t, err, nil)
-// 	equal(t, factory == nil, false)
+	ctx := context.Background()
+	registry := &registry{}
 
-// 	registry := &registry{}
-// 	registry.registerFactory(factory)
+	equal(t, option(ctx, registry), nil)
+	factory := registry.factories[0]
 
-// 	err = registry.spawnFactories()
-// 	equal(t, err, nil)
-// 	equal(t, factory.spawned, true)
-// 	equal(t, factory.outValues[0].Interface(), true)
-// }
+	equal(t, registry.spawnFactories(), nil)
+	equal(t, factory.isSpawned, true)
+	equal(t, len(factory.outValues), 1)
+	equal(t, factory.outValues[0].Interface(), true)
+	equal(t, factory.getOutValue().Interface(), true)
+}
 
 // TestRegistryResolveParallel tests corresponding registry method.
 // This test must be run with the race detector (`-race` flag).
 func TestRegistryResolveParallel(t *testing.T) {
 	invocations := atomic.Int32{}
-	option := NewFactory(func() bool {
+	source := NewFactory(func() bool {
 		invocations.Add(1)
 		time.Sleep(10 * time.Millisecond)
 		return true
@@ -233,8 +231,8 @@ func TestRegistryResolveParallel(t *testing.T) {
 
 	ctx := context.Background()
 	registry := &registry{}
-	err := option(ctx, registry)
-	equal(t, err, nil)
+
+	equal(t, source(ctx, registry), nil)
 	factory := registry.factories[0]
 
 	wg := sync.WaitGroup{}
@@ -249,7 +247,7 @@ func TestRegistryResolveParallel(t *testing.T) {
 	}
 
 	wg.Wait()
-	equal(t, factory.getSpawned(), true)
+	equal(t, factory.getIsSpawned(), true)
 	equal(t, invocations.Load(), int32(1))
 }
 
@@ -289,16 +287,12 @@ func TestRegistryResolveFuncServices(t *testing.T) {
 
 	ctx := context.Background()
 	registry := &registry{}
+
 	for _, option := range options {
-		err := option(ctx, registry)
-		equal(t, err, nil)
+		equal(t, option(ctx, registry), nil)
 	}
 
-	_, err := registry.resolveByType(reflect.TypeOf(true))
-	equal(t, err, nil)
-	_, err = registry.resolveByType(reflect.TypeOf(""))
-	equal(t, err, nil)
-	_, err = registry.resolveByType(reflect.TypeOf(123))
+	err := registry.spawnFactories()
 	equal(t, err, nil)
 
 	err = registry.closeFactories()
@@ -311,19 +305,19 @@ func TestRegistryResolveFuncServices(t *testing.T) {
 
 // TestRegistrySpawnWithErrors tests corresponding registry method.
 func TestRegistrySpawnWithErrors(t *testing.T) {
-	option := NewFactory(func() (bool, error) {
+	source := NewFactory(func() (bool, error) {
 		return false, errors.New("failed to create new service")
 	})
 
 	ctx := context.Background()
 	registry := &registry{}
-	err := option(ctx, registry)
-	equal(t, err, nil)
+	equal(t, source(ctx, registry), nil)
 
-	_, err = registry.resolveByType(reflect.TypeOf(true))
+	err := registry.spawnFactories()
 	equal(t, err != nil, true)
-	equal(t, fmt.Sprint(err), `failed to spawn 'Factory[func() (bool, error)]' `+
-		`from 'github.com/NVIDIA/gontainer': failed to create new service`)
+	equal(t, fmt.Sprint(err), `failed to spawn services of `+
+		`'Factory[func() (bool, error)]' from 'github.com/NVIDIA/gontainer': `+
+		`factory returned error: failed to create new service`)
 }
 
 // TestIsEmptyInterface tests checking of argument to be empty interface.

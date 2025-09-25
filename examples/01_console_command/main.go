@@ -45,8 +45,8 @@ func (s *HelloService) SayHello() {
 }
 
 func main() {
-	// Initialize service container.
-	log.Println("Running service container")
+	// Execute service container.
+	log.Println("Executing service container")
 	err := gontainer.Run(
 		// Root context for container.
 		context.Background(),
@@ -61,13 +61,17 @@ func main() {
 			return &HelloService{nameService: svc}
 		}),
 
-		// Function to use the HelloService instance.
-		gontainer.NewFunction(func(svc *HelloService) {
+		// Factory to say hello using HelloService.
+		gontainer.NewFactory(func(svc *HelloService) {
 			svc.SayHello()
 		}),
 	)
+
+	// Check if service container run failed.
 	if err != nil {
-		log.Panicf("Failed to run service container: %s", err)
+		log.Panicf("Service container failed: %s", err)
 	}
-	log.Println("Service container has run successfully")
+
+	// Service container successfully executed.
+	log.Println("Service container executed")
 }

@@ -92,26 +92,29 @@ func TestInvokerService(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Prepare started flag.
 			started := atomic.Bool{}
 
-			err := Run(
+			// Run container.
+			equal(t, Run(
 				context.Background(),
 				NewFactory(func() string { return "string" }),
 				NewFactory(func() int { return 123 }),
-				NewFunction(func(invoker *Invoker) {
+				NewFactory(func(invoker *Invoker) {
 					started.Store(true)
 
 					values, err := invoker.Invoke(tt.haveFn)
 					if (err != nil) != tt.wantErr {
 						t.Errorf("Invoke() error = %v, wantErr %v", err, tt.wantErr)
-						return
 					}
+
 					if tt.wantFn != nil {
 						tt.wantFn(t, values)
 					}
 				}),
-			)
-			equal(t, err, nil)
+			), nil)
+
+			// Assert started flag is set.
 			equal(t, started.Load(), true)
 		})
 	}

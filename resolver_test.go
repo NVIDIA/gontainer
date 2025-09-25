@@ -25,40 +25,30 @@ import (
 
 // TestResolverService tests resolver service resolve.
 func TestResolverService(t *testing.T) {
-	factoryCalled := atomic.Bool{}
-	functionCalled := atomic.Bool{}
-
 	svc1 := float64(100500)
 	svc2 := float32(100501)
 
-	err := Run(
+	// Prepare started flag.
+	started := atomic.Bool{}
+
+	// Run container.
+	equal(t, Run(
 		context.Background(),
 		NewService(svc1),
 		NewService(svc2),
-		NewFactory(func(resolver *Resolver) bool {
-			factoryCalled.Store(true)
+		NewFactory(func(resolver *Resolver) {
+			started.Store(true)
 
 			var depExists float64
 			equal(t, resolver.Resolve(&depExists), nil)
 			equal(t, depExists, svc1)
 
-			return true
-		}),
-		NewFunction(func(resolver *Resolver) error {
-			functionCalled.Store(true)
-
-			var depExists bool
-			equal(t, resolver.Resolve(&depExists) == nil, true)
-			equal(t, depExists, true)
-
 			var depNotExists int
 			equal(t, resolver.Resolve(&depNotExists) != nil, true)
 			equal(t, depNotExists, 0)
-
-			return nil
 		}),
-	)
-	equal(t, err, nil)
-	equal(t, factoryCalled.Load(), true)
-	equal(t, functionCalled.Load(), true)
+	), nil)
+
+	// Assert started flag is set.
+	equal(t, started.Load(), true)
 }

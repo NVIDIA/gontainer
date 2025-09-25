@@ -25,7 +25,7 @@ import (
 	"sync"
 )
 
-// registry contains all defined factories metadata.
+// registry contains all defined factories.
 type registry struct {
 	factories []*factory
 	functions []*factory
@@ -93,6 +93,11 @@ func (r *registry) validateRegistry() error {
 
 	// Validate all output types are unique.
 	for _, factory := range r.factories {
+		// Skip factories without output type.
+		if factory.getOutType() == nil {
+			continue
+		}
+
 		// Validate uniqueness of the factory output type.
 		factories := r.findFactories(factory.getOutType())
 		if len(factories) > 1 {
@@ -151,7 +156,7 @@ func (r *registry) validateRegistry() error {
 	return errors.Join(errs...)
 }
 
-// invokeFunctions invokes factories with kind function.
+// invokeFunctions invokes registered functions.
 func (r *registry) invokeFunctions() error {
 	// Prepare result errors slice.
 	var errs []error
@@ -159,14 +164,12 @@ func (r *registry) invokeFunctions() error {
 	// Invoke all functions in the registry.
 	for _, factory := range r.functions {
 		// Invoke the factory.
-		err := r.invokeFactory(factory)
-		if err != nil {
+		if err := r.invokeFactory(factory); err != nil {
 			errs = append(errs, err)
 		}
 
 		// Handle factory error.
-		err = factory.getOutError()
-		if err != nil {
+		if err := factory.getOutError(); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -265,7 +268,7 @@ func (r *registry) resolveMultiple(multipleType, serviceType reflect.Type) (refl
 // resolveRegular resolves a regular service.
 func (r *registry) resolveRegular(serviceType reflect.Type) (reflect.Value, error) {
 	// Resolve all services by specified type.
-	serviceValues, err := r.resolveByType(serviceType)
+	resolvedValues, err := r.resolveByType(serviceType)
 	if err != nil {
 		return reflect.Value{}, err
 	}
@@ -275,12 +278,12 @@ func (r *registry) resolveRegular(serviceType reflect.Type) (reflect.Value, erro
 	// not found, then a zero-value box should be returned instead. For example, resolving an
 	// unregistered type `Config` triggers an error, while resolving `gontainer.Optional[Config]`
 	// returns a zero-value box.
-	if len(serviceValues) == 0 {
+	if len(resolvedValues) == 0 {
 		return reflect.Value{}, fmt.Errorf("%w: '%s'", ErrServiceNotResolved, serviceType)
 	}
 
 	// Pick first found service value.
-	return serviceValues[0], nil
+	return resolvedValues[0], nil
 }
 
 // resolveByType resolves all service fits to specified type.
@@ -292,8 +295,7 @@ func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, err
 	// Spawn all found factories.
 	for _, factory := range factories {
 		// Handle found factory definition.
-		err := r.spawnFactory(factory)
-		if err != nil {
+		if err := r.spawnFactory(factory); err != nil {
 			return nil, fmt.Errorf(
 				"failed to spawn '%s' from '%s': %w",
 				factory.name, factory.source, err,
@@ -301,8 +303,7 @@ func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, err
 		}
 
 		// Handle error returned by the factory.
-		err = factory.getOutError()
-		if err != nil {
+		if err := factory.getOutError(); err != nil {
 			return nil, fmt.Errorf(
 				"failed to spawn '%s' from '%s': %w",
 				factory.name, factory.source, err,
@@ -318,27 +319,27 @@ func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, err
 
 // findFactories lookups for all factories for an output type in the registry.
 func (r *registry) findFactories(serviceType reflect.Type) []*factory {
-	var results []*factory
+	var factories []*factory
 
 	// Lookup for factories in the registry.
 	for _, factory := range r.factories {
-		// Desired service type matched exactly.
+		// Desired service type matched.
 		if factory.getOutType() == serviceType {
-			results = append(results, factory)
+			factories = append(factories, factory)
 			continue
 		}
 
 		// Desired service type implements an interface.
 		if serviceType.Kind() == reflect.Interface {
 			if factory.getOutType().Implements(serviceType) {
-				results = append(results, factory)
+				factories = append(factories, factory)
 				continue
 			}
 		}
 	}
 
 	// Return matched factories.
-	return results
+	return factories
 }
 
 // spawnFactory instantiates specified factory definition.
@@ -348,7 +349,7 @@ func (r *registry) spawnFactory(factory *factory) error {
 	defer factory.spawnMu.Unlock()
 
 	// Check factory already spawned.
-	if factory.getSpawned() {
+	if factory.getIsSpawned() {
 		return nil
 	}
 
@@ -359,7 +360,7 @@ func (r *registry) spawnFactory(factory *factory) error {
 	}
 
 	// Save the factory spawn status.
-	factory.setSpawned(true)
+	factory.setIsSpawned(true)
 
 	// Save the factory spawn order.
 	r.mutex.Lock()

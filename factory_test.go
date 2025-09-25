@@ -26,20 +26,24 @@ import (
 
 // TestFactoryLoad tests factory loading.
 func TestFactoryLoad(t *testing.T) {
-	function := func(a, b, c string) (int, error) {
+	fun := func(a, b, c string) (int, error) {
 		return 100500, nil
 	}
 
 	ctx := context.Background()
-	funcValue := reflect.ValueOf(function)
-	state, err := newFactory(ctx, "name", "source", funcValue, nil, nil, nil)
-	equal(t, err, nil)
-	equal(t, state.funcType.String(), "func(string, string, string) (int, error)")
-	equal(t, state.funcValue.String(), "<func(string, string, string) (int, error) Value>")
-	equal(t, fmt.Sprint(state.inTypes), "[string string string]")
-	equal(t, fmt.Sprint(state.outTypes), "[int error]")
-	equal(t, state.spawned, false)
-	equal(t, state.outValues, []reflect.Value(nil))
+	option := NewFactory(fun)
+	registry := &registry{}
+	equal(t, option(ctx, registry), nil)
+	factory := registry.factories[0]
+
+	equal(t, factory.funcType.String(), "func(string, string, string) (int, error)")
+	equal(t, factory.funcValue.String(), "<func(string, string, string) (int, error) Value>")
+	equal(t, fmt.Sprint(factory.inTypes), "[string string string]")
+	equal(t, fmt.Sprint(factory.outTypes), "[int error]")
+	equal(t, fmt.Sprint(factory.getOutType()), "int")
+	equal(t, factory.isSpawned, false)
+	equal(t, factory.outValues, []reflect.Value(nil))
+	equal(t, factory.getOutValue().IsValid(), false)
 }
 
 // TestFactoryInfo tests factories info.
@@ -77,7 +81,7 @@ func TestFactoryInfo(t *testing.T) {
 		{
 			name:  "FactoryGlobalFunc",
 			arg1:  NewFactory(globalFunc),
-			want1: "Factory[func(string) int]",
+			want1: "Factory[func(string)]",
 			want2: "github.com/NVIDIA/gontainer",
 		},
 	}
@@ -85,26 +89,18 @@ func TestFactoryInfo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			registry := &registry{}
-			err := tt.arg1(ctx, registry)
-			equal(t, err, nil)
-			equal(t, len(registry.factories), 1)
-			factory := registry.factories[0]
+			equal(t, tt.arg1(ctx, registry), nil)
 
-			got1 := factory.name
-			if got1 != tt.want1 {
-				t.Errorf("Factory.Name() got = %v, want %v", got1, tt.want1)
-			}
-			got2 := factory.source
-			if got2 != tt.want2 {
-				t.Errorf("Factory.Source() got = %v, want %v", got2, tt.want2)
-			}
+			factory := registry.factories[0]
+			equal(t, factory.name, tt.want1)
+			equal(t, factory.source, tt.want2)
 		})
 	}
 }
 
 type globalType struct{}
 
-func globalFunc(string) int { return 42 }
+func globalFunc(string) {}
 
 // TestSplitFuncName tests splitting of function name.
 func TestSplitFuncName(t *testing.T) {
