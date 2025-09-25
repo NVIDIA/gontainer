@@ -36,7 +36,7 @@ func TestResolverService(t *testing.T) {
 		context.Background(),
 		NewService(svc1),
 		NewService(svc2),
-		NewFactory(func(resolver *Resolver) {
+		NewFunction(func(resolver *Resolver) {
 			started.Store(true)
 
 			var depExists float64

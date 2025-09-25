@@ -57,14 +57,14 @@ func Run(ctx context.Context, options ...Option) error {
 		}
 	}
 
-	// Validate all factories in the registry.
-	if err := registry.validateFactories(); err != nil {
-		return fmt.Errorf("failed to validate factories: %w", err)
+	// Validate all factories in the container.
+	if err := registry.validateRegistry(); err != nil {
+		return fmt.Errorf("failed to validate container: %w", err)
 	}
 
 	// Start all factories in the container.
-	if err := registry.spawnFactories(); err != nil {
-		return fmt.Errorf("failed to spawn factories: %w", err)
+	if err := registry.invokeFunctions(); err != nil {
+		return fmt.Errorf("failed to invoke functions: %w", err)
 	}
 
 	// Close all factories in the container.
@@ -110,18 +110,6 @@ func NewFactory(function any) Option {
 
 		// Prepare value and error getters.
 		switch {
-		// Factory returns nothing.
-		case funcType.NumOut() == 0:
-			getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
-			getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
-			getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
-
-		// Factory returns only error.
-		case funcType.NumOut() == 1 && isErrorInterface(funcType.Out(0)):
-			getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
-			getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
-			getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
-
 		// Factory returns exactly one service.
 		case funcType.NumOut() == 1 && !isEmptyInterface(funcType.Out(0)):
 			getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }

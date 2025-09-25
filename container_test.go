@@ -50,7 +50,7 @@ func TestContainer(t *testing.T) {
 		NewFactory(func() *testService3 { return svc3 }),
 		NewFactory(func() *testService4 { return svc4 }),
 		NewFactory(func() testService5 { return svc5 }),
-		NewFactory(func(
+		NewFunction(func(
 			ctx context.Context,
 			dep1 float64,
 			dep2 string,

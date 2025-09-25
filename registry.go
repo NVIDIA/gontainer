@@ -170,7 +170,10 @@ func (r *registry) invokeFunctions() error {
 
 		// Handle factory error.
 		if err := factory.getOutError(); err != nil {
-			errs = append(errs, err)
+			errs = append(errs, fmt.Errorf(
+				"failed to invoke '%s' from '%s': %w",
+				factory.name, factory.source, err,
+			))
 		}
 	}
 
