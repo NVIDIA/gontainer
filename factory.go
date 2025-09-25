@@ -27,11 +27,6 @@ import (
 	"sync"
 )
 
-// FactoryFunc declares the type for a service factory function.
-// A factory function may accept dependencies as input parameters and
-// must return exactly one service, optionally followed by an error.
-type FactoryFunc any
-
 // Factory declares a service factory definition used by the container to construct services.
 //
 // A Factory wraps a factory function along with its input/output type information and internal
@@ -41,7 +36,7 @@ type FactoryFunc any
 // to enable dependency injection and lifecycle control.
 type Factory struct {
 	// Factory function.
-	fn FactoryFunc
+	fn any
 
 	// Factory function name.
 	name string
@@ -138,10 +133,10 @@ func (f *Factory) factory(ctx context.Context) (*factory, error) {
 //
 //	logger := NewLogger()
 //	gontainer.NewService(logger)
-func NewService[T any](singleton T) *Factory {
-	dataType := reflect.TypeOf(&singleton).Elem()
+func NewService[T any](service T) *Factory {
+	dataType := reflect.TypeOf(&service).Elem()
 	factory := &Factory{
-		fn:     func() T { return singleton },
+		fn:     func() T { return service },
 		name:   fmt.Sprintf("Service[%s]", dataType),
 		source: dataType.PkgPath(),
 	}
@@ -158,10 +153,10 @@ func NewService[T any](singleton T) *Factory {
 // Example:
 //
 //	gontainer.NewFactory(func(db *Database) (*Handler, error), gontainer.WithTag("http"))
-func NewFactory(factoryFn FactoryFunc) *Factory {
-	funcValue := reflect.ValueOf(factoryFn)
+func NewFactory(function any) *Factory {
+	funcValue := reflect.ValueOf(function)
 	factory := &Factory{
-		fn:     factoryFn,
+		fn:     function,
 		name:   fmt.Sprintf("Factory[%s]", funcValue.Type()),
 		source: getFuncSource(funcValue),
 	}
