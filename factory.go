@@ -102,13 +102,23 @@ func (f *Factory) factory(ctx context.Context) (*factory, error) {
 		outTypes = append(outTypes, funcType.Out(index))
 	}
 
+	var outType reflect.Type
+
 	// Validate factory output types.
 	switch {
+	// Factory returns nothing.
+	case len(outTypes) == 0:
+
+	// Factory returns only error.
+	case len(outTypes) == 1 && isErrorInterface(outTypes[0]):
+
 	// Factory returns exactly one service.
 	case len(outTypes) == 1 && !isEmptyInterface(outTypes[0]):
+		outType = outTypes[0]
 
 	// Factory returns a service and an error.
 	case len(outTypes) == 2 && !isEmptyInterface(outTypes[0]) && isErrorInterface(outTypes[1]):
+		outType = outTypes[0]
 
 	// Factory has invalid out signature.
 	default:
@@ -127,7 +137,7 @@ func (f *Factory) factory(ctx context.Context) (*factory, error) {
 		funcType:  funcType,
 		funcValue: funcValue,
 		inTypes:   inTypes,
-		outType:   outTypes[0],
+		outType:   outType,
 	}, nil
 }
 

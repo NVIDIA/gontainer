@@ -29,7 +29,7 @@ import (
 // WithAppEndpoints returns a factory which configures app endpoints.
 func WithAppEndpoints() *gontainer.Factory {
 	return gontainer.NewFactory(
-		func(logger *slog.Logger, server *httpsvr.Server) float32 {
+		func(logger *slog.Logger, server *httpsvr.Server) {
 			logger = logger.With("service", "app")
 			logger.Info("Configuring app endpoints")
 			server.GetMux().HandleFunc(
@@ -38,7 +38,6 @@ func WithAppEndpoints() *gontainer.Factory {
 					_, _ = w.Write([]byte("Hello, world!"))
 				},
 			)
-			return 0
 		},
 	)
 }
@@ -46,7 +45,7 @@ func WithAppEndpoints() *gontainer.Factory {
 // WithHealthEndpoints returns a factory which configures health check endpoints.
 func WithHealthEndpoints() *gontainer.Factory {
 	return gontainer.NewFactory(
-		func(logger *slog.Logger, server *httpsvr.Server) float64 {
+		func(logger *slog.Logger, server *httpsvr.Server) {
 			logger = logger.With("service", "app")
 			logger.Info("Configuring health endpoints")
 			server.GetMux().HandleFunc(
@@ -55,7 +54,6 @@ func WithHealthEndpoints() *gontainer.Factory {
 					_, _ = w.Write([]byte("Alive!"))
 				},
 			)
-			return 0
 		},
 	)
 }
@@ -63,17 +61,16 @@ func WithHealthEndpoints() *gontainer.Factory {
 // WithAppEntryPoint returns a factory which performs final app start and waits for termination.
 func WithAppEntryPoint(terminate <-chan os.Signal) *gontainer.Factory {
 	return gontainer.NewFactory(
-		func(logger *slog.Logger, server *httpsvr.Server) (bool, error) {
+		func(logger *slog.Logger, server *httpsvr.Server) error {
 			// Start serving requests.
 			if err := server.Start(); err != nil {
-				return false, err
+				return err
 			}
 
 			// Wait for termination signal.
 			<-terminate
 			logger.Info("Terminating by signal")
-
-			return false, nil
+			return nil
 		},
 	)
 }

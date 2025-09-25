@@ -62,9 +62,8 @@ func main() {
 		}),
 
 		// Factory to say hello using HelloService.
-		gontainer.NewFactory(func(svc *HelloService) bool {
+		gontainer.NewFactory(func(svc *HelloService) {
 			svc.SayHello()
-			return true
 		}),
 	)
 
