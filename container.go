@@ -20,6 +20,7 @@ package gontainer
 import (
 	"context"
 	"fmt"
+	"reflect"
 )
 
 // Run runs a container with a set of configured factories.
@@ -79,4 +80,45 @@ func Run(ctx context.Context, factories ...*Factory) error {
 
 	// Service container executed.
 	return nil
+}
+
+// NewFactory creates a new service factory using the provided factory function.
+//
+// The factory function must be a valid function. It may accept dependencies as input parameters,
+// and return one or more service instances, optionally followed by an error as the last return value.
+//
+// The resulting Factory can be registered in the container.
+//
+// Example:
+//
+//	gontainer.NewFactory(func(db *Database) (*Handler, error), gontainer.WithTag("http"))
+func NewFactory(function any) *Factory {
+	funcValue := reflect.ValueOf(function)
+	factory := &Factory{
+		fn:     function,
+		name:   fmt.Sprintf("Factory[%s]", funcValue.Type()),
+		source: getFuncSource(funcValue),
+	}
+	return factory
+}
+
+// NewService creates a new service factory that always returns the given singleton value.
+//
+// This is a convenience helper for registering preconstructed service instances
+// as factories. The returned factory produces the same instance on every invocation.
+//
+// This is useful for registering constants, mocks, or externally constructed values.
+//
+// Example:
+//
+//	logger := NewLogger()
+//	gontainer.NewService(logger)
+func NewService[T any](service T) *Factory {
+	dataType := reflect.TypeOf(&service).Elem()
+	factory := &Factory{
+		fn:     func() T { return service },
+		name:   fmt.Sprintf("Service[%s]", dataType),
+		source: dataType.PkgPath(),
+	}
+	return factory
 }
