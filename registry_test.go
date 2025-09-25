@@ -35,8 +35,7 @@ func TestRegistryRegisterFactory(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	opts := WithMetadata("test", func() {})
-	source := NewFactory(fun, opts)
+	source := NewFactory(fun)
 	factory, err := source.factory(ctx)
 	equal(t, err, nil)
 

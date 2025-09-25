@@ -27,36 +27,22 @@ import (
 	"sync"
 )
 
-// FactoryFunc declares the type for a service factory function.
-// A factory function may accept dependencies as input parameters and
-// must return exactly one service, optionally followed by an error.
-type FactoryFunc any
-
-// FactoryMetadata defines a key-value store for attaching metadata to a factory.
-//
-// Metadata can be used for annotations, tagging, grouping, versioning, or
-// integration with external tools. It is populated using `WithMetadata()` option.
-type FactoryMetadata map[string]any
-
 // Factory declares a service factory definition used by the container to construct services.
 //
-// A Factory wraps a factory function along with its metadata, input/output type information,
-// and internal state used during service resolution and lifecycle management.
+// A Factory wraps a factory function along with its input/output type information and internal
+// state used during service resolution and lifecycle management.
 //
 // It is created using NewFactory or NewService, and typically registered into the container
 // to enable dependency injection and lifecycle control.
 type Factory struct {
 	// Factory function.
-	fn FactoryFunc
+	fn any
 
 	// Factory function name.
 	name string
 
 	// Factory function location.
 	source string
-
-	// Factory metadata.
-	metadata FactoryMetadata
 }
 
 // Name returns factory function name.
@@ -67,11 +53,6 @@ func (f *Factory) Name() string {
 // Source returns factory function source.
 func (f *Factory) Source() string {
 	return f.source
-}
-
-// Metadata returns associated factory metadata.
-func (f *Factory) Metadata() FactoryMetadata {
-	return f.metadata
 }
 
 // factory produces internal representation for the factory.
@@ -141,12 +122,6 @@ func (f *Factory) factory(ctx context.Context) (*factory, error) {
 	}, nil
 }
 
-// FactoryOpt defines a functional option for configuring a service factory.
-//
-// Factory options allow customizing the behavior or metadata of a factory
-// at the time of its creation, using functions like WithMetadata, WithTag, etc.
-type FactoryOpt func(*Factory)
-
 // NewService creates a new service factory that always returns the given singleton value.
 //
 // This is a convenience helper for registering preconstructed service instances
@@ -158,16 +133,12 @@ type FactoryOpt func(*Factory)
 //
 //	logger := NewLogger()
 //	gontainer.NewService(logger)
-func NewService[T any](singleton T, opts ...FactoryOpt) *Factory {
-	dataType := reflect.TypeOf(&singleton).Elem()
+func NewService[T any](service T) *Factory {
+	dataType := reflect.TypeOf(&service).Elem()
 	factory := &Factory{
-		fn:       func() T { return singleton },
-		name:     fmt.Sprintf("Service[%s]", dataType),
-		source:   dataType.PkgPath(),
-		metadata: FactoryMetadata{},
-	}
-	for _, opt := range opts {
-		opt(factory)
+		fn:     func() T { return service },
+		name:   fmt.Sprintf("Service[%s]", dataType),
+		source: dataType.PkgPath(),
 	}
 	return factory
 }
@@ -177,40 +148,19 @@ func NewService[T any](singleton T, opts ...FactoryOpt) *Factory {
 // The factory function must be a valid function. It may accept dependencies as input parameters,
 // and return one or more service instances, optionally followed by an error as the last return value.
 //
-// Optional configuration can be applied via factory options (`FactoryOpt`), such as providing additional metadata.
-//
 // The resulting Factory can be registered in the container.
 //
 // Example:
 //
 //	gontainer.NewFactory(func(db *Database) (*Handler, error), gontainer.WithTag("http"))
-func NewFactory(factoryFn FactoryFunc, opts ...FactoryOpt) *Factory {
-	funcValue := reflect.ValueOf(factoryFn)
+func NewFactory(function any) *Factory {
+	funcValue := reflect.ValueOf(function)
 	factory := &Factory{
-		fn:       factoryFn,
-		name:     fmt.Sprintf("Factory[%s]", funcValue.Type()),
-		source:   getFuncSource(funcValue),
-		metadata: FactoryMetadata{},
-	}
-	for _, opt := range opts {
-		opt(factory)
+		fn:     function,
+		name:   fmt.Sprintf("Factory[%s]", funcValue.Type()),
+		source: getFuncSource(funcValue),
 	}
 	return factory
-}
-
-// WithMetadata adds a custom metadata key-value pair to the factory.
-//
-// Metadata can be used to attach arbitrary information to a factory,
-// such as labels, tags, annotations, or integration-specific flags.
-// This data is accessible through the factory’s metadata map at runtime.
-//
-// Example:
-//
-//	gontainer.NewFactory(..., gontainer.WithMetadata("version", "v1.2"))
-func WithMetadata(key string, value any) FactoryOpt {
-	return func(factory *Factory) {
-		factory.metadata[key] = value
-	}
 }
 
 // getFuncSource returns func source path.
