@@ -62,7 +62,7 @@ func TestContainer(t *testing.T) {
 			dep8 Optional[testService5],
 			dep9 Optional[interface{ Do5() error }],
 			dep10 Optional[func() error],
-		) float32 {
+		) {
 			equal(t, dep1, float64(100500))
 			equal(t, dep2, "string")
 			equal(t, dep3.Get(), 123)
@@ -76,7 +76,6 @@ func TestContainer(t *testing.T) {
 			equal(t, dep9.Get().Do5().Error(), "svc5 error")
 			equal(t, dep10.Get(), (func() error)(nil))
 			started.Store(true)
-			return 123
 		}),
 	), nil)
 
