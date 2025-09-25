@@ -147,6 +147,7 @@ func TestRegistryValidateFactories(t *testing.T) {
 				NewFactory(func(bool) (int, error) { return 1, nil }),                      // cycle
 				NewFactory(func(int) (bool, error) { return true, nil }),                   // cycle
 				NewFactory(func() string { return "s3" }),                                  // duplicate
+				NewFunction(func(struct{ X int }) error { return nil }),                    // not resolved
 			},
 			wantErr: func(t *testing.T, err error) {
 				equal(t, errors.Is(err, ErrServiceNotResolved), true)
@@ -156,34 +157,39 @@ func TestRegistryValidateFactories(t *testing.T) {
 				unwrap, ok := err.(interface{ Unwrap() []error })
 				equal(t, ok, true)
 				errs := unwrap.Unwrap()
-				equal(t, len(errs), 6)
+				equal(t, len(errs), 7)
 
 				equal(t, errors.Is(errs[0], ErrServiceNotResolved), true)
 				equal(t, errs[0].Error(), "failed to validate argument 'struct { X int }' (index 0) "+
 					"of 'Factory[func(struct { X int }) string]' from 'github.com/NVIDIA/gontainer': "+
 					"service not resolved")
 
-				equal(t, errors.Is(errs[1], ErrServiceDuplicated), true)
-				equal(t, errs[1].Error(), "failed to validate output 'string' "+
-					"of 'Factory[func(struct { X int }) string]' from 'github.com/NVIDIA/gontainer': "+
-					"service duplicated")
+				equal(t, errors.Is(errs[1], ErrServiceNotResolved), true)
+				equal(t, errs[1].Error(), "failed to validate argument 'struct { X int }' (index 0) "+
+					"of 'Function[func(struct { X int }) error]' from 'github.com/NVIDIA/gontainer': "+
+					"service not resolved")
 
 				equal(t, errors.Is(errs[2], ErrServiceDuplicated), true)
 				equal(t, errs[2].Error(), "failed to validate output 'string' "+
-					"of 'Factory[func(context.Context) (string, error)]' from 'github.com/NVIDIA/gontainer': "+
+					"of 'Factory[func(struct { X int }) string]' from 'github.com/NVIDIA/gontainer': "+
 					"service duplicated")
 
 				equal(t, errors.Is(errs[3], ErrServiceDuplicated), true)
 				equal(t, errs[3].Error(), "failed to validate output 'string' "+
+					"of 'Factory[func(context.Context) (string, error)]' from 'github.com/NVIDIA/gontainer': "+
+					"service duplicated")
+
+				equal(t, errors.Is(errs[4], ErrServiceDuplicated), true)
+				equal(t, errs[4].Error(), "failed to validate output 'string' "+
 					"of 'Factory[func() string]' from 'github.com/NVIDIA/gontainer': "+
 					"service duplicated")
 
-				equal(t, errors.Is(errs[4], ErrCircularDependency), true)
-				equal(t, errs[4].Error(), "failed to validate 'Factory[func(bool) (int, error)]' "+
+				equal(t, errors.Is(errs[5], ErrCircularDependency), true)
+				equal(t, errs[5].Error(), "failed to validate 'Factory[func(bool) (int, error)]' "+
 					"from 'github.com/NVIDIA/gontainer': circular dependency")
 
-				equal(t, errors.Is(errs[5], ErrCircularDependency), true)
-				equal(t, errs[5].Error(), "failed to validate 'Factory[func(int) (bool, error)]' "+
+				equal(t, errors.Is(errs[6], ErrCircularDependency), true)
+				equal(t, errs[6].Error(), "failed to validate 'Factory[func(int) (bool, error)]' "+
 					"from 'github.com/NVIDIA/gontainer': circular dependency")
 			},
 		},
