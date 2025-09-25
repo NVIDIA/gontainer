@@ -45,10 +45,9 @@ func (s *HelloService) SayHello() {
 }
 
 func main() {
-	// Initialize service container.
-	// Order of factories definition is non-restrictive.
-	log.Println("Creating new service container")
-	container, err := gontainer.New(
+	// Start container and wait for finish.
+	log.Println("Starting service container")
+	err := gontainer.Run(
 		// Root context for container.
 		context.Background(),
 
@@ -60,6 +59,11 @@ func main() {
 		// Factory to create an instance of HelloService.
 		gontainer.NewFactory(func(svc *NameService) *HelloService {
 			return &HelloService{nameService: svc}
+		}),
+
+		// Factory to say hello.
+		gontainer.NewFactory(func(svc *HelloService) {
+			svc.SayHello()
 		}),
 	)
 
