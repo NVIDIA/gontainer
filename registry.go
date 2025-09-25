@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"runtime"
 	"sync"
 )
 
@@ -329,11 +328,6 @@ func (r *registry) findFactories(serviceType reflect.Type) []*factory {
 
 // spawnFactory instantiates specified factory definition.
 func (r *registry) spawnFactory(factory *factory) error {
-	// Protect from cyclic dependencies.
-	if getStackDepth() >= stackDepthLimit {
-		return ErrStackLimitReached
-	}
-
 	// Lock the factory spawn mutex.
 	factory.spawnMu.Lock()
 	defer factory.spawnMu.Unlock()
@@ -400,27 +394,3 @@ func isErrorInterface(typ reflect.Type) bool {
 	errType := reflect.TypeOf((*error)(nil)).Elem()
 	return typ.Kind() == reflect.Interface && typ.Implements(errType)
 }
-
-// getStackDepth returns current stack depth.
-func getStackDepth() int {
-	pc := make([]uintptr, stackDepthLimit+1)
-	return runtime.Callers(0, pc) - 1
-}
-
-// stackDepthLimit to protect from infinite recursion.
-const stackDepthLimit = 100
-
-// ErrFactoryReturnedError declares factory returned error.
-var ErrFactoryReturnedError = errors.New("factory returned error")
-
-// ErrServiceDuplicated declares service duplicated error.
-var ErrServiceDuplicated = errors.New("service duplicated")
-
-// ErrServiceNotResolved declares service not resolved error.
-var ErrServiceNotResolved = errors.New("service not resolved")
-
-// ErrCircularDependency declares a cyclic dependency error.
-var ErrCircularDependency = errors.New("circular dependency")
-
-// ErrStackLimitReached declares a reach of stack limit error.
-var ErrStackLimitReached = errors.New("stack limit reached")
