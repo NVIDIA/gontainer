@@ -20,6 +20,7 @@ package app
 import (
 	"log/slog"
 	"net/http"
+	"os"
 
 	"github.com/NVIDIA/gontainer"
 	"github.com/NVIDIA/gontainer/examples/03_complete_webapp/services/httpsvr"
@@ -57,12 +58,19 @@ func WithHealthEndpoints() *gontainer.Factory {
 	)
 }
 
-// WithAppEntryPoint returns a factory which performs final app start.
-func WithAppEntryPoint() *gontainer.Factory {
+// WithAppEntryPoint returns a factory which performs final app start and waits for termination.
+func WithAppEntryPoint(terminate <-chan os.Signal) *gontainer.Factory {
 	return gontainer.NewFactory(
-		func(server *httpsvr.Server) error {
+		func(logger *slog.Logger, server *httpsvr.Server) error {
 			// Start serving requests.
-			return server.Start()
+			if err := server.Start(); err != nil {
+				return err
+			}
+
+			// Wait for termination signal.
+			<-terminate
+			logger.Info("Terminating by signal")
+			return nil
 		},
 	)
 }

@@ -19,6 +19,7 @@ package gontainer
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 )
 
@@ -27,11 +28,17 @@ func TestResolverService(t *testing.T) {
 	svc1 := float64(100500)
 	svc2 := float32(100501)
 
-	container, err := New(
+	// Prepare started flag.
+	started := atomic.Bool{}
+
+	// Run container.
+	equal(t, Run(
 		context.Background(),
 		NewService(svc1),
 		NewService(svc2),
-		NewFactory(func(resolver *Resolver) bool {
+		NewFactory(func(resolver *Resolver) {
+			started.Store(true)
+
 			var depExists float64
 			equal(t, resolver.Resolve(&depExists), nil)
 			equal(t, depExists, svc1)
@@ -39,17 +46,9 @@ func TestResolverService(t *testing.T) {
 			var depNotExists int
 			equal(t, resolver.Resolve(&depNotExists) != nil, true)
 			equal(t, depNotExists, 0)
-			return true
 		}),
-	)
-	equal(t, err, nil)
-	equal(t, container == nil, false)
+	), nil)
 
-	// Start all factories in the container.
-	equal(t, container.Start(), nil)
-
-	// Close all factories in the container.
-	equal(t, container.Close(), nil)
-
-	<-container.Done()
+	// Assert started flag is set.
+	equal(t, started.Load(), true)
 }

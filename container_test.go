@@ -23,7 +23,6 @@ import (
 	"reflect"
 	"sync/atomic"
 	"testing"
-	"time"
 )
 
 // TestContainer tests service container.
@@ -36,8 +35,11 @@ func TestContainer(t *testing.T) {
 		return fmt.Errorf("svc5 error")
 	})
 
+	// Prepare started flag.
 	started := atomic.Bool{}
-	container, err := New(
+
+	// Run container.
+	equal(t, Run(
 		context.Background(),
 		NewService(float64(100500)),
 		NewFactory(func() string { return "string" }),
@@ -60,7 +62,7 @@ func TestContainer(t *testing.T) {
 			dep8 Optional[testService5],
 			dep9 Optional[interface{ Do5() error }],
 			dep10 Optional[func() error],
-		) float32 {
+		) {
 			equal(t, dep1, float64(100500))
 			equal(t, dep2, "string")
 			equal(t, dep3.Get(), 123)
@@ -74,28 +76,11 @@ func TestContainer(t *testing.T) {
 			equal(t, dep9.Get().Do5().Error(), "svc5 error")
 			equal(t, dep10.Get(), (func() error)(nil))
 			started.Store(true)
-			return 123
 		}),
-	)
-	equal(t, err, nil)
-	equal(t, container == nil, false)
-	equal(t, len(container.Factories()), 12)
-	equal(t, started.Load(), false)
+	), nil)
 
-	// Start all factories in the container.
-	equal(t, container.Start(), nil)
+	// Assert started flag is set.
 	equal(t, started.Load(), true)
-	time.Sleep(time.Millisecond)
-
-	// Close all factories in the container.
-	equal(t, container.Close(), nil)
-
-	// Assert context is closed.
-	select {
-	case <-container.Done():
-	default:
-		t.Fatalf("context is not closed")
-	}
 }
 
 type testService1 struct{}
@@ -120,16 +105,6 @@ func (t *testService4) Do1() {}
 type testService5 func() error
 
 func (t testService5) Do5() error { return t() }
-
-type testServiceWithClose struct {
-	ctx    context.Context
-	closed *atomic.Bool
-}
-
-func (t *testServiceWithClose) Close() error {
-	t.closed.Store(true)
-	return nil
-}
 
 func equal(t *testing.T, a, b any) {
 	t.Helper()

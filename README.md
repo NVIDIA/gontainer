@@ -19,24 +19,19 @@ Dependency injection service container for Golang projects.
 
 * [Console command example](./examples/01_console_command/main.go) – demonstrates how to build a simple console command. It shows how to use `Resolver` and `Invoker` services to organize the application entry point in a run-and-exit style.
   ```
-  12:51:32 Creating new service container
+  12:51:32 Executing service container
   12:51:32 Hello from the Hello Service Bob
-  12:51:32 Hello from the Hello Service Bob
-  12:51:32 Closing service container by defer
-  12:51:32 Service container closed
+  12:51:32 Service container executed
   ```
 * [Daemon service example](./examples/02_daemon_service/main.go) – demonstrates how to maintain background services. It shows how to organize a daemon entry point and wait for graceful shutdown by subscribing to OS termination signals.
   ```
-  12:48:22 Creating service container instance
-  12:48:22 Starting service container
+  12:48:22 Executing service container
   12:48:22 Starting listening on: http://127.0.0.1:8080
   12:48:22 Starting serving HTTP requests
-  12:48:22 Awaiting service container done
   ------ Application was started and now accepts HTTP requests -------------
   ------ CTRL+C was pressed or a TERM signal was sent to the process -------
-  12:48:28 Service container done chan closed
-  12:48:28 Closing service container by defer
-  12:48:28 Service container closed
+  12:48:28 Exiting from serving by signal
+  12:48:28 Service container executed
   ```
 * [Complete webapp example](./examples/03_complete_webapp/main.go) – demonstrates how to organize web application with multiple services. It provides basic config service, handles logging, setups HTTP server and initiates two endpoints.
   ```
@@ -44,24 +39,20 @@ Dependency injection service container for Golang projects.
   15:19:48 INFO msg="Configuring app endpoints" service=app
   15:19:48 INFO msg="Configuring health endpoints" service=app
   15:19:48 INFO msg="Starting HTTP server" service=http address=127.0.0.1:8080
-  15:19:48 INFO msg="Service container started" service=logger
   ------ Application was started and now accepts HTTP requests -------------
   15:19:54 INFO msg="Serving home page" service=app remote-addr=127.0.0.1:62640
   15:20:01 INFO msg="Serving health check" service=app remote-addr=127.0.0.1:62640
   ------ CTRL+C was pressed or a TERM signal was sent to the process -------
-  15:20:04 INFO msg="Closing service container" service=logger
+  15:20:04 INFO msg="Terminating by signal" service=app
   15:20:04 INFO msg="Closing HTTP server" service=http
-  15:20:04 INFO msg="Service container closed" service=logger
   ```
 * [Transient service example](./examples/04_transient_services/main.go) – demonstrates how to return a function that can be called multiple times to produce transient services.
   ```
-  11:19:22 Creating new service container
-  11:19:22 Starting service container
-  11:19:22 New value: 42
-  11:19:22 New value: 42
-  11:19:22 New value: 42
-  11:19:22 Closing service container by defer
-  11:19:22 Service container closed
+  11:19:22 Executing service container
+  11:19:22 New value: 8767488676555705225
+  11:19:22 New value: 5813207273458254863
+  11:19:22 New value: 750077227530805093
+  11:19:22 Service container executed
   ```
 
 ## Quick Start
@@ -82,9 +73,9 @@ Dependency injection service container for Golang projects.
       return new(MyService)
    }
    ```
-3. Register service factories in the container.
+3. Run the container with service factories.
    ```go
-   container, err := gontainer.New(
+   err := gontainer.Run(
       context.Background(),
 
       // Define MyService factory in the container.
@@ -97,38 +88,54 @@ Dependency injection service container for Golang projects.
       }),
    )
    if err != nil {
-      log.Fatalf("Failed to init service container: %s", err)
+      log.Fatalf("Failed to run service container: %s", err)
    }
    ```
-4. Start the container and launch all factories.
+4. For on-demand resolution there are `Resolver` and `Invoker` services.
    ```go
-   if err := container.Start(); err != nil {
-      log.Fatalf("Failed to start service container: %s", err)
-   }
-   ```
-5. Alternatively to eager start with a `Start()` call it is possible to resolve services on-demand. They will instantiate only the explicitly requested services and their transitive dependencies.
-   ```go
-   var myService *MyService
-   if err := container.Resolve(&myService); err != nil {
-       log.Fatalf("Failed to resolve dependency: %s", err)
-   }
-   myService.SayHello("World")
+   err := gontainer.Run(
+      context.Background(),
+
+      // Define MyService factory.
+      gontainer.NewFactory(NewMyService),
+   
+      // Use Resolver to resolve services on-demand.
+      gontainer.NewFactory(func(resolver *gontainer.Resolver) error {
+         var myService *MyService
+         if err := resolver.Resolve(&myService); err != nil {
+             return err
+         }
+         myService.SayHello("World")
+         return nil
+      }),
+   )
    ```
    or
    ```go
-   values, err := container.Invoke(func(myService *MyService) error {
-       myService.SayHello("World")
-       return nil
-   })
-   if err != nil {
-       log.Fatalf("Failed to invoke a function: %s", err)
-   }
-   // Check function's returned error
-   if values[0] != nil {
-       log.Fatalf("Function returned error: %s", values[0])
-   }
+   err := gontainer.Run(
+      context.Background(),
+
+      // Define MyService factory.
+      gontainer.NewFactory(NewMyService),
+   
+      // Use Invoker to call functions with auto-injection.
+      gontainer.NewFactory(func(invoker *gontainer.Invoker) error {
+         values, err := invoker.Invoke(func(myService *MyService) error {
+             myService.SayHello("World")
+             return nil
+         })
+         if err != nil {
+             return err
+         }
+         // Check function's returned error
+         if values[0] != nil {
+             return values[0].(error)
+         }
+         return nil
+      }),
+   )
    ```
-   The `Resolve` and `Invoke` methods can serve as an entry point to the application, especially when it's a simple console tool that runs a task and exits.
+   The `Resolver` and `Invoker` services can serve as an entry point to the application, especially when it's a simple console tool that runs a task and exits.
    The [console command example](./examples/01_console_command/main.go) demonstrates this approach.
 
 ## Key Concepts
@@ -172,14 +179,14 @@ To achieve this, the service factory can return a function (this function will b
 a new service instance each time it is called and other factories could depend on this function by its type.
 
 ```go
-container, err := gontainer.New(
+err := gontainer.Run(
     context.Background(),
 
     // Return new function from the factory.
 	// It will produce new values each time.
     gontainer.NewFactory(func() func() int {
         return func() int { 
-			return 42
+			return rand.Int()
 		}
     }),
 
@@ -254,35 +261,38 @@ func (s *MyService) Close() error {
 
 ### Container API
 
-The `Container` struct provides the following methods:
+The package provides the following main function:
 
 ```go
-// New creates a new container instance with the given context and factories.
-func New(ctx context.Context, factories ...*Factory) (*Container, error)
+// Run runs the container with the given context and factories.
+// It automatically handles the container lifecycle:
+// 1. Registers all factories.
+// 2. Validates dependencies.
+// 3. Spawns all factories.
+// 4. Closes all services.
+func Run(ctx context.Context, factories ...*Factory) error
+```
 
-// Start initializes every service in the container.
-func (c *Container) Start() error
+### Built-in Services
 
-// Close closes service container with all services.
-// Blocks invocation until the container is closed.
-func (c *Container) Close() error
+The container automatically provides the following services that can be injected into any factory:
 
-// Done returns a channel that is closed after all services have been shut down.
-func (c *Container) Done() <-chan struct{}
-
-// Factories returns all registered service factories.
-func (c *Container) Factories() []*Factory
+```go
+// Resolver provides on-demand service resolution.
+type Resolver struct { ... }
 
 // Resolve resolves a service dependency and stores it in the provided pointer.
-// If the container is not yet started, only requested services and their
-// transitive dependencies will be instantiated.
-func (c *Container) Resolve(varPtr any) error
+// If the service is not yet instantiated, it will be created along with
+// its transitive dependencies.
+func (r *Resolver) Resolve(varPtr any) error
+
+// Invoker provides dynamic function invocation with dependency injection.
+type Invoker struct { ... }
 
 // Invoke calls the provided function with auto-injected dependencies.
 // Returns all values returned by the function as []any, and an error if
-// dependency resolution fails. If the container is not yet started, only 
-// requested services and their transitive dependencies will be instantiated.
-func (c *Container) Invoke(fn any) ([]any, error)
+// dependency resolution fails. Services are instantiated on-demand.
+func (i *Invoker) Invoke(fn any) ([]any, error)
 ```
 
 ### Container Errors

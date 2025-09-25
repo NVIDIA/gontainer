@@ -79,6 +79,11 @@ func (r *registry) validateFactories() error {
 
 	// Validate all output types are unique.
 	for _, factory := range r.factories {
+		// Skip factories without output type.
+		if factory.outType == nil {
+			continue
+		}
+
 		// Validate uniqueness of the factory output type.
 		typeFactories := r.findFactoriesFor(factory.outType)
 		if len(typeFactories) > 1 {
@@ -171,8 +176,14 @@ func (r *registry) closeFactories() error {
 		// the waiting of context done channel and finish work.
 		factory.cancel()
 
+		// Skip factories without output type.
+		if factory.outType == nil {
+			continue
+		}
+
 		// Handle the single spawned factory output value.
 		outValue := factory.getOutValue()
+
 		// Get the factory result object interface.
 		service := outValue.Interface()
 
@@ -288,27 +299,32 @@ func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, err
 
 // findFactoriesFor lookups for all factories for an output type in the registry.
 func (r *registry) findFactoriesFor(serviceType reflect.Type) []*factory {
-	var records []*factory
+	var factories []*factory
 
 	// Lookup for factories in the registry.
-	for _, record := range r.factories {
+	for _, factory := range r.factories {
+		// Skip factories without output type.
+		if factory.outType == nil {
+			continue
+		}
+
 		// Desired service type matched.
-		if record.outType == serviceType {
-			records = append(records, record)
+		if factory.outType == serviceType {
+			factories = append(factories, factory)
 			continue
 		}
 
 		// Desired service type implements an interface.
 		if serviceType.Kind() == reflect.Interface {
-			if record.outType.Implements(serviceType) {
-				records = append(records, record)
+			if factory.outType.Implements(serviceType) {
+				factories = append(factories, factory)
 				continue
 			}
 		}
 	}
 
 	// Return matched factories.
-	return records
+	return factories
 }
 
 // spawnFactory instantiates specified factory definition.
@@ -359,7 +375,9 @@ func (r *registry) spawnFactory(factory *factory) error {
 	factory.setSpawned(true)
 
 	// Save the factory out values.
-	factory.setOutValue(outValues[0])
+	if factory.outType != nil {
+		factory.setOutValue(outValues[0])
+	}
 
 	// Save the factory spawn order.
 	r.mutex.Lock()
