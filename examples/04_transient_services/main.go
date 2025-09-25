@@ -20,15 +20,15 @@ package main
 import (
 	"context"
 	"log"
+	"math/rand"
 
 	"github.com/NVIDIA/gontainer"
 )
 
 func main() {
-	// Initialize service container.
-	// Order of factories definition is non-restrictive.
-	log.Println("Creating new service container")
-	container, err := gontainer.New(
+	// Execute service container.
+	log.Println("Executing service container")
+	err := gontainer.Run(
 		// Root context for container.
 		context.Background(),
 
@@ -38,40 +38,27 @@ func main() {
 			// Container factory returns this service as a singleton:
 			// once on the eager container start or once on the lazy
 			// service resolution via resolver or invoker components.
-			return func() int { return 42 }
+			return func() int {
+				return rand.Int()
+			}
 		}),
 
 		// This factory is called once on the container start.
 		// Depend on the function returned by the previous factory.
 		// This could be used to produce transient services.
-		gontainer.NewFactory(func(funcFromFactory1 func() int) {
+		gontainer.NewFactory(func(funcFromFactory1 func() int) error {
 			log.Printf("New value: %d", funcFromFactory1())
 			log.Printf("New value: %d", funcFromFactory1())
 			log.Printf("New value: %d", funcFromFactory1())
+			return nil
 		}),
 	)
 
-	// Validate the container's proper handling of all factory functions.
-	// Errors may point to bad function signatures or unresolvable dependencies.
+	// Check if service container run failed.
 	if err != nil {
-		log.Panicf("Failed to create service container: %s", err)
+		log.Panicf("Service container failed: %s", err)
 	}
 
-	// Instantiate all services within the container.
-	// This call will wait until all factories returns.
-	log.Println("Starting service container")
-	if err := container.Start(); err != nil {
-		log.Panicf("Failed to start service container: %s", err)
-	}
-
-	// Close defined services in reverse-to-instantiation order.
-	// Every service can define it's own `Close() error` method.
-	// The `container.Close()` can be called several times.
-	defer func() {
-		log.Println("Closing service container by defer")
-		if err := container.Close(); err != nil {
-			log.Panicf("Failed to close service container: %s", err)
-		}
-		log.Println("Service container closed")
-	}()
+	// Service container successfully executed.
+	log.Println("Service container executed")
 }
