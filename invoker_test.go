@@ -100,20 +100,17 @@ func TestInvokerService(t *testing.T) {
 				context.Background(),
 				NewFactory(func() string { return "string" }),
 				NewFactory(func() int { return 123 }),
-				NewFactory(func(invoker *Invoker) float32 {
+				NewFactory(func(invoker *Invoker) {
 					started.Store(true)
 
 					values, err := invoker.Invoke(tt.haveFn)
 					if (err != nil) != tt.wantErr {
 						t.Errorf("Invoke() error = %v, wantErr %v", err, tt.wantErr)
-						return 0
 					}
 
 					if tt.wantFn != nil {
 						tt.wantFn(t, values)
 					}
-
-					return 0
 				}),
 			), nil)
 
