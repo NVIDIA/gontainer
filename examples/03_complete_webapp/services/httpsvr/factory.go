@@ -63,8 +63,7 @@ func (s *Server) Start() error {
 	return nil
 }
 
-// Close function will be automatically called on the container close.
-// See: https://github.com/NVIDIA/gontainer?tab=readme-ov-file#services.
+// Close closes HTTP server.
 func (s *Server) Close() error {
 	// Stop serving HTTP requests.
 	s.logger.Info("Closing HTTP server")

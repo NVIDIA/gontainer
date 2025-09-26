@@ -37,6 +37,8 @@ func TestContainer(t *testing.T) {
 
 	// Prepare started flag.
 	started := atomic.Bool{}
+	closed := atomic.Bool{}
+	invoked := atomic.Bool{}
 
 	// Run container.
 	equal(t, Run(
@@ -50,6 +52,13 @@ func TestContainer(t *testing.T) {
 		NewFactory(func() *testService3 { return svc3 }),
 		NewFactory(func() *testService4 { return svc4 }),
 		NewFactory(func() testService5 { return svc5 }),
+		NewFactory(func() (float32, func() error) {
+			started.Store(true)
+			return 123, func() error {
+				closed.Store(true)
+				return nil
+			}
+		}),
 		NewFunction(func(
 			ctx context.Context,
 			dep1 float64,
@@ -62,6 +71,7 @@ func TestContainer(t *testing.T) {
 			dep8 Optional[testService5],
 			dep9 Optional[interface{ Do5() error }],
 			dep10 Optional[func() error],
+			dep11 float32,
 		) {
 			equal(t, dep1, float64(100500))
 			equal(t, dep2, "string")
@@ -75,12 +85,15 @@ func TestContainer(t *testing.T) {
 			equal(t, dep8.Get().Do5().Error(), "svc5 error")
 			equal(t, dep9.Get().Do5().Error(), "svc5 error")
 			equal(t, dep10.Get(), (func() error)(nil))
-			started.Store(true)
+			equal(t, dep11, float32(123))
+			invoked.Store(true)
 		}),
 	), nil)
 
-	// Assert started flag is set.
+	// Assert flags are set.
 	equal(t, started.Load(), true)
+	equal(t, closed.Load(), true)
+	equal(t, invoked.Load(), true)
 }
 
 type testService1 struct{}

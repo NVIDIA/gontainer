@@ -86,8 +86,10 @@ type Option func(ctx context.Context, registry *registry) error
 //
 // Example:
 //
-//	gontainer.NewFactory(func(db *Database) (*Handler, error) { ... })
 //	gontainer.NewFactory(func(db *Database) *Handler { ... })
+//	gontainer.NewFactory(func(db *Database) (*Handler, error) { ... })
+//	gontainer.NewFactory(func(db *Database) (*Handler, func() error) { ... })
+//	gontainer.NewFactory(func(db *Database) (*Handler, func() error, error) { ... })
 func NewFactory(function any) Option {
 	funcValue := reflect.ValueOf(function)
 	funcType := reflect.TypeOf(function)
@@ -106,6 +108,7 @@ func NewFactory(function any) Option {
 		// Prepare default value and error getters.
 		var getOutType getOutTypeFn
 		var getOutValue getOutValueFn
+		var getOutClose getOutCloseFn
 		var getOutError getOutErrorFn
 
 		// Prepare value and error getters.
@@ -114,13 +117,29 @@ func NewFactory(function any) Option {
 		case funcType.NumOut() == 1 && isUsefulService(funcType.Out(0)):
 			getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
 			getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+			getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 			getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 
 		// Factory returns a service and an error.
 		case funcType.NumOut() == 2 && isUsefulService(funcType.Out(0)) && isErrorInterface(funcType.Out(1)):
 			getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
 			getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+			getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 			getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
+
+		// Factory returns a service and a close callback.
+		case funcType.NumOut() == 2 && isUsefulService(funcType.Out(0)) && isCloseCallback(funcType.Out(1)):
+			getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
+			getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+			getOutClose = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
+			getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+
+		// Factory returns a service, a close callback and an error.
+		case funcType.NumOut() == 3 && isUsefulService(funcType.Out(0)) && isCloseCallback(funcType.Out(1)) && isErrorInterface(funcType.Out(2)):
+			getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
+			getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+			getOutClose = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
+			getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[2] }
 
 		// Factory signature is invalid.
 		default:
@@ -128,7 +147,7 @@ func NewFactory(function any) Option {
 		}
 
 		// Load the factory internal representation.
-		state, err := newFactory(ctx, name, source, funcValue, getOutType, getOutValue, getOutError)
+		state, err := newFactory(ctx, name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
 		if err != nil {
 			return fmt.Errorf("failed to load factory '%s': %w", name, err)
 		}
@@ -166,13 +185,12 @@ func NewService[T any](service T) Option {
 	return func(ctx context.Context, registry *registry) error {
 		// Prepare value and error getters.
 		getOutType := func(outTypes []reflect.Type) reflect.Type { return funcType.Out(0) }
-		getOutValue := func(outValues []reflect.Value) reflect.Value {
-			return outValues[0]
-		}
+		getOutValue := func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+		getOutClose := func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 		getOutError := func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 
 		// Load the factory internal representation.
-		state, err := newFactory(ctx, name, source, funcValue, getOutType, getOutValue, getOutError)
+		state, err := newFactory(ctx, name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
 		if err != nil {
 			return fmt.Errorf("failed to load factory '%s': %w", name, err)
 		}
@@ -209,6 +227,7 @@ func NewFunction(function any) Option {
 		// Prepare default value and error getters.
 		var getOutType getOutTypeFn
 		var getOutValue getOutValueFn
+		var getOutClose getOutCloseFn
 		var getOutError getOutErrorFn
 
 		// Prepare value and error getters.
@@ -217,12 +236,14 @@ func NewFunction(function any) Option {
 		case funcType.NumOut() == 0:
 			getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
 			getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+			getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 			getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 
 		// Function returns an error.
 		case funcType.NumOut() == 1 && isErrorInterface(funcType.Out(0)):
 			getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
 			getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+			getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 			getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
 
 		// Function signature is invalid.
@@ -231,7 +252,7 @@ func NewFunction(function any) Option {
 		}
 
 		// Load the factory internal representation.
-		state, err := newFactory(ctx, name, source, funcValue, getOutType, getOutValue, getOutError)
+		state, err := newFactory(ctx, name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
 		if err != nil {
 			return fmt.Errorf("failed to load factory '%s': %w", name, err)
 		}

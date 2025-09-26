@@ -64,8 +64,10 @@ func splitFuncName(funcFullName string) (string, string) {
 
 // newFactory loads factory function to the internal representation.
 func newFactory(
-	ctx context.Context, name, source string, funcValue reflect.Value,
-	getOutType getOutTypeFn, getOutValue getOutValueFn, getOutError getOutErrorFn,
+	ctx context.Context,
+	name, source string, funcValue reflect.Value,
+	getOutType getOutTypeFn, getOutValue getOutValueFn,
+	getOutClose getOutCloseFn, getOutError getOutErrorFn,
 ) (*factory, error) {
 	// Prepare function reflect type.
 	funcType := funcValue.Type()
@@ -99,6 +101,7 @@ func newFactory(
 		// Signature-dependent.
 		getOutTypeFn:  getOutType,
 		getOutValueFn: getOutValue,
+		getOutCloseFn: getOutClose,
 		getOutErrorFn: getOutError,
 	}, nil
 }
@@ -149,6 +152,9 @@ type factory struct {
 
 	// Factory output value getter.
 	getOutValueFn getOutValueFn
+
+	// Factory output close getter.
+	getOutCloseFn getOutCloseFn
 
 	// Factory output error getter.
 	getOutErrorFn getOutErrorFn
@@ -223,6 +229,37 @@ func (f *factory) getOutError() error {
 	return nil
 }
 
+// getOutClose returns factory close function in a thread-safe way.
+func (f *factory) getOutClose() func() error {
+	// Get the factory closer value.
+	outValues := f.getOutValues()
+	outValue := f.getOutCloseFn(outValues)
+
+	// Check if the value is valid.
+	if !outValue.IsValid() {
+		return func() error {
+			return nil
+		}
+	}
+
+	// Check if the value is nil.
+	if outValue.IsNil() {
+		return func() error {
+			return nil
+		}
+	}
+
+	// Check if the value is a close function.
+	if closeFunc, ok := outValue.Interface().(func() error); ok {
+		return closeFunc
+	}
+
+	// Return a no-op close function.
+	return func() error {
+		return nil
+	}
+}
+
 // getOutTypeFn is the function type for getting an output type.
 type getOutTypeFn func([]reflect.Type) reflect.Type
 
@@ -231,3 +268,6 @@ type getOutValueFn func([]reflect.Value) reflect.Value
 
 // getOutErrorFn is the function type for getting an output error.
 type getOutErrorFn func([]reflect.Value) reflect.Value
+
+// getOutCloseFn is the function type for getting a close function.
+type getOutCloseFn func([]reflect.Value) reflect.Value

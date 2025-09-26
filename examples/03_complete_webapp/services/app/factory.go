@@ -68,9 +68,12 @@ func WithAppEntryPoint(terminate <-chan os.Signal) gontainer.Option {
 			}
 
 			// Wait for termination signal.
+			logger.Info("Waiting for term signal")
 			<-terminate
-			logger.Info("Terminating by signal")
-			return nil
+			logger.Info("Term signal received")
+
+			// Terminate the server.
+			return server.Close()
 		},
 	)
 }

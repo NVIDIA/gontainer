@@ -198,22 +198,12 @@ func (r *registry) closeFactories() error {
 		// waiting of context done channels and finish work.
 		factory.cancel()
 
-		// Get the factory result object interface.
-		service := factory.getOutValue().Interface()
-
-		// Close service implementing `Close() error` interface.
-		if closer, ok := service.(interface{ Close() error }); ok {
-			if err := closer.Close(); err != nil {
-				errs = append(errs, fmt.Errorf(
-					"failed to close service '%T' of '%s' from '%s': %w",
-					service, factory.name, factory.source, err),
-				)
-			}
-		}
-
-		// Close service implementing `Close()` interface.
-		if closer, ok := service.(interface{ Close() }); ok {
-			closer.Close()
+		// Invoke close callback function.
+		if err := factory.getOutClose()(); err != nil {
+			errs = append(errs, fmt.Errorf(
+				"failed to close '%s' from '%s': %w",
+				factory.name, factory.source, err,
+			))
 		}
 	}
 
@@ -443,4 +433,10 @@ func isContextInterface(typ reflect.Type) bool {
 func isErrorInterface(typ reflect.Type) bool {
 	errType := reflect.TypeOf((*error)(nil)).Elem()
 	return typ.Kind() == reflect.Interface && typ.Implements(errType)
+}
+
+// isCloseCallback returns true when argument is a close callback function.
+func isCloseCallback(typ reflect.Type) bool {
+	refType := reflect.TypeOf(func() error { return nil })
+	return typ.Kind() == reflect.Func && typ == refType
 }
