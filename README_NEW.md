@@ -11,10 +11,12 @@ Simple but powerful dependency injection container for Go projects!
 
 ## Features
 
-- 🚀 Lazy dependencies instantiation with automatic dependency injection.
-- 🛠 Automatic injection of dependencies for service factories, avoiding manual fetch through container API.
-- 🔄 Automatic reverse-to-instantiation order for service termination to ensure proper resource release and shutdown.
-- 🤖 Clean and tested implementation based on reflection and generics. No external dependencies.
+- 🎯 Automatic dependency injection based on function signatures.
+- ✨ Super simple interface to register and run services.
+- 🚀 Lazy service creation only when actually needed.
+- 🔄 Lifecycle management with proper cleanup in reverse order.
+- 🤖 Clean and tested implementation using reflection and generics.
+- 🧩 No external packages, no code generation, zero dependencies.
 
 ## Quick Start
 
