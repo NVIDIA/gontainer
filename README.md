@@ -51,7 +51,7 @@ func main() {
         
         // Use your services
         gontainer.NewFunction(func(users *UserService) {
-            log.Printf("UserService ready with DB: %s", users.db.connString)
+            log.Printf("UserService ready with DB: %s", users.db)
         }),
     )
     
