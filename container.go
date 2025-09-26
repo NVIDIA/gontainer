@@ -80,9 +80,6 @@ func Run(ctx context.Context, options ...Option) error {
 type Option interface {
 	// apply applies the option to the given context and registry.
 	apply(context.Context, *registry) error
-
-	// kind returns associated with the option kind string.
-	kind() string
 }
 
 // NewFactory creates a new service load using the provided load function.
@@ -163,7 +160,7 @@ func NewFactory(function any) Option {
 
 		// Factory registered.
 		return nil
-	}, "factory")
+	})
 }
 
 // NewService creates a new service load that always returns the given singleton value.
@@ -206,7 +203,7 @@ func NewService[T any](service T) Option {
 
 		// Factory registered.
 		return nil
-	}, "service")
+	})
 }
 
 // NewEntrypoint creates a new factory which will be called by the container.
@@ -268,41 +265,20 @@ func NewEntrypoint(function any) Option {
 
 		// Factory registered.
 		return nil
-	}, "entrypoint")
-}
-
-// IsFactory checks if the given option is a factory.
-func IsFactory(option Option) bool {
-	return option.kind() == "factory"
-}
-
-// IsService checks if the given option is a service.
-func IsService(option Option) bool {
-	return option.kind() == "service"
-}
-
-// IsEntrypoint checks if the given option is an entrypoint.
-func IsEntrypoint(option Option) bool {
-	return option.kind() == "entrypoint"
+	})
 }
 
 // newOption creates a new option with the given apply function.
-func newOption(apply func(context.Context, *registry) error, kind string) Option {
-	return &option{fn: apply, knd: kind}
+func newOption(apply func(context.Context, *registry) error) *option {
+	return &option{fn: apply}
 }
 
 // option implements Option interface.
 type option struct {
-	fn  func(context.Context, *registry) error
-	knd string
+	fn func(context.Context, *registry) error
 }
 
 // apply applies the option to the given context and registry.
 func (o *option) apply(ctx context.Context, registry *registry) error {
 	return o.fn(ctx, registry)
-}
-
-// String returns a human-readable description of the option.
-func (o *option) kind() string {
-	return o.knd
 }
