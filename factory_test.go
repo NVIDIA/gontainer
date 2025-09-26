@@ -64,25 +64,25 @@ func TestFactoryInfo(t *testing.T) {
 			name:  "ServiceLocalType",
 			arg1:  NewService(localType{}),
 			want1: "Service[gontainer.localType]",
-			want2: "github.com/NVIDIA/gontainer",
+			want2: "github.com/NVIDIA/gontainer/v2",
 		},
 		{
 			name:  "ServiceGlobalType",
 			arg1:  NewService(globalType{}),
 			want1: "Service[gontainer.globalType]",
-			want2: "github.com/NVIDIA/gontainer",
+			want2: "github.com/NVIDIA/gontainer/v2",
 		},
 		{
 			name:  "FactoryLocalFunc",
 			arg1:  NewFactory(localFunc),
 			want1: "Factory[func(gontainer.globalType) string]",
-			want2: "github.com/NVIDIA/gontainer",
+			want2: "github.com/NVIDIA/gontainer/v2",
 		},
 		{
 			name:  "FactoryGlobalFunc",
 			arg1:  NewFactory(globalFunc),
 			want1: "Factory[func(string) bool]",
-			want2: "github.com/NVIDIA/gontainer",
+			want2: "github.com/NVIDIA/gontainer/v2",
 		},
 	}
 	for _, tt := range tests {
@@ -113,8 +113,8 @@ func TestSplitFuncName(t *testing.T) {
 		want2 string
 	}{{
 		name:  "SplitPublicPackage",
-		arg:   "github.com/NVIDIA/gontainer/app.WithApp.func1",
-		want1: "github.com/NVIDIA/gontainer/app",
+		arg:   "github.com/NVIDIA/gontainer/v2/app.WithApp.func1",
+		want1: "github.com/NVIDIA/gontainer/v2/app",
 		want2: "WithApp.func1",
 	}, {
 		name:  "SplitMainPackage",

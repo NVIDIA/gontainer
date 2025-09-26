@@ -22,7 +22,7 @@ import (
 	"log"
 	"math/rand"
 
-	"github.com/NVIDIA/gontainer"
+	"github.com/NVIDIA/gontainer/v2"
 )
 
 func main() {

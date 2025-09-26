@@ -27,7 +27,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/NVIDIA/gontainer"
+	"github.com/NVIDIA/gontainer/v2"
 )
 
 // MyService performs some crucial tasks.

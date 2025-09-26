@@ -4,6 +4,6 @@ go 1.21
 
 toolchain go1.21.0
 
-require github.com/NVIDIA/gontainer v0.0.0-00010101000000-000000000000
+require github.com/NVIDIA/gontainer/v2 v2.0.0-00010101000000-000000000000
 
-replace github.com/NVIDIA/gontainer => ../../
+replace github.com/NVIDIA/gontainer/v2 => ../../

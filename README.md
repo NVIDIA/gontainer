@@ -1,7 +1,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![GoDoc](https://pkg.go.dev/badge/github.com/NVIDIA/gontainer)](https://pkg.go.dev/github.com/NVIDIA/gontainer)
+[![GoDoc](https://pkg.go.dev/badge/github.com/NVIDIA/gontainer/v2)](https://pkg.go.dev/github.com/NVIDIA/gontainer/v2)
 ![Test](https://github.com/NVIDIA/gontainer/actions/workflows/go.yml/badge.svg)
-[![Report](https://goreportcard.com/badge/github.com/NVIDIA/gontainer)](https://goreportcard.com/report/github.com/NVIDIA/gontainer)
+[![Report](https://goreportcard.com/badge/github.com/NVIDIA/gontainer/v2)](https://goreportcard.com/report/github.com/NVIDIA/gontainer/v2)
 
 # Gontainer
 
@@ -28,7 +28,7 @@ package main
 import (
     "context"
     "log"
-    "github.com/NVIDIA/gontainer"
+    "github.com/NVIDIA/gontainer/v2"
 )
 
 // Your services
@@ -104,7 +104,7 @@ func main() {
 ## Installation
 
 ```bash
-go get github.com/NVIDIA/gontainer@latest
+go get github.com/NVIDIA/gontainer/v2
 ```
 
 Requirements: Go 1.21+

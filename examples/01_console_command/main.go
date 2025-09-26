@@ -21,7 +21,7 @@ import (
 	"context"
 	"log"
 
-	"github.com/NVIDIA/gontainer"
+	"github.com/NVIDIA/gontainer/v2"
 )
 
 // NameService is a service that returns a name.
