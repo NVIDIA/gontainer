@@ -327,9 +327,9 @@ func TestRegistryResolveWithErrors(t *testing.T) {
 	value, err := registry.resolveService(reflect.TypeOf(true))
 	equal(t, err != nil, true)
 	equal(t, value.IsValid(), false)
-	equal(t, fmt.Sprint(err), `failed to spawn `+
-		`'Factory[func() (bool, error)]' from 'github.com/NVIDIA/gontainer/v2': `+
-		`factory returned error: some function-specific error message`)
+	equal(t, fmt.Sprint(err), ""+
+		"Factory[func() (bool, error)] from 'github.com/NVIDIA/gontainer/v2': "+
+		"factory returned error: some function-specific error message")
 	equal(t, errors.Is(err, ErrFactoryReturnedError), true)
 }
 
@@ -345,9 +345,9 @@ func TestRegistryInvokeWithErrors(t *testing.T) {
 
 	err := registry.invokeEntrypoints()
 	equal(t, err != nil, true)
-	equal(t, fmt.Sprint(err), ``+
-		`'Entrypoint[func() error]' from 'github.com/NVIDIA/gontainer/v2': `+
-		`entrypoint returned error: some function-specific error message`)
+	equal(t, fmt.Sprint(err), ""+
+		"Entrypoint[func() error] from 'github.com/NVIDIA/gontainer/v2': "+
+		"entrypoint returned error: some function-specific error message")
 	equal(t, errors.Is(err, ErrEntrypointReturnedError), true)
 }
 
