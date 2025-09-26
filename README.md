@@ -50,7 +50,7 @@ func main() {
         }),
         
         // Use your services
-        gontainer.NewFunction(func(users *UserService) {
+        gontainer.NewEntrypoint(func(users *UserService) {
             log.Printf("UserService ready with DB: %s", users.db)
         }),
     )
@@ -160,7 +160,7 @@ err := gontainer.Run(
     context.Background(),
     gontainer.NewFactory(...),
     gontainer.NewFactory(...),
-    gontainer.NewFunction(func(/* dependencies */) {
+    gontainer.NewEntrypoint(func(/* dependencies */) {
         // Application entry point
     }),
 )
@@ -226,7 +226,7 @@ gontainer.NewFactory(func(middlewares gontainer.Multiple[Middleware]) *Router {
 Resolve services on-demand:
 
 ```go
-gontainer.NewFunction(func(resolver *gontainer.Resolver) error {
+gontainer.NewEntrypoint(func(resolver *gontainer.Resolver) error {
     // Resolve service dynamically
     var userService *UserService
     if err := resolver.Resolve(&userService); err != nil {
@@ -253,7 +253,7 @@ gontainer.NewFactory(func(db *Database) func() *Transaction {
 })
 
 // Use the factory function
-gontainer.NewFunction(func(newTx func() *Transaction) {
+gontainer.NewEntrypoint(func(newTx func() *Transaction) {
     tx1 := newTx() // New instance
     tx2 := newTx() // Another new instance
 })
@@ -266,17 +266,17 @@ gontainer.NewFunction(func(newTx func() *Transaction) {
 Gontainer module interface is really simple:
 
 ```go
-// Run creates and runs a container with provided options
+// Run creates and runs a container with provided options.
 func Run(ctx context.Context, opts ...Option) error
 
-// NewFactory registers a service factory
+// NewFactory registers a service factory.
 func NewFactory(fn any) Option
 
-// NewService registers a pre-created service
+// NewService registers a pre-created service.
 func NewService[T any](service T) Option
 
-// NewFunction registers a function to run after all services are created
-func NewFunction(fn any) Option
+// NewEntrypoint registers an entrypoint function.
+func NewEntrypoint(fn any) Option
 ```
 
 ### Factory Signatures
