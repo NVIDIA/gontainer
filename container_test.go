@@ -59,7 +59,7 @@ func TestContainer(t *testing.T) {
 				return nil
 			}
 		}),
-		NewFunction(func(
+		NewEntrypoint(func(
 			ctx context.Context,
 			dep1 float64,
 			dep2 string,

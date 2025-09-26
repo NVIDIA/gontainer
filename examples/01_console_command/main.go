@@ -62,7 +62,7 @@ func main() {
 		}),
 
 		// Factory to say hello using HelloService.
-		gontainer.NewFunction(func(svc *HelloService) {
+		gontainer.NewEntrypoint(func(svc *HelloService) {
 			svc.SayHello()
 		}),
 	)

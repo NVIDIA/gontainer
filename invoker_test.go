@@ -100,7 +100,7 @@ func TestInvokerService(t *testing.T) {
 				context.Background(),
 				NewFactory(func() string { return "string" }),
 				NewFactory(func() int { return 123 }),
-				NewFunction(func(invoker *Invoker) {
+				NewEntrypoint(func(invoker *Invoker) {
 					started.Store(true)
 
 					values, err := invoker.Invoke(tt.haveFn)
