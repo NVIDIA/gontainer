@@ -352,7 +352,7 @@ case errors.Is(err, gontainer.ErrCircularDependency):
 case errors.Is(err, gontainer.ErrServiceNotResolved):
     // Service type not registered
 case errors.Is(err, gontainer.ErrServiceDuplicated):
-	// Service type was duplicated
+    // Service type was duplicated
 }
 ```
 
