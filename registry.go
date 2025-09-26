@@ -83,7 +83,7 @@ func (r *registry) validateRegistry() error {
 			factories := r.findFactories(inType)
 			if len(factories) == 0 {
 				errs = append(errs, fmt.Errorf(
-					"'%s' from '%s': argument '%s': %w",
+					"%s from '%s': argument '%s': %w",
 					factory.name, factory.source, inType,
 					ErrDependencyNotResolved,
 				))
@@ -106,7 +106,7 @@ func (r *registry) validateRegistry() error {
 		factories := r.findFactories(outType)
 		if len(factories) > 1 {
 			errs = append(errs, fmt.Errorf(
-				"'%s' from '%s': output '%s': %w",
+				"%s from '%s': output '%s': %w",
 				factory.name, factory.source, outType,
 				ErrFactoryTypeDuplicated,
 			))
@@ -144,7 +144,7 @@ func (r *registry) validateRegistry() error {
 				for _, factoryForType := range typeFactories {
 					if factoryForType == r.factories[index] {
 						errs = append(errs, fmt.Errorf(
-							"'%s' from '%s': %w",
+							"%s from '%s': %w",
 							r.factories[index].name,
 							r.factories[index].source,
 							ErrCircularDependency,
@@ -177,7 +177,7 @@ func (r *registry) invokeEntrypoints() error {
 		// Invoke the factory.
 		if err := r.invokeFactory(factory); err != nil {
 			errs = append(errs, fmt.Errorf(
-				"failed to invoke '%s' from '%s': %w",
+				"%s from '%s': invoke: %w",
 				factory.name, factory.source, err,
 			))
 		}
@@ -185,7 +185,7 @@ func (r *registry) invokeEntrypoints() error {
 		// Handle factory error.
 		if err := factory.getOutError(); err != nil {
 			errs = append(errs, fmt.Errorf(
-				"'%s' from '%s': %w: %w",
+				"%s from '%s': %w: %w",
 				factory.name, factory.source,
 				ErrEntrypointReturnedError, err,
 			))
@@ -213,7 +213,7 @@ func (r *registry) closeFactories() error {
 		// Invoke close callback function.
 		if err := factory.getOutClose()(); err != nil {
 			errs = append(errs, fmt.Errorf(
-				"failed to close '%s' from '%s': %w",
+				"%s from '%s': close: %w",
 				factory.name, factory.source, err,
 			))
 		}
@@ -305,7 +305,7 @@ func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, err
 		// Handle found factory definition.
 		if err := r.spawnFactory(factory); err != nil {
 			return nil, fmt.Errorf(
-				"failed to spawn '%s' from '%s': %w",
+				"%s from '%s': spawn: %w",
 				factory.name, factory.source, err,
 			)
 		}
@@ -313,8 +313,9 @@ func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, err
 		// Handle error returned by the factory.
 		if err := factory.getOutError(); err != nil {
 			return nil, fmt.Errorf(
-				"failed to spawn '%s' from '%s': %w: %w",
-				factory.name, factory.source, ErrFactoryReturnedError, err,
+				"%s from '%s': %w: %w",
+				factory.name, factory.source,
+				ErrFactoryReturnedError, err,
 			)
 		}
 

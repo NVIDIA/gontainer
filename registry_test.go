@@ -78,13 +78,13 @@ func TestRegistryValidateFactories(t *testing.T) {
 				equal(t, len(errs), 2)
 
 				equal(t, errors.Is(errs[0], ErrDependencyNotResolved), true)
-				equal(t, errs[0].Error(), "'Factory[func(bool) (int, error)]' "+
-					"from 'github.com/NVIDIA/gontainer/v2': "+
+				equal(t, errs[0].Error(), ""+
+					"Factory[func(bool) (int, error)] from 'github.com/NVIDIA/gontainer/v2': "+
 					"argument 'bool': dependency not resolved")
 
 				equal(t, errors.Is(errs[1], ErrDependencyNotResolved), true)
-				equal(t, errs[1].Error(), "'Factory[func(string) (int32, error)]' "+
-					"from 'github.com/NVIDIA/gontainer/v2': "+
+				equal(t, errs[1].Error(), ""+
+					"Factory[func(string) (int32, error)] from 'github.com/NVIDIA/gontainer/v2': "+
 					"argument 'string': dependency not resolved")
 			},
 		},
@@ -104,13 +104,13 @@ func TestRegistryValidateFactories(t *testing.T) {
 				equal(t, len(errs), 2)
 
 				equal(t, errors.Is(errs[0], ErrFactoryTypeDuplicated), true)
-				equal(t, errs[0].Error(), "'Factory[func() (string, error)]' "+
-					"from 'github.com/NVIDIA/gontainer/v2': "+
+				equal(t, errs[0].Error(), ""+
+					"Factory[func() (string, error)] from 'github.com/NVIDIA/gontainer/v2': "+
 					"output 'string': factory type duplicated")
 
 				equal(t, errors.Is(errs[1], ErrFactoryTypeDuplicated), true)
-				equal(t, errs[1].Error(), "'Factory[func() (string, error)]' "+
-					"from 'github.com/NVIDIA/gontainer/v2': "+
+				equal(t, errs[1].Error(), ""+
+					"Factory[func() (string, error)] from 'github.com/NVIDIA/gontainer/v2': "+
 					"output 'string': factory type duplicated")
 			},
 		},
@@ -131,16 +131,19 @@ func TestRegistryValidateFactories(t *testing.T) {
 				equal(t, len(errs), 3)
 
 				equal(t, errors.Is(errs[0], ErrCircularDependency), true)
-				equal(t, errs[0].Error(), "'Factory[func(bool) (int, error)]' "+
-					"from 'github.com/NVIDIA/gontainer/v2': circular dependency")
+				equal(t, errs[0].Error(), ""+
+					"Factory[func(bool) (int, error)] from 'github.com/NVIDIA/gontainer/v2': "+
+					"circular dependency")
 
 				equal(t, errors.Is(errs[1], ErrCircularDependency), true)
-				equal(t, errs[1].Error(), "'Factory[func(string) (bool, error)]' "+
-					"from 'github.com/NVIDIA/gontainer/v2': circular dependency")
+				equal(t, errs[1].Error(), ""+
+					"Factory[func(string) (bool, error)] from 'github.com/NVIDIA/gontainer/v2': "+
+					"circular dependency")
 
 				equal(t, errors.Is(errs[2], ErrCircularDependency), true)
-				equal(t, errs[2].Error(), "'Factory[func(int) (string, error)]' "+
-					"from 'github.com/NVIDIA/gontainer/v2': circular dependency")
+				equal(t, errs[2].Error(), ""+
+					"Factory[func(int) (string, error)] from 'github.com/NVIDIA/gontainer/v2': "+
+					"circular dependency")
 			},
 		},
 		{
@@ -164,38 +167,38 @@ func TestRegistryValidateFactories(t *testing.T) {
 				equal(t, len(errs), 7)
 
 				equal(t, errors.Is(errs[0], ErrDependencyNotResolved), true)
-				equal(t, errs[0].Error(), "'Factory[func(struct { X int }) string]' "+
-					"from 'github.com/NVIDIA/gontainer/v2': "+
+				equal(t, errs[0].Error(), ""+
+					"Factory[func(struct { X int }) string] from 'github.com/NVIDIA/gontainer/v2': "+
 					"argument 'struct { X int }': dependency not resolved")
 
 				equal(t, errors.Is(errs[1], ErrDependencyNotResolved), true)
-				equal(t, errs[1].Error(), "'Entrypoint[func(struct { X int }) error]' "+
-					"from 'github.com/NVIDIA/gontainer/v2': "+
+				equal(t, errs[1].Error(), ""+
+					"Entrypoint[func(struct { X int }) error] from 'github.com/NVIDIA/gontainer/v2': "+
 					"argument 'struct { X int }': dependency not resolved")
 
 				equal(t, errors.Is(errs[2], ErrFactoryTypeDuplicated), true)
-				equal(t, errs[2].Error(), "'Factory[func(struct { X int }) string]' "+
-					"from 'github.com/NVIDIA/gontainer/v2': "+
+				equal(t, errs[2].Error(), ""+
+					"Factory[func(struct { X int }) string] from 'github.com/NVIDIA/gontainer/v2': "+
 					"output 'string': factory type duplicated")
 
 				equal(t, errors.Is(errs[3], ErrFactoryTypeDuplicated), true)
-				equal(t, errs[3].Error(), "'Factory[func(context.Context) (string, error)]' "+
-					"from 'github.com/NVIDIA/gontainer/v2': "+
+				equal(t, errs[3].Error(), ""+
+					"Factory[func(context.Context) (string, error)] from 'github.com/NVIDIA/gontainer/v2': "+
 					"output 'string': factory type duplicated")
 
 				equal(t, errors.Is(errs[4], ErrFactoryTypeDuplicated), true)
-				equal(t, errs[4].Error(), "'Factory[func() string]' "+
-					"from 'github.com/NVIDIA/gontainer/v2': "+
+				equal(t, errs[4].Error(), ""+
+					"Factory[func() string] from 'github.com/NVIDIA/gontainer/v2': "+
 					"output 'string': factory type duplicated")
 
 				equal(t, errors.Is(errs[5], ErrCircularDependency), true)
-				equal(t, errs[5].Error(), "'Factory[func(bool) (int, error)]' "+
-					"from 'github.com/NVIDIA/gontainer/v2': "+
+				equal(t, errs[5].Error(), ""+
+					"Factory[func(bool) (int, error)] from 'github.com/NVIDIA/gontainer/v2': "+
 					"circular dependency")
 
 				equal(t, errors.Is(errs[6], ErrCircularDependency), true)
-				equal(t, errs[6].Error(), "'Factory[func(int) (bool, error)]' "+
-					"from 'github.com/NVIDIA/gontainer/v2': "+
+				equal(t, errs[6].Error(), ""+
+					"Factory[func(int) (bool, error)] from 'github.com/NVIDIA/gontainer/v2': "+
 					"circular dependency")
 			},
 		},
