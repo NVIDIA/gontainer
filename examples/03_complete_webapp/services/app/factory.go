@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/NVIDIA/gontainer"
 	"github.com/NVIDIA/gontainer/examples/03_complete_webapp/services/httpsvr"
+	"github.com/NVIDIA/gontainer/v2"
 )
 
 // WithAppEndpoints returns a factory which configures app endpoints.

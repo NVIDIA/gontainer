@@ -23,11 +23,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/NVIDIA/gontainer"
 	"github.com/NVIDIA/gontainer/examples/03_complete_webapp/services/app"
 	"github.com/NVIDIA/gontainer/examples/03_complete_webapp/services/config"
 	"github.com/NVIDIA/gontainer/examples/03_complete_webapp/services/httpsvr"
 	"github.com/NVIDIA/gontainer/examples/03_complete_webapp/services/logging"
+	"github.com/NVIDIA/gontainer/v2"
 )
 
 // Example of the environment configuration.

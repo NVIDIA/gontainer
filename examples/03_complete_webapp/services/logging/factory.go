@@ -22,8 +22,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/NVIDIA/gontainer"
 	confmod "github.com/NVIDIA/gontainer/examples/03_complete_webapp/services/config"
+	"github.com/NVIDIA/gontainer/v2"
 )
 
 // WithSlogLogger returns a factory for the slog logger.

@@ -24,8 +24,8 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/NVIDIA/gontainer"
 	confmod "github.com/NVIDIA/gontainer/examples/03_complete_webapp/services/config"
+	"github.com/NVIDIA/gontainer/v2"
 )
 
 // Server is an HTTP server service.
