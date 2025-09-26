@@ -345,13 +345,15 @@ err := gontainer.Run(ctx, factories...)
 switch {
 case errors.Is(err, gontainer.ErrFactoryReturnedError):
     // Factory returned an error
-case errors.Is(err, gontainer.ErrFunctionReturnedError):
-    // Function returned an error
+case errors.Is(err, gontainer.ErrEntrypointReturnedError):
+    // Entrypoint returned an error
+case errors.Is(err, gontainer.ErrNoEntrypointsProvided):
+    // No entrypoints were provided
 case errors.Is(err, gontainer.ErrCircularDependency):
     // Circular dependency detected
-case errors.Is(err, gontainer.ErrServiceNotResolved):
+case errors.Is(err, gontainer.ErrDependencyNotResolved):
     // Service type not registered
-case errors.Is(err, gontainer.ErrServiceDuplicated):
+case errors.Is(err, gontainer.ErrFactoryTypeDuplicated):
     // Service type was duplicated
 }
 ```

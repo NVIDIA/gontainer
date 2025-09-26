@@ -46,7 +46,7 @@ func main() {
 		// This factory is called once on the container start.
 		// Depend on the function returned by the previous factory.
 		// This could be used to produce transient services.
-		gontainer.NewFunction(func(funcFromFactory1 func() int) {
+		gontainer.NewEntrypoint(func(funcFromFactory1 func() int) {
 			log.Printf("New value: %d", funcFromFactory1())
 			log.Printf("New value: %d", funcFromFactory1())
 			log.Printf("New value: %d", funcFromFactory1())

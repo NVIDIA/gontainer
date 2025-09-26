@@ -56,6 +56,7 @@ func TestRegistryValidateFactories(t *testing.T) {
 				NewFactory(func(bool) (int, error) { return 1, nil }),
 				NewFactory(func(string) (bool, error) { return true, nil }),
 				NewFactory(func() (string, error) { return "s", nil }),
+				NewEntrypoint(func(int, bool, string) {}),
 			},
 			wantErr: func(t *testing.T, err error) {
 				equal(t, err, nil)
@@ -66,24 +67,25 @@ func TestRegistryValidateFactories(t *testing.T) {
 			options: []Option{
 				NewFactory(func(bool) (int, error) { return 0, nil }),
 				NewFactory(func(string) (int32, error) { return 0, nil }),
+				NewEntrypoint(func(int, int32) {}),
 			},
 			wantErr: func(t *testing.T, err error) {
-				equal(t, errors.Is(err, ErrServiceNotResolved), true)
+				equal(t, errors.Is(err, ErrDependencyNotResolved), true)
 
 				unwrap, ok := err.(interface{ Unwrap() []error })
 				equal(t, ok, true)
 				errs := unwrap.Unwrap()
 				equal(t, len(errs), 2)
 
-				equal(t, errors.Is(errs[0], ErrServiceNotResolved), true)
-				equal(t, errs[0].Error(), "failed to validate argument 'bool' (index 0) "+
-					"of 'Factory[func(bool) (int, error)]' from 'github.com/NVIDIA/gontainer/v2': "+
-					"service not resolved")
+				equal(t, errors.Is(errs[0], ErrDependencyNotResolved), true)
+				equal(t, errs[0].Error(), "'Factory[func(bool) (int, error)]' "+
+					"from 'github.com/NVIDIA/gontainer/v2': "+
+					"argument 'bool': dependency not resolved")
 
-				equal(t, errors.Is(errs[1], ErrServiceNotResolved), true)
-				equal(t, errs[1].Error(), "failed to validate argument 'string' (index 0) "+
-					"of 'Factory[func(string) (int32, error)]' from 'github.com/NVIDIA/gontainer/v2': "+
-					"service not resolved")
+				equal(t, errors.Is(errs[1], ErrDependencyNotResolved), true)
+				equal(t, errs[1].Error(), "'Factory[func(string) (int32, error)]' "+
+					"from 'github.com/NVIDIA/gontainer/v2': "+
+					"argument 'string': dependency not resolved")
 			},
 		},
 		{
@@ -91,24 +93,25 @@ func TestRegistryValidateFactories(t *testing.T) {
 			options: []Option{
 				NewFactory(func() (string, error) { return "s1", nil }),
 				NewFactory(func() (string, error) { return "s2", nil }),
+				NewEntrypoint(func(string) {}),
 			},
 			wantErr: func(t *testing.T, err error) {
-				equal(t, errors.Is(err, ErrServiceDuplicated), true)
+				equal(t, errors.Is(err, ErrFactoryTypeDuplicated), true)
 
 				unwrap, ok := err.(interface{ Unwrap() []error })
 				equal(t, ok, true)
 				errs := unwrap.Unwrap()
 				equal(t, len(errs), 2)
 
-				equal(t, errors.Is(errs[0], ErrServiceDuplicated), true)
-				equal(t, errs[0].Error(), "failed to validate output 'string' "+
-					"of 'Factory[func() (string, error)]' from 'github.com/NVIDIA/gontainer/v2': "+
-					"service duplicated")
+				equal(t, errors.Is(errs[0], ErrFactoryTypeDuplicated), true)
+				equal(t, errs[0].Error(), "'Factory[func() (string, error)]' "+
+					"from 'github.com/NVIDIA/gontainer/v2': "+
+					"output 'string': factory type duplicated")
 
-				equal(t, errors.Is(errs[1], ErrServiceDuplicated), true)
-				equal(t, errs[1].Error(), "failed to validate output 'string' "+
-					"of 'Factory[func() (string, error)]' from 'github.com/NVIDIA/gontainer/v2': "+
-					"service duplicated")
+				equal(t, errors.Is(errs[1], ErrFactoryTypeDuplicated), true)
+				equal(t, errs[1].Error(), "'Factory[func() (string, error)]' "+
+					"from 'github.com/NVIDIA/gontainer/v2': "+
+					"output 'string': factory type duplicated")
 			},
 		},
 		{
@@ -117,6 +120,7 @@ func TestRegistryValidateFactories(t *testing.T) {
 				NewFactory(func(bool) (int, error) { return 1, nil }),
 				NewFactory(func(string) (bool, error) { return true, nil }),
 				NewFactory(func(int) (string, error) { return "s", nil }),
+				NewEntrypoint(func(int, bool, string) {}),
 			},
 			wantErr: func(t *testing.T, err error) {
 				equal(t, errors.Is(err, ErrCircularDependency), true)
@@ -127,15 +131,15 @@ func TestRegistryValidateFactories(t *testing.T) {
 				equal(t, len(errs), 3)
 
 				equal(t, errors.Is(errs[0], ErrCircularDependency), true)
-				equal(t, errs[0].Error(), "failed to validate 'Factory[func(bool) (int, error)]' "+
+				equal(t, errs[0].Error(), "'Factory[func(bool) (int, error)]' "+
 					"from 'github.com/NVIDIA/gontainer/v2': circular dependency")
 
 				equal(t, errors.Is(errs[1], ErrCircularDependency), true)
-				equal(t, errs[1].Error(), "failed to validate 'Factory[func(string) (bool, error)]' "+
+				equal(t, errs[1].Error(), "'Factory[func(string) (bool, error)]' "+
 					"from 'github.com/NVIDIA/gontainer/v2': circular dependency")
 
 				equal(t, errors.Is(errs[2], ErrCircularDependency), true)
-				equal(t, errs[2].Error(), "failed to validate 'Factory[func(int) (string, error)]' "+
+				equal(t, errs[2].Error(), "'Factory[func(int) (string, error)]' "+
 					"from 'github.com/NVIDIA/gontainer/v2': circular dependency")
 			},
 		},
@@ -147,11 +151,11 @@ func TestRegistryValidateFactories(t *testing.T) {
 				NewFactory(func(bool) (int, error) { return 1, nil }),                      // cycle
 				NewFactory(func(int) (bool, error) { return true, nil }),                   // cycle
 				NewFactory(func() string { return "s3" }),                                  // duplicate
-				NewFunction(func(struct{ X int }) error { return nil }),                    // not resolved
+				NewEntrypoint(func(struct{ X int }) error { return nil }),                  // not resolved
 			},
 			wantErr: func(t *testing.T, err error) {
-				equal(t, errors.Is(err, ErrServiceNotResolved), true)
-				equal(t, errors.Is(err, ErrServiceDuplicated), true)
+				equal(t, errors.Is(err, ErrDependencyNotResolved), true)
+				equal(t, errors.Is(err, ErrFactoryTypeDuplicated), true)
 				equal(t, errors.Is(err, ErrCircularDependency), true)
 
 				unwrap, ok := err.(interface{ Unwrap() []error })
@@ -159,38 +163,40 @@ func TestRegistryValidateFactories(t *testing.T) {
 				errs := unwrap.Unwrap()
 				equal(t, len(errs), 7)
 
-				equal(t, errors.Is(errs[0], ErrServiceNotResolved), true)
-				equal(t, errs[0].Error(), "failed to validate argument 'struct { X int }' (index 0) "+
-					"of 'Factory[func(struct { X int }) string]' from 'github.com/NVIDIA/gontainer/v2': "+
-					"service not resolved")
+				equal(t, errors.Is(errs[0], ErrDependencyNotResolved), true)
+				equal(t, errs[0].Error(), "'Factory[func(struct { X int }) string]' "+
+					"from 'github.com/NVIDIA/gontainer/v2': "+
+					"argument 'struct { X int }': dependency not resolved")
 
-				equal(t, errors.Is(errs[1], ErrServiceNotResolved), true)
-				equal(t, errs[1].Error(), "failed to validate argument 'struct { X int }' (index 0) "+
-					"of 'Function[func(struct { X int }) error]' from 'github.com/NVIDIA/gontainer/v2': "+
-					"service not resolved")
+				equal(t, errors.Is(errs[1], ErrDependencyNotResolved), true)
+				equal(t, errs[1].Error(), "'Entrypoint[func(struct { X int }) error]' "+
+					"from 'github.com/NVIDIA/gontainer/v2': "+
+					"argument 'struct { X int }': dependency not resolved")
 
-				equal(t, errors.Is(errs[2], ErrServiceDuplicated), true)
-				equal(t, errs[2].Error(), "failed to validate output 'string' "+
-					"of 'Factory[func(struct { X int }) string]' from 'github.com/NVIDIA/gontainer/v2': "+
-					"service duplicated")
+				equal(t, errors.Is(errs[2], ErrFactoryTypeDuplicated), true)
+				equal(t, errs[2].Error(), "'Factory[func(struct { X int }) string]' "+
+					"from 'github.com/NVIDIA/gontainer/v2': "+
+					"output 'string': factory type duplicated")
 
-				equal(t, errors.Is(errs[3], ErrServiceDuplicated), true)
-				equal(t, errs[3].Error(), "failed to validate output 'string' "+
-					"of 'Factory[func(context.Context) (string, error)]' from 'github.com/NVIDIA/gontainer/v2': "+
-					"service duplicated")
+				equal(t, errors.Is(errs[3], ErrFactoryTypeDuplicated), true)
+				equal(t, errs[3].Error(), "'Factory[func(context.Context) (string, error)]' "+
+					"from 'github.com/NVIDIA/gontainer/v2': "+
+					"output 'string': factory type duplicated")
 
-				equal(t, errors.Is(errs[4], ErrServiceDuplicated), true)
-				equal(t, errs[4].Error(), "failed to validate output 'string' "+
-					"of 'Factory[func() string]' from 'github.com/NVIDIA/gontainer/v2': "+
-					"service duplicated")
+				equal(t, errors.Is(errs[4], ErrFactoryTypeDuplicated), true)
+				equal(t, errs[4].Error(), "'Factory[func() string]' "+
+					"from 'github.com/NVIDIA/gontainer/v2': "+
+					"output 'string': factory type duplicated")
 
 				equal(t, errors.Is(errs[5], ErrCircularDependency), true)
-				equal(t, errs[5].Error(), "failed to validate 'Factory[func(bool) (int, error)]' "+
-					"from 'github.com/NVIDIA/gontainer/v2': circular dependency")
+				equal(t, errs[5].Error(), "'Factory[func(bool) (int, error)]' "+
+					"from 'github.com/NVIDIA/gontainer/v2': "+
+					"circular dependency")
 
 				equal(t, errors.Is(errs[6], ErrCircularDependency), true)
-				equal(t, errs[6].Error(), "failed to validate 'Factory[func(int) (bool, error)]' "+
-					"from 'github.com/NVIDIA/gontainer/v2': circular dependency")
+				equal(t, errs[6].Error(), "'Factory[func(int) (bool, error)]' "+
+					"from 'github.com/NVIDIA/gontainer/v2': "+
+					"circular dependency")
 			},
 		},
 	}
@@ -213,10 +219,10 @@ func TestRegistryInvokeFunctions(t *testing.T) {
 	invoked := atomic.Bool{}
 
 	equal(t, NewFactory(func() bool { return true })(ctx, registry), nil)
-	equal(t, NewFunction(func(_ bool) { invoked.Store(true) })(ctx, registry), nil)
+	equal(t, NewEntrypoint(func(_ bool) { invoked.Store(true) })(ctx, registry), nil)
 
 	factory := registry.factories[0]
-	equal(t, registry.invokeFunctions(), nil)
+	equal(t, registry.invokeEntrypoints(), nil)
 	equal(t, factory.isSpawned, true)
 	equal(t, len(factory.outValues), 1)
 	equal(t, factory.outValues[0].Interface(), true)
@@ -275,7 +281,7 @@ func TestRegistryResolveFuncServices(t *testing.T) {
 				return str + " test"
 			}
 		}),
-		NewFunction(func(
+		NewEntrypoint(func(
 			fn1 func() int,
 			fn2 func(string) string,
 			fn3 func(string) string,
@@ -294,7 +300,7 @@ func TestRegistryResolveFuncServices(t *testing.T) {
 		equal(t, option(ctx, registry), nil)
 	}
 
-	err := registry.invokeFunctions()
+	err := registry.invokeEntrypoints()
 	equal(t, err, nil)
 
 	err = registry.closeFactories()
@@ -326,7 +332,7 @@ func TestRegistryResolveWithErrors(t *testing.T) {
 
 // TestRegistryInvokeWithErrors tests corresponding registry method.
 func TestRegistryInvokeWithErrors(t *testing.T) {
-	source := NewFunction(func() error {
+	source := NewEntrypoint(func() error {
 		return errors.New("some function-specific error message")
 	})
 
@@ -334,12 +340,12 @@ func TestRegistryInvokeWithErrors(t *testing.T) {
 	registry := &registry{}
 	equal(t, source(ctx, registry), nil)
 
-	err := registry.invokeFunctions()
+	err := registry.invokeEntrypoints()
 	equal(t, err != nil, true)
-	equal(t, fmt.Sprint(err), `failed to invoke `+
-		`'Function[func() error]' from 'github.com/NVIDIA/gontainer/v2': `+
-		`function returned error: some function-specific error message`)
-	equal(t, errors.Is(err, ErrFunctionReturnedError), true)
+	equal(t, fmt.Sprint(err), ``+
+		`'Entrypoint[func() error]' from 'github.com/NVIDIA/gontainer/v2': `+
+		`entrypoint returned error: some function-specific error message`)
+	equal(t, errors.Is(err, ErrEntrypointReturnedError), true)
 }
 
 // TestIsEmptyInterface tests checking of argument to be empty interface.

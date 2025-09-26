@@ -63,7 +63,7 @@ func Run(ctx context.Context, options ...Option) error {
 	}
 
 	// Start all factories in the container.
-	if err := registry.invokeFunctions(); err != nil {
+	if err := registry.invokeEntrypoints(); err != nil {
 		return fmt.Errorf("failed to invoke functions: %w", err)
 	}
 
@@ -203,18 +203,18 @@ func NewService[T any](service T) Option {
 	}
 }
 
-// NewFunction creates a new factory which will be called by the container.
+// NewEntrypoint creates a new factory which will be called by the container.
 //
 // Example:
 //
-//	gontainer.NewFunction(func(db *Database) error { ... })
-//	gontainer.NewFunction(func(db *Database) { ... })
-func NewFunction(function any) Option {
+//	gontainer.NewEntrypoint(func(db *Database) error { ... })
+//	gontainer.NewEntrypoint(func(db *Database) { ... })
+func NewEntrypoint(function any) Option {
 	funcValue := reflect.ValueOf(function)
 	funcType := reflect.TypeOf(function)
 
 	// Prepare factory description.
-	name := fmt.Sprintf("Function[%s]", funcValue.Type())
+	name := fmt.Sprintf("Entrypoint[%s]", funcValue.Type())
 	source := getFuncSource(funcValue)
 
 	// Prepare option callback.
@@ -258,7 +258,7 @@ func NewFunction(function any) Option {
 		}
 
 		// Register factory in the registry.
-		registry.registerFunction(state)
+		registry.registerEntrypoint(state)
 
 		// Factory registered.
 		return nil

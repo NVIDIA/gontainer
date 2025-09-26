@@ -21,17 +21,20 @@ import (
 	"errors"
 )
 
+// ErrFactoryTypeDuplicated declares service duplicated error.
+var ErrFactoryTypeDuplicated = errors.New("factory type duplicated")
+
 // ErrFactoryReturnedError declares factory returned error.
 var ErrFactoryReturnedError = errors.New("factory returned error")
 
-// ErrFunctionReturnedError declares function returned error.
-var ErrFunctionReturnedError = errors.New("function returned error")
+// ErrNoEntrypointsProvided declares no entrypoints provided error.
+var ErrNoEntrypointsProvided = errors.New("no entrypoints provided")
 
-// ErrServiceDuplicated declares service duplicated error.
-var ErrServiceDuplicated = errors.New("service duplicated")
+// ErrEntrypointReturnedError declares entrypoint returned error.
+var ErrEntrypointReturnedError = errors.New("entrypoint returned error")
 
-// ErrServiceNotResolved declares service not resolved error.
-var ErrServiceNotResolved = errors.New("service not resolved")
+// ErrDependencyNotResolved declares service not resolved error.
+var ErrDependencyNotResolved = errors.New("dependency not resolved")
 
-// ErrCircularDependency declares a cyclic dependency error.
+// ErrCircularDependency declares a circular dependency error.
 var ErrCircularDependency = errors.New("circular dependency")
