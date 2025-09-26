@@ -277,6 +277,15 @@ func NewService[T any](service T) Option
 
 // NewEntrypoint registers an entrypoint function.
 func NewEntrypoint(fn any) Option
+
+// IsFactory checks if the given option is a factory.
+func IsFactory(option Option) bool
+
+// IsService checks if the given option is a service.
+func IsService(option Option) bool
+
+// IsEntrypoint checks if the given option is an entrypoint.
+func IsEntrypoint(option Option) bool
 ```
 
 ### Factory Signatures

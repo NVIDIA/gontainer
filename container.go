@@ -41,18 +41,18 @@ func Run(ctx context.Context, options ...Option) error {
 	invoker := &Invoker{resolver: resolver}
 
 	// Register service resolver instance in the registry.
-	if err := NewService(resolver)(ctx, registry); err != nil {
+	if err := NewService(resolver).apply(ctx, registry); err != nil {
 		return fmt.Errorf("failed to register resolver: %w", err)
 	}
 
 	// Register function invoker instance in the registry.
-	if err := NewService(invoker)(ctx, registry); err != nil {
+	if err := NewService(invoker).apply(ctx, registry); err != nil {
 		return fmt.Errorf("failed to register invoker: %w", err)
 	}
 
 	// Register provided factories in the registry.
 	for _, option := range options {
-		if err := option(ctx, registry); err != nil {
+		if err := option.apply(ctx, registry); err != nil {
 			return fmt.Errorf("failed to apply option: %w", err)
 		}
 	}
@@ -77,7 +77,13 @@ func Run(ctx context.Context, options ...Option) error {
 }
 
 // Option defines an option for the service container.
-type Option func(ctx context.Context, registry *registry) error
+type Option interface {
+	// apply applies the option to the given context and registry.
+	apply(context.Context, *registry) error
+
+	// kind returns associated with the option kind string.
+	kind() string
+}
 
 // NewFactory creates a new service load using the provided load function.
 //
@@ -99,7 +105,7 @@ func NewFactory(function any) Option {
 	source := getFuncSource(funcValue)
 
 	// Prepare option callback.
-	return func(ctx context.Context, registry *registry) error {
+	return newOption(func(ctx context.Context, registry *registry) error {
 		// Validate function type.
 		if funcType.Kind() != reflect.Func {
 			return fmt.Errorf("invalid type: %s", funcType)
@@ -157,7 +163,7 @@ func NewFactory(function any) Option {
 
 		// Factory registered.
 		return nil
-	}
+	}, "factory")
 }
 
 // NewService creates a new service load that always returns the given singleton value.
@@ -182,7 +188,7 @@ func NewService[T any](service T) Option {
 	source := serviceType.PkgPath()
 
 	// Prepare option callback.
-	return func(ctx context.Context, registry *registry) error {
+	return newOption(func(ctx context.Context, registry *registry) error {
 		// Prepare value and error getters.
 		getOutType := func(outTypes []reflect.Type) reflect.Type { return funcType.Out(0) }
 		getOutValue := func(outValues []reflect.Value) reflect.Value { return outValues[0] }
@@ -200,7 +206,7 @@ func NewService[T any](service T) Option {
 
 		// Factory registered.
 		return nil
-	}
+	}, "service")
 }
 
 // NewEntrypoint creates a new factory which will be called by the container.
@@ -218,7 +224,7 @@ func NewEntrypoint(function any) Option {
 	source := getFuncSource(funcValue)
 
 	// Prepare option callback.
-	return func(ctx context.Context, registry *registry) error {
+	return newOption(func(ctx context.Context, registry *registry) error {
 		// Validate function type.
 		if funcType.Kind() != reflect.Func {
 			return fmt.Errorf("invalid type: %s", funcType)
@@ -262,5 +268,41 @@ func NewEntrypoint(function any) Option {
 
 		// Factory registered.
 		return nil
-	}
+	}, "entrypoint")
+}
+
+// IsFactory checks if the given option is a factory.
+func IsFactory(option Option) bool {
+	return option.kind() == "factory"
+}
+
+// IsService checks if the given option is a service.
+func IsService(option Option) bool {
+	return option.kind() == "service"
+}
+
+// IsEntrypoint checks if the given option is an entrypoint.
+func IsEntrypoint(option Option) bool {
+	return option.kind() == "entrypoint"
+}
+
+// newOption creates a new option with the given apply function.
+func newOption(apply func(context.Context, *registry) error, kind string) Option {
+	return &option{fn: apply, knd: kind}
+}
+
+// option implements Option interface.
+type option struct {
+	fn  func(context.Context, *registry) error
+	knd string
+}
+
+// apply applies the option to the given context and registry.
+func (o *option) apply(ctx context.Context, registry *registry) error {
+	return o.fn(ctx, registry)
+}
+
+// String returns a human-readable description of the option.
+func (o *option) kind() string {
+	return o.knd
 }
