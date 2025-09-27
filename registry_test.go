@@ -37,7 +37,7 @@ func TestRegistryRegisterFactory(t *testing.T) {
 	ctx := context.Background()
 	option := NewFactory(fun)
 	registry := &registry{}
-	equal(t, option(ctx, registry), nil)
+	equal(t, option.apply(ctx, registry), nil)
 	factory := registry.factories[0]
 	equal(t, factory.funcValue.IsValid(), true)
 	equal(t, factory.funcValue.Kind(), reflect.Func)
@@ -208,7 +208,7 @@ func TestRegistryValidateFactories(t *testing.T) {
 			ctx := context.Background()
 			registry := &registry{}
 			for _, option := range tt.options {
-				equal(t, option(ctx, registry), nil)
+				equal(t, option.apply(ctx, registry), nil)
 			}
 			tt.wantErr(t, registry.validateRegistry())
 		})
@@ -221,8 +221,8 @@ func TestRegistryInvokeFunctions(t *testing.T) {
 	registry := &registry{}
 	invoked := atomic.Bool{}
 
-	equal(t, NewFactory(func() bool { return true })(ctx, registry), nil)
-	equal(t, NewEntrypoint(func(_ bool) { invoked.Store(true) })(ctx, registry), nil)
+	equal(t, NewFactory(func() bool { return true }).apply(ctx, registry), nil)
+	equal(t, NewEntrypoint(func(_ bool) { invoked.Store(true) }).apply(ctx, registry), nil)
 
 	factory := registry.factories[0]
 	equal(t, registry.invokeEntrypoints(), nil)
@@ -246,7 +246,7 @@ func TestRegistryResolveParallel(t *testing.T) {
 	ctx := context.Background()
 	registry := &registry{}
 
-	equal(t, source(ctx, registry), nil)
+	equal(t, source.apply(ctx, registry), nil)
 	factory := registry.factories[0]
 
 	wg := sync.WaitGroup{}
@@ -300,7 +300,7 @@ func TestRegistryResolveFuncServices(t *testing.T) {
 	ctx := context.Background()
 	registry := &registry{}
 	for _, option := range options {
-		equal(t, option(ctx, registry), nil)
+		equal(t, option.apply(ctx, registry), nil)
 	}
 
 	err := registry.invokeEntrypoints()
@@ -322,7 +322,7 @@ func TestRegistryResolveWithErrors(t *testing.T) {
 
 	ctx := context.Background()
 	registry := &registry{}
-	equal(t, source(ctx, registry), nil)
+	equal(t, source.apply(ctx, registry), nil)
 
 	value, err := registry.resolveService(reflect.TypeOf(true))
 	equal(t, err != nil, true)
@@ -341,7 +341,7 @@ func TestRegistryInvokeWithErrors(t *testing.T) {
 
 	ctx := context.Background()
 	registry := &registry{}
-	equal(t, source(ctx, registry), nil)
+	equal(t, source.apply(ctx, registry), nil)
 
 	err := registry.invokeEntrypoints()
 	equal(t, err != nil, true)
