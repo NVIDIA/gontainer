@@ -55,7 +55,7 @@ func (i *Invoker) Invoke(function any) ([]any, error) {
 	for index := 0; index < funcType.NumIn(); index++ {
 		result, err := i.registry.resolveService(funcType.In(index))
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve dependency: %w", err)
+			return nil, err
 		}
 		inArgs = append(inArgs, result)
 	}

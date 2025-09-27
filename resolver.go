@@ -18,7 +18,6 @@
 package gontainer
 
 import (
-	"fmt"
 	"reflect"
 )
 
@@ -41,7 +40,7 @@ func (r *Resolver) Resolve(varPtr any) error {
 	value := reflect.ValueOf(varPtr).Elem()
 	result, err := r.registry.resolveService(value.Type())
 	if err != nil {
-		return fmt.Errorf("failed to resolve service: %w", err)
+		return err
 	}
 	value.Set(result)
 	return nil
