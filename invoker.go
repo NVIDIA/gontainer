@@ -83,4 +83,5 @@ func getStackDepth() int {
 }
 
 // stackDepthLimit protects from infinite recursion.
-const stackDepthLimit = 1000
+// Go standard library mostly uses 10000 as well.
+const stackDepthLimit = 10000

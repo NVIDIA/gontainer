@@ -132,7 +132,7 @@ func TestInvokerRecursion(t *testing.T) {
 			invoke = func(invoker *Invoker) {
 				_, err := invoker.Invoke(invoke)
 				if err != nil {
-					equal(t, err.Error(), "recursion limit: 1000")
+					equal(t, err.Error(), "recursion limit: 10000")
 					errorProduced.Store(true)
 				}
 			}
