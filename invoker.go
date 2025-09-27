@@ -83,4 +83,4 @@ func getStackDepth() int {
 }
 
 // stackDepthLimit protects from infinite recursion.
-const stackDepthLimit = 100
+const stackDepthLimit = 1000
