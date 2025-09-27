@@ -33,7 +33,7 @@ func TestFactoryLoad(t *testing.T) {
 	ctx := context.Background()
 	option := NewFactory(fun)
 	registry := &registry{}
-	equal(t, option(ctx, registry), nil)
+	equal(t, option.apply(ctx, registry), nil)
 	factory := registry.factories[0]
 
 	equal(t, factory.funcType.String(), "func(string, string, string) (int, error)")
@@ -89,7 +89,7 @@ func TestFactoryInfo(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			registry := &registry{}
-			equal(t, tt.arg1(ctx, registry), nil)
+			equal(t, tt.arg1.apply(ctx, registry), nil)
 
 			factory := registry.factories[0]
 			equal(t, factory.name, tt.want1)
