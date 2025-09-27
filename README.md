@@ -138,7 +138,6 @@ gontainer.NewFactory(func() *EmailService {
 
 // Factory with dependencies - auto-injected!
 gontainer.NewFactory(func(config *Config, logger *Logger) *EmailService {
-    logger.Info("Creating email service")
     return &EmailService{smtp: config.SMTPHost}
 })
 
