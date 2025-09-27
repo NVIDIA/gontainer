@@ -38,33 +38,34 @@ import (
 // including any error values. The caller is responsible for checking and handling
 // these values as appropriate.
 type Invoker struct {
-	resolver *Resolver
+	registry *registry
 }
 
 // Invoke invokes specified function.
-func (i *Invoker) Invoke(fn any) ([]any, error) {
-	// Get reflection of the fn.
-	fnValue := reflect.ValueOf(fn)
-	if fnValue.Kind() != reflect.Func {
-		return nil, fmt.Errorf("fn must be a function")
+func (i *Invoker) Invoke(function any) ([]any, error) {
+	// Get reflection of the function.
+	funcValue := reflect.ValueOf(function)
+	funcType := reflect.TypeOf(function)
+	if funcType.Kind() != reflect.Func {
+		return nil, fmt.Errorf("invalid type: %s", funcType)
 	}
 
 	// Resolve function arguments.
-	fnInArgs := make([]reflect.Value, 0, fnValue.Type().NumIn())
-	for index := 0; index < fnValue.Type().NumIn(); index++ {
-		fnArgPtrValue := reflect.New(fnValue.Type().In(index))
-		if err := i.resolver.Resolve(fnArgPtrValue.Interface()); err != nil {
-			return nil, fmt.Errorf("failed to resolve dependency: %w", err)
+	inArgs := make([]reflect.Value, 0, funcType.NumIn())
+	for index := 0; index < funcType.NumIn(); index++ {
+		result, err := i.registry.resolveService(funcType.In(index))
+		if err != nil {
+			return nil, err
 		}
-		fnInArgs = append(fnInArgs, fnArgPtrValue.Elem())
+		inArgs = append(inArgs, result)
 	}
 
 	// Call the function and collect results.
-	fnOutArgs := fnValue.Call(fnInArgs)
-	values := make([]any, 0, len(fnOutArgs))
-	for _, fnOut := range fnOutArgs {
-		values = append(values, fnOut.Interface())
+	outArgs := funcValue.Call(inArgs)
+	results := make([]any, 0, len(outArgs))
+	for _, fnOut := range outArgs {
+		results = append(results, fnOut.Interface())
 	}
 
-	return values, nil
+	return results, nil
 }

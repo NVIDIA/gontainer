@@ -38,7 +38,7 @@ func Run(ctx context.Context, options ...Option) error {
 	resolver := &Resolver{registry: registry}
 
 	// Prepare function invoker instance.
-	invoker := &Invoker{resolver: resolver}
+	invoker := &Invoker{registry: registry}
 
 	// Register service resolver instance in the registry.
 	if err := NewService(resolver).apply(ctx, registry); err != nil {
