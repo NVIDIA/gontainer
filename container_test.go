@@ -20,21 +20,13 @@ package gontainer
 import (
 	"context"
 	"fmt"
-	"sync"
+	"reflect"
 	"sync/atomic"
 	"testing"
-	"time"
 )
 
-// TestContainerLifecycle tests container lifecycle.
-func TestContainerLifecycle(t *testing.T) {
-	factoryStarted := atomic.Bool{}
-	serviceStarted := atomic.Bool{}
-	serviceClosed := atomic.Bool{}
-
-	var serviceWaitGroup sync.WaitGroup
-	serviceWaitGroup.Add(1)
-
+// TestContainer tests service container.
+func TestContainer(t *testing.T) {
 	svc1 := &testService1{}
 	svc2 := &testService2{}
 	svc3 := &testService3{}
@@ -43,15 +35,31 @@ func TestContainerLifecycle(t *testing.T) {
 		return fmt.Errorf("svc5 error")
 	})
 
-	container, err := New(
+	// Prepare started flag.
+	started := atomic.Bool{}
+	closed := atomic.Bool{}
+	invoked := atomic.Bool{}
+
+	// Run container.
+	equal(t, Run(
+		context.Background(),
 		NewService(float64(100500)),
 		NewFactory(func() string { return "string" }),
-		NewFactory(func() (int, int64) { return 123, 456 }),
+		NewFactory(func() int { return 123 }),
+		NewFactory(func() int64 { return 456 }),
 		NewFactory(func() *testService1 { return svc1 }),
 		NewFactory(func() *testService2 { return svc2 }),
-		NewFactory(func() (*testService3, *testService4) { return svc3, svc4 }),
+		NewFactory(func() *testService3 { return svc3 }),
+		NewFactory(func() *testService4 { return svc4 }),
 		NewFactory(func() testService5 { return svc5 }),
-		NewFactory(func(
+		NewFactory(func() (float32, func() error) {
+			started.Store(true)
+			return 123, func() error {
+				closed.Store(true)
+				return nil
+			}
+		}),
+		NewEntrypoint(func(
 			ctx context.Context,
 			dep1 float64,
 			dep2 string,
@@ -63,7 +71,8 @@ func TestContainerLifecycle(t *testing.T) {
 			dep8 Optional[testService5],
 			dep9 Optional[interface{ Do5() error }],
 			dep10 Optional[func() error],
-		) any {
+			dep11 float32,
+		) {
 			equal(t, dep1, float64(100500))
 			equal(t, dep2, "string")
 			equal(t, dep3.Get(), 123)
@@ -76,55 +85,15 @@ func TestContainerLifecycle(t *testing.T) {
 			equal(t, dep8.Get().Do5().Error(), "svc5 error")
 			equal(t, dep9.Get().Do5().Error(), "svc5 error")
 			equal(t, dep10.Get(), (func() error)(nil))
-			factoryStarted.Store(true)
-
-			// Service function.
-			return func() error {
-				serviceWaitGroup.Done()
-				serviceStarted.Store(true)
-				<-ctx.Done()
-				serviceClosed.Store(true)
-				return nil
-			}
+			equal(t, dep11, float32(123))
+			invoked.Store(true)
 		}),
-	)
-	equal(t, err, nil)
-	equal(t, container == nil, false)
+	), nil)
 
-	// Assert factories and services.
-	equal(t, len(container.Factories()), 11)
-	equal(t, len(container.Services()), 0)
-
-	// Start all factories in the container.
-	equal(t, container.Start(), nil)
-	equal(t, factoryStarted.Load(), true)
-	equal(t, serviceClosed.Load(), false)
-	time.Sleep(time.Millisecond)
-
-	// Assert factories and services.
-	equal(t, len(container.Factories()), 11)
-	equal(t, len(container.Services()), 13)
-
-	// Let factory function start in background.
-	serviceWaitGroup.Wait()
-
-	equal(t, serviceStarted.Load(), true)
-	equal(t, serviceClosed.Load(), false)
-
-	// Close all factories in the container.
-	equal(t, container.Close(), nil)
-	equal(t, serviceClosed.Load(), true)
-
-	// Assert context is closed.
-	select {
-	case <-container.Done():
-	default:
-		t.Fatalf("context is not closed")
-	}
-
-	// Assert factories and services.
-	equal(t, len(container.Factories()), 11)
-	equal(t, len(container.Services()), 0)
+	// Assert flags are set.
+	equal(t, started.Load(), true)
+	equal(t, closed.Load(), true)
+	equal(t, invoked.Load(), true)
 }
 
 type testService1 struct{}
@@ -149,3 +118,10 @@ func (t *testService4) Do1() {}
 type testService5 func() error
 
 func (t testService5) Do5() error { return t() }
+
+func equal(t *testing.T, a, b any) {
+	t.Helper()
+	if !reflect.DeepEqual(a, b) {
+		t.Fatalf("equal failed: '%v' != '%v'", a, b)
+	}
+}

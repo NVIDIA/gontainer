@@ -18,11 +18,11 @@
 package config
 
 import (
-	"github.com/NVIDIA/gontainer"
+	"github.com/NVIDIA/gontainer/v2"
 )
 
 // WithConfig returns a factory for the Config service.
-func WithConfig() *gontainer.Factory {
+func WithConfig() gontainer.Option {
 	return gontainer.NewFactory(func() *Config {
 		return NewConfig()
 	})

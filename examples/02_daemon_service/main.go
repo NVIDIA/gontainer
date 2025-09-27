@@ -24,8 +24,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
-	"github.com/NVIDIA/gontainer"
+	"github.com/NVIDIA/gontainer/v2"
 )
 
 // MyService performs some crucial tasks.
@@ -41,19 +43,20 @@ type MyServer struct {
 	server *http.Server
 }
 
-// Close implements close interface.
-func (s *MyServer) Close() error {
-	return s.server.Shutdown(context.Background())
-}
-
 func main() {
+	// Prepare terminate signals channel.
+	terminate := make(chan os.Signal)
+	signal.Notify(terminate, syscall.SIGTERM, syscall.SIGINT)
+
 	// Prepare external to container object.
 	logger := log.New(os.Stderr, "", log.LstdFlags)
 
-	// Initialize service container.
-	// Order of factories definition is non-restrictive.
-	log.Println("Creating service container instance")
-	container, err := gontainer.New(
+	// Execute service container.
+	log.Println("Executing service container")
+	err := gontainer.Run(
+		// Root context for container.
+		context.Background(),
+
 		// Inject singleton object.
 		gontainer.NewService(logger),
 
@@ -69,57 +72,58 @@ func main() {
 				_, _ = w.Write([]byte(svc.SayHello("Username")))
 			})
 
+			return &MyServer{
+				&http.Server{
+					Handler: handler,
+				},
+			}, nil
+		}),
+
+		// Factory to start serving HTTP requests and wait for termination.
+		gontainer.NewEntrypoint(func(logger *log.Logger, server *MyServer) error {
 			logger.Println("Starting listening on: http://127.0.0.1:8080")
 			socket, err := net.Listen("tcp", "127.0.0.1:8080")
 			if err != nil {
-				return nil, err
+				return err
 			}
 
-			logger.Println("Starting serving HTTP requests")
-			server := &http.Server{Handler: handler}
+			// Prepare error channel.
+			errsChan := make(chan error, 1)
+
+			// Start serving HTTP requests.
 			go func() {
-				if err := server.Serve(socket); err != nil {
+				// Close error channel after server shutdown.
+				defer close(errsChan)
+
+				// Start serving HTTP requests on the socket.
+				logger.Println("Starting serving HTTP requests")
+				if err := server.server.Serve(socket); err != nil {
 					if !errors.Is(err, http.ErrServerClosed) {
 						logger.Printf("Error serving HTTP requests: %s", err)
 					}
+					errsChan <- err
 				}
 			}()
 
-			return &MyServer{server}, nil
+			// Wait for termination.
+			select {
+			case err := <-errsChan:
+				logger.Printf("Exiting from serving with error: %s", err)
+				closeErr := server.server.Shutdown(context.Background())
+				return errors.Join(err, closeErr)
+			case <-terminate:
+				logger.Println("Exiting from serving by signal")
+				closeErr := server.server.Shutdown(context.Background())
+				return closeErr
+			}
 		}),
 	)
 
-	// Validate the container's proper handling of all factory functions.
-	// Errors may point to bad function signatures or unresolvable dependencies.
+	// Check if service container run failed.
 	if err != nil {
-		log.Panicf("Failed to create service container: %s", err)
+		log.Panicf("Service container failed: %s", err)
 	}
 
-	// Close defined services in reverse-to-instantiation order.
-	// Every service can define it's own `Close() error` method.
-	// The `container.Close()` can be called several times.
-	defer func() {
-		log.Println("Closing service container by defer")
-		if err := container.Close(); err != nil {
-			log.Panicf("Failed to close service container: %s", err)
-		}
-		log.Println("Service container closed")
-	}()
-
-	// Instantiate all services within the container.
-	// This call will wait until all factories returns.
-	log.Println("Starting service container")
-	if err := container.Start(); err != nil {
-		log.Panicf("Failed to start service container: %s", err)
-	}
-
-	// Initialize closing of container by a signal.
-	initCloseSignals(container, func(err error) {
-		log.Panicf("Failed to close service container: %s", err)
-	})
-
-	// Wait for close by signal.
-	log.Println("Awaiting service container done")
-	<-container.Done()
-	log.Println("Service container done chan closed")
+	// Service container successfully executed.
+	log.Println("Service container executed")
 }

@@ -22,33 +22,46 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"runtime"
 	"sync"
 )
 
-// registry contains all defined factories metadata.
+// registry contains all defined factories.
 type registry struct {
-	factories []*factory
-	sequence  []*factory
-	events    Events
-	mutex     sync.Mutex
+	factories   []*factory
+	sequence    []*factory
+	entrypoints []*factory
+	mutex       sync.Mutex
 }
 
-// registerFactory registers factory in the registry.
+// registerFactory registers factory function in the registry.
 func (r *registry) registerFactory(factory *factory) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	r.factories = append(r.factories, factory)
 }
 
-// validateFactories validates registered factories.
+// registerEntrypoint registers entrypoint function in the registry.
+func (r *registry) registerEntrypoint(factory *factory) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.entrypoints = append(r.entrypoints, factory)
+}
+
+// validateRegistry validates all registered state.
 // Validate checks for availability of all non-optional types
 // and for possible circular dependencies between factories.
-func (r *registry) validateFactories() error {
+func (r *registry) validateRegistry() error {
 	// Prepare result errors slice.
 	var errs []error
 
+	// Combine all factories and functions for validation.
+	factories := make([]*factory, 0, len(r.factories)+len(r.entrypoints))
+	factories = append(factories, r.factories...)
+	factories = append(factories, r.entrypoints...)
+
 	// Validate all input types are resolvable.
-	for _, factory := range r.factories {
-		for index, inType := range factory.inTypes {
+	for _, factory := range factories {
+		for _, inType := range factory.inTypes {
 			// Is this type a special factory context type?
 			if isContextInterface(inType) {
 				continue
@@ -66,12 +79,13 @@ func (r *registry) validateFactories() error {
 				continue
 			}
 
-			// Is a factory for this type could be resolved?
-			typeFactories, _ := r.findFactoriesFor(inType)
-			if len(typeFactories) == 0 {
+			// Could a factory for this type be resolved?
+			factories := r.findFactories(inType)
+			if len(factories) == 0 {
 				errs = append(errs, fmt.Errorf(
-					"failed to validate argument '%s' (index %d) of factory '%s' from '%s': %w",
-					inType, index, factory.source.name, factory.source.source, ErrServiceNotResolved,
+					"%s from '%s': argument '%s': %w",
+					factory.name, factory.source, inType,
+					ErrDependencyNotResolved,
 				))
 				continue
 			}
@@ -80,20 +94,22 @@ func (r *registry) validateFactories() error {
 
 	// Validate all output types are unique.
 	for _, factory := range r.factories {
-		for index, outType := range factory.outTypes {
-			// Factories returning `any` could be duplicated.
-			if isEmptyInterface(outType) {
-				continue
-			}
+		// Prepare factory output type.
+		outType := factory.getOutType()
 
-			// Validate uniqueness of the every factory output type.
-			typeFactories, _ := r.findFactoriesFor(outType)
-			if len(typeFactories) > 1 {
-				errs = append(errs, fmt.Errorf(
-					"failed to validate output '%s' (index %d) of factory '%s' from '%s': %w",
-					outType, index, factory.source.name, factory.source.source, ErrServiceDuplicated,
-				))
-			}
+		// Skip factories without output type.
+		if outType == nil {
+			continue
+		}
+
+		// Validate uniqueness of the factory output type.
+		factories := r.findFactories(outType)
+		if len(factories) > 1 {
+			errs = append(errs, fmt.Errorf(
+				"%s from '%s': output '%s': %w",
+				factory.name, factory.source, outType,
+				ErrFactoryTypeDuplicated,
+			))
 		}
 	}
 
@@ -124,12 +140,13 @@ func (r *registry) validateFactories() error {
 				}
 
 				// Walk through all factories for this in argument type.
-				typeFactories, _ := r.findFactoriesFor(inType)
+				typeFactories := r.findFactories(inType)
 				for _, factoryForType := range typeFactories {
 					if factoryForType == r.factories[index] {
 						errs = append(errs, fmt.Errorf(
-							"failed to validate factory '%s' from '%s': %w",
-							r.factories[index].source.name, r.factories[index].source.source,
+							"%s from '%s': %w",
+							r.factories[index].name,
+							r.factories[index].source,
 							ErrCircularDependency,
 						))
 						break recursion
@@ -141,28 +158,42 @@ func (r *registry) validateFactories() error {
 		}
 	}
 
+	// Validate for entrypoints count.
+	if len(r.entrypoints) == 0 {
+		errs = append(errs, ErrNoEntrypointsProvided)
+	}
+
 	// Join all found errors.
 	return errors.Join(errs...)
 }
 
-// spawnFactories spawns all factories in the registry.
-func (r *registry) spawnFactories() error {
-	// Spawn all factories with registration order.
-	// If the factory requires a dependency not yet spawned,
-	// but found in the registry, then it will be spawned
-	// before the current factory and this fact will be
-	// recorded in the `sequence` slice.
-	for _, factory := range r.factories {
-		if err := r.spawnFactory(factory); err != nil {
-			return fmt.Errorf(
-				"failed to spawn services of '%s' from '%s': %w",
-				factory.source.name, factory.source.source, err,
-			)
+// invokeEntrypoints invokes registered entrypoints.
+func (r *registry) invokeEntrypoints() error {
+	// Prepare result errors slice.
+	var errs []error
+
+	// Invoke all functions in the registry.
+	for _, factory := range r.entrypoints {
+		// Invoke the factory.
+		if err := r.invokeFactory(factory); err != nil {
+			errs = append(errs, fmt.Errorf(
+				"%s from '%s': invoke: %w",
+				factory.name, factory.source, err,
+			))
+		}
+
+		// Handle factory error.
+		if err := factory.getOutError(); err != nil {
+			errs = append(errs, fmt.Errorf(
+				"%s from '%s': %w: %w",
+				factory.name, factory.source,
+				ErrEntrypointReturnedError, err,
+			))
 		}
 	}
 
-	// Only the first error is returned.
-	return nil
+	// Join all found errors.
+	return errors.Join(errs...)
 }
 
 // closeFactories closes all factories in the reverse order.
@@ -175,30 +206,16 @@ func (r *registry) closeFactories() error {
 		factory := r.sequence[index]
 
 		// Cancel factory context before calling close on services.
-		// This allows background factory functions to unblock from
-		// the waiting of context done channel and finish work.
+		// This allows background goroutines to unblock from
+		// waiting of context done channels and finish work.
 		factory.cancel()
 
-		// Handle every spawned factory output value.
-		for outIndex, outValue := range factory.getOutValues() {
-			// Get the factory result object interface.
-			service := outValue.Interface()
-
-			// Close service implementing `Close() error` interface.
-			// Service functions will wait for the function return.
-			if closer, ok := service.(interface{ Close() error }); ok {
-				if err := closer.Close(); err != nil {
-					errs = append(errs, fmt.Errorf(
-						"failed to close service '%s' (index %d) of factory '%s' from '%s': %w",
-						outValue.Type(), outIndex, factory.source.name, factory.source.source, err),
-					)
-				}
-			}
-
-			// Close service implementing `Close()` interface.
-			if closer, ok := service.(interface{ Close() }); ok {
-				closer.Close()
-			}
+		// Invoke close callback function.
+		if err := factory.getOutClose()(); err != nil {
+			errs = append(errs, fmt.Errorf(
+				"%s from '%s': close: %w",
+				factory.name, factory.source, err,
+			))
 		}
 	}
 
@@ -259,7 +276,7 @@ func (r *registry) resolveMultiple(multipleType, serviceType reflect.Type) (refl
 // resolveRegular resolves a regular service.
 func (r *registry) resolveRegular(serviceType reflect.Type) (reflect.Value, error) {
 	// Resolve all services by specified type.
-	serviceValues, err := r.resolveByType(serviceType)
+	resolvedValues, err := r.resolveByType(serviceType)
 	if err != nil {
 		return reflect.Value{}, err
 	}
@@ -269,90 +286,105 @@ func (r *registry) resolveRegular(serviceType reflect.Type) (reflect.Value, erro
 	// not found, then a zero-value box should be returned instead. For example, resolving an
 	// unregistered type `Config` triggers an error, while resolving `gontainer.Optional[Config]`
 	// returns a zero-value box.
-	if len(serviceValues) == 0 {
-		return reflect.Value{}, fmt.Errorf("%w: '%s'", ErrServiceNotResolved, serviceType)
+	if len(resolvedValues) == 0 {
+		return reflect.Value{}, fmt.Errorf("%w: '%s'", ErrDependencyNotResolved, serviceType)
 	}
 
 	// Pick first found service value.
-	return serviceValues[0], nil
+	return resolvedValues[0], nil
 }
 
 // resolveByType resolves all service fits to specified type.
 func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, error) {
-	// Lookup factory definition by an output service type.
-	factories, outIndexes := r.findFactoriesFor(serviceType)
-	services := make([]reflect.Value, 0, len(factories))
+	// Lookup factory definition by an output type.
+	factories := r.findFactories(serviceType)
+	resolvedValues := make([]reflect.Value, 0, len(factories))
 
-	for index, factory := range factories {
+	// Spawn all found factories.
+	for _, factory := range factories {
 		// Handle found factory definition.
 		if err := r.spawnFactory(factory); err != nil {
-			return nil, fmt.Errorf("failed to spawn factory '%s': %w", factory.funcType, err)
+			return nil, fmt.Errorf(
+				"%s from '%s': spawn: %w",
+				factory.name, factory.source, err,
+			)
 		}
 
-		// Handle services from factory outputs.
-		outValues := factory.getOutValues()
-		for _, outIndex := range outIndexes[index] {
-			services = append(services, outValues[outIndex])
+		// Handle error returned by the factory.
+		if err := factory.getOutError(); err != nil {
+			return nil, fmt.Errorf(
+				"%s from '%s': %w: %w",
+				factory.name, factory.source,
+				ErrFactoryReturnedError, err,
+			)
 		}
+
+		// Handle the factory result output.
+		resolvedValues = append(resolvedValues, factory.getOutValue())
 	}
 
-	return services, nil
+	return resolvedValues, nil
 }
 
-// findFactoriesFor lookups for all factories for an output type in the registry.
-func (r *registry) findFactoriesFor(serviceType reflect.Type) ([]*factory, [][]int) {
-	var records []*factory
-	var indices [][]int
+// findFactories lookups for all factories for an output type in the registry.
+func (r *registry) findFactories(serviceType reflect.Type) []*factory {
+	var factories []*factory
 
 	// Lookup for factories in the registry.
-	for _, record := range r.factories {
-		var indexes []int
-		for index, resultType := range record.outTypes {
-			// If requested type matched.
-			if resultType == serviceType {
-				records = append(records, record)
-				indexes = append(indexes, index)
+	for _, factory := range r.factories {
+		// Desired service type matched.
+		if factory.getOutType() == serviceType {
+			factories = append(factories, factory)
+			continue
+		}
+
+		// Desired service type implements an interface.
+		if serviceType.Kind() == reflect.Interface {
+			if factory.getOutType().Implements(serviceType) {
+				factories = append(factories, factory)
 				continue
 			}
-
-			// if requested type implements a non-empty interface.
-			if isNonEmptyInterface(serviceType) {
-				if resultType.Implements(serviceType) {
-					records = append(records, record)
-					indexes = append(indexes, index)
-					continue
-				}
-			}
-		}
-		if len(indexes) > 0 {
-			indices = append(indices, indexes)
 		}
 	}
 
-	// Return matched factories and indices.
-	return records, indices
+	// Return matched factories.
+	return factories
 }
 
 // spawnFactory instantiates specified factory definition.
 func (r *registry) spawnFactory(factory *factory) error {
-	// Protect from cyclic dependencies.
-	if getStackDepth() >= stackDepthLimit {
-		return ErrStackLimitReached
-	}
-
 	// Lock the factory spawn mutex.
 	factory.spawnMu.Lock()
 	defer factory.spawnMu.Unlock()
 
 	// Check factory already spawned.
-	if factory.getSpawned() {
+	if factory.getIsSpawned() {
 		return nil
 	}
 
+	// Invoke the factory.
+	err := r.invokeFactory(factory)
+	if err != nil {
+		return err
+	}
+
+	// Save the factory spawn status.
+	factory.setIsSpawned(true)
+
+	// Save the factory spawn order.
+	r.mutex.Lock()
+	r.sequence = append(r.sequence, factory)
+	r.mutex.Unlock()
+
+	return nil
+}
+
+// invokeFactory calls the factory function and returns output values.
+func (r *registry) invokeFactory(factory *factory) error {
 	// Get or spawn factory input values recursively.
 	inValues := make([]reflect.Value, 0, len(factory.inTypes))
 	for _, inType := range factory.inTypes {
-		// Handle specified `context.Context` as a special case.
+		// Handle `context.Context` as a special case.
 		if isContextInterface(inType) {
 			ctxValue := reflect.ValueOf(factory.ctx)
 			inValues = append(inValues, ctxValue)
@@ -365,72 +397,43 @@ func (r *registry) spawnFactory(factory *factory) error {
 			return fmt.Errorf("failed to resolve service: %w", err)
 		}
 
+		// Append resolved input value.
 		inValues = append(inValues, inValue)
 	}
 
-	// Spawn the factory using the factory input arguments.
+	// Call the factory using input arguments.
 	outValues := factory.funcValue.Call(inValues)
-	errorValue := reflect.Value{}
 
-	// Read optional factory error value.
-	if factory.outError {
-		errorValue = outValues[len(outValues)-1]
-		outValues = outValues[0 : len(outValues)-1]
-	}
-
-	// Handle factory output error if present.
-	if factory.outError && !errorValue.IsNil() {
-		err, _ := errorValue.Interface().(error)
-		return fmt.Errorf("%w: %w", ErrFactoryReturnedError, err)
-	}
-
-	// Handle factory out functions as regular objects.
-	for outIndex, outValue := range outValues {
-		if serviceFuncValue, ok := isServiceFunc(outValue); ok {
-			serviceFuncResult, err := startServiceFunc(serviceFuncValue)
-			if err != nil {
-				return fmt.Errorf("failed to start factory func: %w", err)
-			}
-			outValues[outIndex] = serviceFuncResult
-		}
-	}
-
-	// Save the factory spawn status.
-	factory.setSpawned(true)
-
-	// Save the factory out values.
+	// Set factory output values.
 	factory.setOutValues(outValues)
 
-	// Save the factory spawn order.
-	r.mutex.Lock()
-	r.sequence = append(r.sequence, factory)
-	r.mutex.Unlock()
-
+	// Factory invoked successfully.
 	return nil
 }
 
-// function represents service func return value wrapper.
-type funcResult chan error
+// isUsefulService returns true if the type is a useful service.
+func isUsefulService(typ reflect.Type) bool {
+	// Any objects are not useful services.
+	if isEmptyInterface(typ) {
+		return false
+	}
 
-// Close awaits service function and returns result error.
-func (f funcResult) Close() error {
-	return <-f
-}
+	// Contexts are not useful services.
+	if isContextInterface(typ) {
+		return false
+	}
 
-// isNonEmptyInterface returns true when argument is an interface with methods.
-func isNonEmptyInterface(typ reflect.Type) bool {
-	return typ.Kind() == reflect.Interface && typ.NumMethod() > 0
+	// Errors are not useful services.
+	if isErrorInterface(typ) {
+		return false
+	}
+
+	return true
 }
 
 // isEmptyInterface returns true when argument is an `any` interface.
 func isEmptyInterface(typ reflect.Type) bool {
 	return typ.Kind() == reflect.Interface && typ.NumMethod() == 0
-}
-
-// isErrorInterface returns true when argument is an `error` interface.
-func isErrorInterface(typ reflect.Type) bool {
-	ctxType := reflect.TypeOf((*error)(nil)).Elem()
-	return typ.Kind() == reflect.Interface && typ.Implements(ctxType)
 }
 
 // isContextInterface returns true when argument is a context interface.
@@ -439,107 +442,14 @@ func isContextInterface(typ reflect.Type) bool {
 	return typ.Kind() == reflect.Interface && typ.Implements(ctxType)
 }
 
-// isServiceFunc returns true when the argument is a service function.
-// The `outValue` can be an `any` type with a function in the value
-// (when the factory declares `any` return type), or the `function` type
-// (when the factory declares explicit return type).
-func isServiceFunc(outValue reflect.Value) (reflect.Value, bool) {
-	// Unbox the value if it is an any interface.
-	if isEmptyInterface(outValue.Type()) {
-		outValue = outValue.Elem()
-	}
-
-	// Check if the result value kind is a func kind.
-	if outValue.Kind() != reflect.Func {
-		return reflect.Value{}, false
-	}
-
-	// The service func type must have no user-defined methods,
-	// Otherwise it could be a service instance based on the func type
-	// but with a several public methods implementing public interface.
-	if outValue.NumMethod() > 0 {
-		return reflect.Value{}, false
-	}
-
-	// The service func type must have no input arguments.
-	if outValue.Type().NumIn() > 0 {
-		return reflect.Value{}, false
-	}
-
-	// The service func type could be just a `func()` type.
-	if outValue.Type().NumOut() == 0 {
-		return outValue, true
-	}
-
-	// The service func type could be a `func() error` type.
-	if outValue.Type().NumOut() == 1 {
-		if isErrorInterface(outValue.Type().Out(0)) {
-			return outValue, true
-		}
-	}
-
-	// All other types like `func(name string) (MyType, error)`
-	// or `func() MyType` or are not service functions.
-	return reflect.Value{}, false
+// isErrorInterface returns true when argument is an error interface.
+func isErrorInterface(typ reflect.Type) bool {
+	errType := reflect.TypeOf((*error)(nil)).Elem()
+	return typ.Kind() == reflect.Interface && typ.Implements(errType)
 }
 
-// startServiceFunc wraps service function to the regular service object.
-func startServiceFunc(serviceFuncValue reflect.Value) (reflect.Value, error) {
-	// Prepare closable result chan as a service function replacement.
-	// The service function result error will be returned from the
-	// result wrapper chan `Close() error` method right to the
-	// service container on the termination stage.
-	funcResultChan := funcResult(make(chan error))
-
-	// Start the service function in background.
-	serviceFunc := serviceFuncValue.Interface()
-	switch serviceFunc := serviceFunc.(type) {
-	case func() error:
-		go func() {
-			err := serviceFunc()
-			funcResultChan <- err
-		}()
-	case func():
-		go func() {
-			serviceFunc()
-			funcResultChan <- nil
-		}()
-	default:
-		// This case must never be reached.
-		// Protected by the `isServiceFunc()`.
-		return reflect.Value{}, fmt.Errorf(
-			"unexpected service function signature: %T",
-			serviceFuncValue.Interface(),
-		)
-	}
-
-	// Return reflected value of the wrapper.
-	return reflect.ValueOf(funcResultChan), nil
+// isCloseCallback returns true when argument is a close callback function.
+func isCloseCallback(typ reflect.Type) bool {
+	refType := reflect.TypeOf(func() error { return nil })
+	return typ.Kind() == reflect.Func && typ == refType
 }
-
-// errorType contains reflection type for error variable.
-var errorType = reflect.TypeOf((*error)(nil)).Elem()
-
-// getStackDepth returns current stack depth.
-func getStackDepth() int {
-	pc := make([]uintptr, stackDepthLimit+1)
-	return runtime.Callers(0, pc) - 1
-}
-
-// stackDepthLimit to protect from infinite recursion.
-const stackDepthLimit = 100
-
-// ErrFactoryReturnedError declares factory returned error.
-var ErrFactoryReturnedError = errors.New("factory returned error")
-
-// ErrServiceDuplicated declares service duplicated error.
-var ErrServiceDuplicated = errors.New("service duplicated")
-
-// ErrServiceNotResolved declares service not resolved error.
-var ErrServiceNotResolved = errors.New("service not resolved")
-
-// ErrCircularDependency declares a cyclic dependency error.
-var ErrCircularDependency = errors.New("circular dependency")
-
-// ErrStackLimitReached declares a reach of stack limit error.
-var ErrStackLimitReached = errors.New("stack limit reached")

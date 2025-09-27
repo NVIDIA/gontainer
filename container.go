@@ -20,356 +20,271 @@ package gontainer
 import (
 	"context"
 	"fmt"
-	"runtime/debug"
-	"sync"
+	"reflect"
 )
 
-// Events declaration.
-const (
-	// ContainerStarting declares container starting event.
-	ContainerStarting = "ContainerStarting"
-
-	// ContainerStarted declares container started event.
-	ContainerStarted = "ContainerStarted"
-
-	// ContainerClosing declares container closing event.
-	ContainerClosing = "ContainerClosing"
-
-	// ContainerClosed declares container closed event.
-	ContainerClosed = "ContainerClosed"
-
-	// UnhandledPanic declares unhandled panic in container.
-	UnhandledPanic = "UnhandledPanic"
-)
-
-// New returns new container instance with a set of configured services.
-// The `factories` specifies factories for services with dependency resolution.
-func New(factories ...*Factory) (result Container, err error) {
-	// Don't accept the context in args, since it mustn't be cancelled outside.
-	// Cancel of the root context will trigger cancel of all children contexts, but
-	// it is unwanted behavior: services should be cancelled in strict reverse order.
-
-	// Prepare container context.
+// Run runs a container with a set of configured factories.
+func Run(ctx context.Context, options ...Option) error {
+	// Prepare container context ignoring the cancelling.
 	// When cancelled, it closes `container.Done()` channel
 	// and unblocks any waiting read from `container.Done()`.
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// Cancel context only when returning an error.
-	// Otherwise, in will be cancelled by container.
-	defer func() {
-		if err != nil {
-			cancel()
-		}
-	}()
-
-	// Prepare events broker instance.
-	events := &events{
-		mutex:  sync.RWMutex{},
-		events: make(map[string][]handler),
-	}
+	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	defer cancel()
 
 	// Prepare services registry instance.
-	registry := &registry{events: events}
+	registry := &registry{}
 
 	// Prepare service resolver instance.
-	resolver := &resolver{registry: registry}
+	resolver := &Resolver{registry: registry}
 
 	// Prepare function invoker instance.
-	invoker := &invoker{resolver: resolver}
-
-	// Prepare service container instance.
-	container := &container{
-		ctx:      ctx,
-		cancel:   cancel,
-		events:   events,
-		resolver: resolver,
-		invoker:  invoker,
-		registry: registry,
-	}
-
-	// Trigger panic events in service container.
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			event := NewEvent(UnhandledPanic, recovered, string(debug.Stack()))
-			_ = container.events.Trigger(event)
-			panic(recovered)
-		}
-	}()
-
-	// Register events broker instance in the registry.
-	if factory, err := NewService[Events](events).factory(); err != nil {
-		return nil, fmt.Errorf("failed to register events manager: %w", err)
-	} else {
-		registry.registerFactory(factory)
-	}
+	invoker := &Invoker{registry: registry}
 
 	// Register service resolver instance in the registry.
-	if factory, err := NewService[Resolver](resolver).factory(); err != nil {
-		return nil, fmt.Errorf("failed to register service resolver: %w", err)
-	} else {
-		registry.registerFactory(factory)
+	if err := NewService(resolver).apply(ctx, registry); err != nil {
+		return fmt.Errorf("failed to register resolver: %w", err)
 	}
 
 	// Register function invoker instance in the registry.
-	if factory, err := NewService[Invoker](invoker).factory(); err != nil {
-		return nil, fmt.Errorf("failed to register function invoker: %w", err)
-	} else {
-		registry.registerFactory(factory)
+	if err := NewService(invoker).apply(ctx, registry); err != nil {
+		return fmt.Errorf("failed to register invoker: %w", err)
 	}
 
 	// Register provided factories in the registry.
-	for _, source := range factories {
-		if factory, err := source.factory(); err != nil {
-			return nil, fmt.Errorf("failed to register factory: %w", err)
-		} else {
-			registry.registerFactory(factory)
+	for _, option := range options {
+		if err := option.apply(ctx, registry); err != nil {
+			return fmt.Errorf("failed to apply option: %w", err)
 		}
 	}
 
-	// Validate all factories in the registry.
-	if err := registry.validateFactories(); err != nil {
-		return nil, fmt.Errorf("failed to validate factories: %w", err)
-	}
-
-	// Return service container instance.
-	return container, nil
-}
-
-// Container defines the main interface for a service container.
-//
-// A Container is responsible for managing the lifecycle of services,
-// including their initialization, shutdown, and dependency resolution.
-//
-// It supports both eager initialization via Start(), and lazy resolution
-// via Resolver or Invoker before the container is started. Services are
-// created using registered factories, and may optionally implement a Close()
-// method to participate in graceful shutdown.
-//
-// The container also includes an internal events broker for decoupled communication
-// between services.
-type Container interface {
-	// Start initializes all registered services in dependency order.
-	// Services are instantiated via their factories.
-	// Returns an error if initialization fails.
-	Start() error
-
-	// Close shuts down all services in reverse order of their instantiation.
-	// This method blocks until all services are properly closed.
-	Close() error
-
-	// Done returns a channel that is closed after all services have been shut down.
-	// Useful for coordinating external shutdown logic.
-	Done() <-chan struct{}
-
-	// Factories returns all registered service factories.
-	Factories() []*Factory
-
-	// Services returns all currently instantiated services.
-	Services() []any
-
-	// Events returns the container-wide event broker instance.
-	Events() Events
-
-	// Resolver returns a service resolver for on-demand dependency injection.
-	// If the container is not yet started, only requested services and their
-	// transitive dependencies will be instantiated.
-	Resolver() Resolver
-
-	// Invoker returns a function invoker that can call user-provided functions
-	// with auto-injected dependencies. Behaves lazily if the container is not started.
-	Invoker() Invoker
-}
-
-// container implements service container.
-type container struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	closer sync.Once
-	mutex  sync.RWMutex
-
-	// Events broker.
-	events Events
-
-	// Service resolver.
-	resolver Resolver
-
-	// Function invoker.
-	invoker Invoker
-
-	// Services registry.
-	registry *registry
-}
-
-// Start initializes every service in the container.
-func (c *container) Start() (resultErr error) {
-	// Trigger panic events in service container.
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			_ = c.events.Trigger(NewEvent(UnhandledPanic, recovered, string(debug.Stack())))
-			_ = c.Close()
-			panic(recovered)
-		}
-	}()
-
-	// Close service container immediately on error.
-	defer func() {
-		if resultErr != nil {
-			_ = c.Close()
-		}
-	}()
-
-	// Acquire write lock.
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	// Trigger container starting event.
-	if err := c.events.Trigger(NewEvent(ContainerStarting)); err != nil {
-		return fmt.Errorf("failed to trigger container starting event: %w", err)
+	// Validate all factories in the container.
+	if err := registry.validateRegistry(); err != nil {
+		return fmt.Errorf("failed to validate container: %w", err)
 	}
 
 	// Start all factories in the container.
-	startErr := c.registry.spawnFactories()
-
-	// Trigger container started event.
-	if err := c.events.Trigger(NewEvent(ContainerStarted, startErr)); err != nil {
-		return fmt.Errorf("failed to trigger container started event: %w", err)
+	if err := registry.invokeEntrypoints(); err != nil {
+		return fmt.Errorf("failed to invoke functions: %w", err)
 	}
 
-	// Handle container start error.
-	if startErr != nil {
-		return fmt.Errorf("failed to start services in container: %w", startErr)
+	// Close all factories in the container.
+	if err := registry.closeFactories(); err != nil {
+		return fmt.Errorf("failed to close factories: %w", err)
 	}
 
+	// Service container executed.
 	return nil
 }
 
-// Close closes service container with all services.
-// Blocks invocation until the container is closed.
-func (c *container) Close() (err error) {
-	// Trigger panic events in service container.
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			_ = c.events.Trigger(NewEvent(UnhandledPanic, recovered, string(debug.Stack())))
-			panic(recovered)
-		}
-	}()
-
-	// Acquire write lock.
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	// Init container close once.
-	c.closer.Do(func() {
-		// Close container context independently of errors.
-		// It will unblock all concurrent close calls.
-		defer c.cancel()
-
-		// Trigger container closing event.
-		if triggerErr := c.events.Trigger(NewEvent(ContainerClosing)); triggerErr != nil {
-			err = fmt.Errorf("failed to trigger container closing event: %w", triggerErr)
-			return
-		}
-
-		// Close all spawned services in the registry.
-		closeErr := c.registry.closeFactories()
-		if closeErr != nil {
-			err = fmt.Errorf("failed to close factories: %w", closeErr)
-			return
-		}
-
-		// Trigger container closed event.
-		if triggerErr := c.events.Trigger(NewEvent(ContainerClosed, closeErr)); triggerErr != nil {
-			err = fmt.Errorf("failed to trigger container closed event: %w", triggerErr)
-			return
-		}
-	})
-
-	// Await container close, e.g. from concurrent close call.
-	<-c.ctx.Done()
-
-	return nil
+// Option defines an option for the service container.
+type Option interface {
+	// apply applies the option to the given registry.
+	apply(ctx context.Context, registry *registry) error
 }
 
-// Done is closing after closing of all services.
-func (c *container) Done() <-chan struct{} {
-	return c.ctx.Done()
-}
+// NewFactory creates a new service load using the provided load function.
+//
+// The load function must be a function. It may accept dependencies as input parameters and return
+// exactly one service instances, optionally followed by an error as the second return value.
+//
+// Example:
+//
+//	gontainer.NewFactory(func(db *Database) *Handler { ... })
+//	gontainer.NewFactory(func(db *Database) (*Handler, error) { ... })
+//	gontainer.NewFactory(func(db *Database) (*Handler, func() error) { ... })
+//	gontainer.NewFactory(func(db *Database) (*Handler, func() error, error) { ... })
+func NewFactory(function any) Option {
+	funcValue := reflect.ValueOf(function)
+	funcType := reflect.TypeOf(function)
 
-// Factories returns all defined factories.
-func (c *container) Factories() []*Factory {
-	// Acquire read lock.
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+	// Prepare factory description.
+	name := fmt.Sprintf("Factory[%s]", funcValue.Type())
+	source := getFuncSource(funcValue)
 
-	// Collect all factory definitions.
-	factories := make([]*Factory, 0, len(c.registry.factories))
-	for _, factory := range c.registry.factories {
-		factories = append(factories, factory.source)
-	}
-
-	return factories
-}
-
-// Services returns all spawned services.
-func (c *container) Services() []any {
-	// Acquire read lock.
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
-
-	select {
-	case <-c.ctx.Done():
-		return nil
-	default:
-		services := make([]any, 0, len(c.registry.factories))
-		for _, factory := range c.registry.factories {
-			if factory.getSpawned() {
-				for _, serviceValue := range factory.getOutValues() {
-					services = append(services, serviceValue.Interface())
-				}
+	// Prepare option callback.
+	return newOption(
+		func(ctx context.Context, registry *registry) error {
+			// Validate function type.
+			if funcType.Kind() != reflect.Func {
+				return fmt.Errorf("invalid type: %s", funcType)
 			}
-		}
-		return services
-	}
+
+			// Prepare default value and error getters.
+			var getOutType getOutTypeFn
+			var getOutValue getOutValueFn
+			var getOutClose getOutCloseFn
+			var getOutError getOutErrorFn
+
+			// Prepare value and error getters.
+			switch {
+			// Factory returns exactly one service.
+			case funcType.NumOut() == 1 && isUsefulService(funcType.Out(0)):
+				getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
+				getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+				getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+				getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+
+			// Factory returns a service and an error.
+			case funcType.NumOut() == 2 && isUsefulService(funcType.Out(0)) && isErrorInterface(funcType.Out(1)):
+				getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
+				getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+				getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+				getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
+
+			// Factory returns a service and a close callback.
+			case funcType.NumOut() == 2 && isUsefulService(funcType.Out(0)) && isCloseCallback(funcType.Out(1)):
+				getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
+				getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+				getOutClose = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
+				getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+
+			// Factory returns a service, a close callback and an error.
+			case funcType.NumOut() == 3 && isUsefulService(funcType.Out(0)) && isCloseCallback(funcType.Out(1)) && isErrorInterface(funcType.Out(2)):
+				getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
+				getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+				getOutClose = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
+				getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[2] }
+
+			// Factory signature is invalid.
+			default:
+				return fmt.Errorf("invalid signature: %s", funcType)
+			}
+
+			// Load the factory internal representation.
+			state, err := newFactory(ctx, name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
+			if err != nil {
+				return fmt.Errorf("failed to load %s: %w", name, err)
+			}
+
+			// Register factory in the registry.
+			registry.registerFactory(state)
+
+			// Factory registered.
+			return nil
+		},
+	)
 }
 
-// Events returns events broker instance.
-func (c *container) Events() Events {
-	// Acquire read lock.
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+// NewService creates a new service load that always returns the given singleton value.
+//
+// This is a convenience helper for registering preconstructed service instances
+// as factories. The returned load produces the same instance on every invocation.
+//
+// This is useful for registering constants, mocks, or externally constructed values.
+//
+// Example:
+//
+//	logger := NewLogger()
+//	gontainer.NewService(logger)
+func NewService[T any](service T) Option {
+	function := func() T { return service }
+	funcValue := reflect.ValueOf(function)
+	funcType := reflect.TypeOf(function)
+	serviceType := reflect.TypeOf(&service).Elem()
 
-	select {
-	case <-c.ctx.Done():
-		return nil
-	default:
-		return c.events
-	}
+	// Prepare factory description.
+	name := fmt.Sprintf("Service[%s]", serviceType)
+	source := serviceType.PkgPath()
+
+	// Prepare option callback.
+	return newOption(
+		func(ctx context.Context, registry *registry) error {
+			// Prepare value and error getters.
+			getOutType := func(outTypes []reflect.Type) reflect.Type { return funcType.Out(0) }
+			getOutValue := func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+			getOutClose := func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+			getOutError := func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+
+			// Load the factory internal representation.
+			state, err := newFactory(ctx, name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
+			if err != nil {
+				return fmt.Errorf("failed to load %s: %w", name, err)
+			}
+
+			// Register factory in the registry.
+			registry.registerFactory(state)
+
+			// Factory registered.
+			return nil
+		},
+	)
 }
 
-// Resolver returns service resolver instance.
-func (c *container) Resolver() Resolver {
-	// Acquire read lock.
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+// NewEntrypoint creates a new factory which will be called by the container.
+//
+// Example:
+//
+//	gontainer.NewEntrypoint(func(db *Database) error { ... })
+//	gontainer.NewEntrypoint(func(db *Database) { ... })
+func NewEntrypoint(function any) Option {
+	funcValue := reflect.ValueOf(function)
+	funcType := reflect.TypeOf(function)
 
-	select {
-	case <-c.ctx.Done():
-		return nil
-	default:
-		return c.resolver
-	}
+	// Prepare factory description.
+	name := fmt.Sprintf("Entrypoint[%s]", funcValue.Type())
+	source := getFuncSource(funcValue)
+
+	// Prepare option callback.
+	return newOption(
+		func(ctx context.Context, registry *registry) error {
+			// Validate function type.
+			if funcType.Kind() != reflect.Func {
+				return fmt.Errorf("invalid type: %s", funcType)
+			}
+
+			// Prepare default value and error getters.
+			var getOutType getOutTypeFn
+			var getOutValue getOutValueFn
+			var getOutClose getOutCloseFn
+			var getOutError getOutErrorFn
+
+			// Prepare value and error getters.
+			switch {
+			// Function returns nothing.
+			case funcType.NumOut() == 0:
+				getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
+				getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+				getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+				getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+
+			// Function returns an error.
+			case funcType.NumOut() == 1 && isErrorInterface(funcType.Out(0)):
+				getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
+				getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+				getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+				getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+
+			// Function signature is invalid.
+			default:
+				return fmt.Errorf("invalid signature: %s", funcType)
+			}
+
+			// Load the factory internal representation.
+			state, err := newFactory(ctx, name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
+			if err != nil {
+				return fmt.Errorf("failed to load %s: %w", name, err)
+			}
+
+			// Register factory in the registry.
+			registry.registerEntrypoint(state)
+
+			// Factory registered.
+			return nil
+		},
+	)
 }
 
-// Invoker returns function invoker instance.
-func (c *container) Invoker() Invoker {
-	// Acquire read lock.
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+// newOption creates a new option instance.
+func newOption(apply func(ctx context.Context, registry *registry) error) *option {
+	return &option{applyFn: apply}
+}
 
-	select {
-	case <-c.ctx.Done():
-		return nil
-	default:
-		return c.invoker
-	}
+// option is the option based on the internal function.
+type option struct {
+	applyFn func(ctx context.Context, registry *registry) error
+}
+
+// apply applies the option to the given registry.
+func (o *option) apply(ctx context.Context, registry *registry) error {
+	return o.applyFn(ctx, registry)
 }

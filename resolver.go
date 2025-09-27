@@ -18,11 +18,10 @@
 package gontainer
 
 import (
-	"fmt"
 	"reflect"
 )
 
-// Resolver defines an interface for resolving service dependencies.
+// Resolver resolves service dependencies.
 //
 // The Resolve method accepts a pointer to a variable (`varPtr`) and attempts to populate it
 // with an instance of the requested type. The type is determined via reflection based on the
@@ -32,22 +31,16 @@ import (
 // only the requested type and its transitive dependencies on demand.
 //
 // An error is returned if the service of the requested type is not found or cannot be resolved.
-type Resolver interface {
-	// Resolve sets the required dependency via the pointer.
-	Resolve(varPtr any) error
-}
-
-// resolver implements resolver interface.
-type resolver struct {
+type Resolver struct {
 	registry *registry
 }
 
 // Resolve sets the required dependency via the pointer.
-func (r *resolver) Resolve(varPtr any) error {
+func (r *Resolver) Resolve(varPtr any) error {
 	value := reflect.ValueOf(varPtr).Elem()
 	result, err := r.registry.resolveService(value.Type())
 	if err != nil {
-		return fmt.Errorf("failed to resolve service: %w", err)
+		return err
 	}
 	value.Set(result)
 	return nil

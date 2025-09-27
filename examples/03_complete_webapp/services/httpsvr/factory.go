@@ -24,8 +24,8 @@ import (
 	"net"
 	"net/http"
 
-	"github.com/NVIDIA/gontainer"
 	confmod "github.com/NVIDIA/gontainer/examples/03_complete_webapp/services/config"
+	"github.com/NVIDIA/gontainer/v2"
 )
 
 // Server is an HTTP server service.
@@ -63,8 +63,7 @@ func (s *Server) Start() error {
 	return nil
 }
 
-// Close function will be automatically called on the container close.
-// See: https://github.com/NVIDIA/gontainer?tab=readme-ov-file#services.
+// Close closes HTTP server.
 func (s *Server) Close() error {
 	// Stop serving HTTP requests.
 	s.logger.Info("Closing HTTP server")
@@ -79,7 +78,7 @@ func (s *Server) Close() error {
 }
 
 // WithHTTPServer returns a factory for the HTTP server service.
-func WithHTTPServer() *gontainer.Factory {
+func WithHTTPServer() gontainer.Option {
 	return gontainer.NewFactory(
 		func(logger *slog.Logger, confsvc *confmod.Config) (*Server, error) {
 			// Prepare HTTP server config.

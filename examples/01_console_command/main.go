@@ -18,9 +18,10 @@
 package main
 
 import (
+	"context"
 	"log"
 
-	"github.com/NVIDIA/gontainer"
+	"github.com/NVIDIA/gontainer/v2"
 )
 
 // NameService is a service that returns a name.
@@ -44,10 +45,12 @@ func (s *HelloService) SayHello() {
 }
 
 func main() {
-	// Initialize service container.
-	// Order of factories definition is non-restrictive.
-	log.Println("Creating new service container")
-	container, err := gontainer.New(
+	// Execute service container.
+	log.Println("Executing service container")
+	err := gontainer.Run(
+		// Root context for container.
+		context.Background(),
+
 		// Factory to create an instance of NameService.
 		gontainer.NewFactory(func() *NameService {
 			return &NameService{name: "Bob"}
@@ -57,47 +60,18 @@ func main() {
 		gontainer.NewFactory(func(svc *NameService) *HelloService {
 			return &HelloService{nameService: svc}
 		}),
+
+		// Factory to say hello using HelloService.
+		gontainer.NewEntrypoint(func(svc *HelloService) {
+			svc.SayHello()
+		}),
 	)
 
-	// Validate the container's proper handling of all factory functions.
-	// Errors may point to bad function signatures or unresolvable dependencies.
+	// Check if service container run failed.
 	if err != nil {
-		log.Panicf("Failed to create service container: %s", err)
+		log.Panicf("Service container failed: %s", err)
 	}
 
-	// Close defined services in reverse-to-instantiation order.
-	// Every service can define it's own `Close() error` method.
-	// The `container.Close()` can be called several times.
-	defer func() {
-		log.Println("Closing service container by defer")
-		if err := container.Close(); err != nil {
-			log.Panicf("Failed to close service container: %s", err)
-		}
-		log.Println("Service container closed")
-	}()
-
-	// Application entrypoint using the `Invoker` service.
-	// Invoker will resolve all dependencies for the function.
-	_, err = container.Invoker().Invoke(func(svc *HelloService) {
-		// Here the application bootstrap code could be located.
-		// It can access all services from the container.
-		// For example, HTTP server could be started here.
-		svc.SayHello()
-	})
-	if err != nil {
-		log.Panicf("Failed to invoke: %s", err)
-	}
-
-	// - or -
-
-	// Application entrypoint using the `Resolver` service.
-	// This code will manually resolve all dependencies.
-	var helloService *HelloService
-	err = container.Resolver().Resolve(&helloService)
-	if err != nil {
-		log.Panicf("Failed to resolve: %s", err)
-	}
-
-	// Manually call the service code.
-	helloService.SayHello()
+	// Service container successfully executed.
+	log.Println("Service container executed")
 }
