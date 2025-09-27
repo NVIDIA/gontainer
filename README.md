@@ -318,7 +318,7 @@ func(ctx context.Context) *Service
 // *gontainer.Resolver - Dynamic service resolution.
 func(resolver *gontainer.Resolver) *Service
 
-// *gontainer.Invoker - Dynamic function invocation
+// *gontainer.Invoker - Dynamic function invocation.
 func(invoker *gontainer.Invoker) *Service
 ```
 
