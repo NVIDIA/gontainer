@@ -366,3 +366,6 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 Apache 2.0 – See [LICENSE](LICENSE) for details.
 
+## Documentation for `v1`
+
+Documentation for the previous major version `v1` is available at [v1 branch](https://github.com/NVIDIA/gontainer/tree/v1).
