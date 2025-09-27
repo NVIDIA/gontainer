@@ -119,3 +119,27 @@ func TestInvokerService(t *testing.T) {
 		})
 	}
 }
+
+// TestInvokerRecursion tests invoker recursion protection.
+func TestInvokerRecursion(t *testing.T) {
+	errorProduced := atomic.Bool{}
+
+	// Run with infinite recursion.
+	equal(t, Run(
+		context.Background(),
+		NewEntrypoint(func(invoker *Invoker) {
+			var invoke func(invoker *Invoker)
+			invoke = func(invoker *Invoker) {
+				_, err := invoker.Invoke(invoke)
+				if err != nil {
+					equal(t, err.Error(), "recursion limit: 100")
+					errorProduced.Store(true)
+				}
+			}
+			invoke(invoker)
+		}),
+	), nil)
+
+	// Assert correct error was produced.
+	equal(t, errorProduced.Load(), true)
+}

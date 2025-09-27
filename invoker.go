@@ -20,6 +20,7 @@ package gontainer
 import (
 	"fmt"
 	"reflect"
+	"runtime"
 )
 
 // Invoker invokes functions with automatic dependency resolution.
@@ -43,6 +44,11 @@ type Invoker struct {
 
 // Invoke invokes specified function.
 func (i *Invoker) Invoke(function any) ([]any, error) {
+	// Protect from infinite recursion.
+	if getStackDepth() >= stackDepthLimit {
+		return nil, fmt.Errorf("recursion limit: %d", stackDepthLimit)
+	}
+
 	// Get reflection of the function.
 	funcValue := reflect.ValueOf(function)
 	funcType := reflect.TypeOf(function)
@@ -69,3 +75,12 @@ func (i *Invoker) Invoke(function any) ([]any, error) {
 
 	return results, nil
 }
+
+// getStackDepth returns current call stack depth.
+func getStackDepth() int {
+	pc := make([]uintptr, stackDepthLimit+1)
+	return runtime.Callers(0, pc) - 1
+}
+
+// stackDepthLimit protects from infinite recursion.
+const stackDepthLimit = 100
