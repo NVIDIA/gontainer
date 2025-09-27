@@ -31,7 +31,7 @@ import (
     "github.com/NVIDIA/gontainer/v2"
 )
 
-// Your services
+// Your services.
 type Database struct{ connString string }
 type UserService struct{ db *Database }
 
@@ -39,7 +39,7 @@ func main() {
     err := gontainer.Run(
         context.Background(),
         
-        // Register Database
+        // Register Database.
         gontainer.NewFactory(func() *Database {
             return &Database{connString: "postgres://localhost/myapp"}
         }),
@@ -49,7 +49,7 @@ func main() {
             return &UserService{db: db}
         }),
         
-        // Use your services
+        // Use your services.
         gontainer.NewEntrypoint(func(users *UserService) {
             log.Printf("UserService ready with DB: %s", users.db)
         }),
@@ -63,13 +63,13 @@ func main() {
 
 ## Examples
 
-* [Console command example](./examples/01_console_command/main.go) – demonstrates how to build a simple console command. It shows how to use `Resolver` and `Invoker` services to organize the application entry point in a run-and-exit style.
+* [Console command example](./examples/01_console_command/main.go) – demonstrates how to build a simple console command.
   ```
   12:51:32 Executing service container
   12:51:32 Hello from the Hello Service Bob
   12:51:32 Service container executed
   ```
-* [Daemon service example](./examples/02_daemon_service/main.go) – demonstrates how to maintain background services. It shows how to organize a daemon entry point and wait for graceful shutdown by subscribing to OS termination signals.
+* [Daemon service example](./examples/02_daemon_service/main.go) – demonstrates how to maintain background services.
   ```
   12:48:22 Executing service container
   12:48:22 Starting listening on: http://127.0.0.1:8080
@@ -79,7 +79,7 @@ func main() {
   12:48:28 Exiting from serving by signal
   12:48:28 Service container executed
   ```
-* [Complete webapp example](./examples/03_complete_webapp/main.go) – demonstrates how to organize web application with multiple services. It provides basic config service, handles logging, setups HTTP server and initiates two endpoints.
+* [Complete webapp example](./examples/03_complete_webapp/main.go) – demonstrates how to organize web application with multiple services.
   ```
   15:19:48 INFO msg="Starting service container" service=logger
   15:19:48 INFO msg="Configuring app endpoints" service=app
@@ -131,7 +131,7 @@ func (s *EmailService) SendWelcome(email string) error {
 Factories create your services. Dependencies are declared as function parameters:
 
 ```go
-// Simple factory
+// Simple factory.
 gontainer.NewFactory(func() *EmailService {
     return &EmailService{smtp: "smtp.gmail.com"}
 })
@@ -142,7 +142,7 @@ gontainer.NewFactory(func(config *Config, logger *Logger) *EmailService {
     return &EmailService{smtp: config.SMTPHost}
 })
 
-// Factory with cleanup
+// Factory with a cleanup callback.
 gontainer.NewFactory(func() (*Database, func() error) {
     db, _ := sql.Open("postgres", "...")
     
@@ -161,7 +161,7 @@ err := gontainer.Run(
     gontainer.NewFactory(...),
     gontainer.NewFactory(...),
     gontainer.NewEntrypoint(func(/* dependencies */) {
-        // Application entry point
+        // application entry point
     }),
 )
 ```
@@ -177,7 +177,7 @@ gontainer.NewFactory(func() (*Server, func() error) {
     server := &http.Server{Addr: ":8080"}
     go server.ListenAndServe()
     
-    // Cleanup function called on container shutdown
+    // Cleanup function called on container shutdown.
     return server, func() error {
         ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
         defer cancel()
@@ -227,7 +227,7 @@ Resolve services on-demand:
 
 ```go
 gontainer.NewEntrypoint(func(resolver *gontainer.Resolver) error {
-    // Resolve service dynamically
+    // Resolve service dynamically.
     var userService *UserService
     if err := resolver.Resolve(&userService); err != nil {
         return err
@@ -242,7 +242,7 @@ gontainer.NewEntrypoint(func(resolver *gontainer.Resolver) error {
 Create new instances on each call:
 
 ```go
-// Factory returns a function that creates new instances
+// Factory returns a function that creates new instances.
 gontainer.NewFactory(func(db *Database) func() *Transaction {
     return func() *Transaction {
         return &Transaction{
@@ -252,10 +252,10 @@ gontainer.NewFactory(func(db *Database) func() *Transaction {
     }
 })
 
-// Use the factory function
+// Use the factory function.
 gontainer.NewEntrypoint(func(newTx func() *Transaction) {
-    tx1 := newTx() // New instance
-    tx2 := newTx() // Another new instance
+    tx1 := newTx()  // new instance
+    tx2 := newTx()  // another new instance
 })
 ```
 
@@ -290,19 +290,19 @@ and can optionally return an error and/or a cleanup function for the factory.
 
 
 ```go
-// Basic factory
+// The simplest factory.
 func() *Service
 
-// Factory with dependencies
+// Factory with dependencies.
 func(dep1 *Dep1, dep2 *Dep2) *Service
 
-// Factory with error
+// Factory with error.
 func() (*Service, error)
 
-// Factory with cleanup
+// Factory with cleanup.
 func() (*Service, func() error)
 
-// Factory with cleanup and error
+// Factory with cleanup and error.
 func() (*Service, func() error, error)
 ```
 
@@ -312,10 +312,10 @@ Gontainer provides several built-in services that can be injected into factories
 They provide access to container features like context, dynamic resolution, and invocation.
 
 ```go
-// context.Context - The container's context
+// context.Context - The factory's context.
 func(ctx context.Context) *Service
 
-// *gontainer.Resolver - Dynamic service resolution
+// *gontainer.Resolver - Dynamic service resolution.
 func(resolver *gontainer.Resolver) *Service
 
 // *gontainer.Invoker - Dynamic function invocation
@@ -327,11 +327,11 @@ func(invoker *gontainer.Invoker) *Service
 Gontainer provides special types for optional and multiple dependencies.
 
 ```go
-// Optional[T] - Optional dependency
+// Optional[T] - Optional dependency declaration.
 type Optional[T any] struct{}
 func (o Optional[T]) Get() T
 
-// Multiple[T] - Multiple services of the same interface
+// Multiple[T] - Multiple services of the same interface.
 type Multiple[T any] []T
 ```
 
@@ -344,17 +344,17 @@ err := gontainer.Run(ctx, factories...)
 
 switch {
 case errors.Is(err, gontainer.ErrFactoryReturnedError):
-    // Factory returned an error
+    // Factory returned an error.
 case errors.Is(err, gontainer.ErrEntrypointReturnedError):
-    // Entrypoint returned an error
+    // Entrypoint returned an error.
 case errors.Is(err, gontainer.ErrNoEntrypointsProvided):
-    // No entrypoints were provided
+    // No entrypoints were provided.
 case errors.Is(err, gontainer.ErrCircularDependency):
-    // Circular dependency detected
+    // Circular dependency detected.
 case errors.Is(err, gontainer.ErrDependencyNotResolved):
-    // Service type not registered
+    // Service type not registered.
 case errors.Is(err, gontainer.ErrFactoryTypeDuplicated):
-    // Service type was duplicated
+    // Service type was duplicated.
 }
 ```
 
