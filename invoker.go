@@ -61,11 +61,11 @@ func (i *Invoker) Invoke(function any) ([]any, error) {
 	}
 
 	// Call the function and collect results.
-	fnOutArgs := funcValue.Call(inArgs)
-	values := make([]any, 0, len(fnOutArgs))
-	for _, fnOut := range fnOutArgs {
-		values = append(values, fnOut.Interface())
+	outArgs := funcValue.Call(inArgs)
+	results := make([]any, 0, len(outArgs))
+	for _, fnOut := range outArgs {
+		results = append(results, fnOut.Interface())
 	}
 
-	return values, nil
+	return results, nil
 }
