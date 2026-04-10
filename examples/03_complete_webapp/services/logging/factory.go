@@ -27,7 +27,7 @@ import (
 )
 
 // WithSlogLogger returns a factory for the slog logger.
-func WithSlogLogger() gontainer.Option {
+func WithSlogLogger() *gontainer.Factory {
 	return gontainer.NewFactory(
 		func(confsvc *confmod.Config) (*slog.Logger, error) {
 			// Prepare logger config.
