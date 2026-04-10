@@ -266,17 +266,17 @@ gontainer.NewEntrypoint(func(newTx func() *Transaction) {
 Gontainer module interface is really simple:
 
 ```go
-// Run creates and runs a container with provided options.
-func Run(ctx context.Context, opts ...Option) error
+// Run creates and runs a container with provided factories and entrypoints.
+func Run(ctx context.Context, opts ...option) error
 
 // NewFactory registers a service factory.
-func NewFactory(fn any) Option
+func NewFactory(fn any) *Factory
 
 // NewService registers a pre-created service.
-func NewService[T any](service T) Option
+func NewService[T any](service T) *Factory
 
 // NewEntrypoint registers an entrypoint function.
-func NewEntrypoint(fn any) Option
+func NewEntrypoint(fn any) *Entrypoint
 ```
 
 ### Factory Signatures

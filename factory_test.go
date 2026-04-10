@@ -56,7 +56,7 @@ func TestFactoryInfo(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		arg1  Option
+		arg1  *Factory
 		want1 string
 		want2 string
 	}{

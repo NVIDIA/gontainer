@@ -24,7 +24,7 @@ import (
 )
 
 // Run runs a container with a set of configured factories.
-func Run(ctx context.Context, options ...Option) error {
+func Run(ctx context.Context, options ...option) error {
 	// Prepare container context ignoring the cancelling.
 	// When cancelled, it closes `container.Done()` channel
 	// and unblocks any waiting read from `container.Done()`.
@@ -76,10 +76,19 @@ func Run(ctx context.Context, options ...Option) error {
 	return nil
 }
 
-// Option defines an option for the service container.
-type Option interface {
-	// apply applies the option to the given registry.
+// option is the internal interface for container options.
+type option interface {
 	apply(ctx context.Context, registry *registry) error
+}
+
+// Factory is a container option that registers a service factory or singleton.
+type Factory struct {
+	fn func(ctx context.Context, registry *registry) error
+}
+
+// apply applies the factory option to the given registry.
+func (f *Factory) apply(ctx context.Context, registry *registry) error {
+	return f.fn(ctx, registry)
 }
 
 // NewFactory creates a new service load using the provided load function.
@@ -93,7 +102,7 @@ type Option interface {
 //	gontainer.NewFactory(func(db *Database) (*Handler, error) { ... })
 //	gontainer.NewFactory(func(db *Database) (*Handler, func() error) { ... })
 //	gontainer.NewFactory(func(db *Database) (*Handler, func() error, error) { ... })
-func NewFactory(function any) Option {
+func NewFactory(function any) *Factory {
 	funcValue := reflect.ValueOf(function)
 	funcType := reflect.TypeOf(function)
 
@@ -102,8 +111,8 @@ func NewFactory(function any) Option {
 	source := getFuncSource(funcValue)
 
 	// Prepare option callback.
-	return newOption(
-		func(ctx context.Context, registry *registry) error {
+	return &Factory{
+		fn: func(ctx context.Context, registry *registry) error {
 			// Validate function type.
 			if funcType.Kind() != reflect.Func {
 				return fmt.Errorf("invalid type: %s", funcType)
@@ -162,7 +171,7 @@ func NewFactory(function any) Option {
 			// Factory registered.
 			return nil
 		},
-	)
+	}
 }
 
 // NewService creates a new service load that always returns the given singleton value.
@@ -176,7 +185,7 @@ func NewFactory(function any) Option {
 //
 //	logger := NewLogger()
 //	gontainer.NewService(logger)
-func NewService[T any](service T) Option {
+func NewService[T any](service T) *Factory {
 	function := func() T { return service }
 	funcValue := reflect.ValueOf(function)
 	funcType := reflect.TypeOf(function)
@@ -187,8 +196,8 @@ func NewService[T any](service T) Option {
 	source := serviceType.PkgPath()
 
 	// Prepare option callback.
-	return newOption(
-		func(ctx context.Context, registry *registry) error {
+	return &Factory{
+		fn: func(ctx context.Context, registry *registry) error {
 			// Prepare value and error getters.
 			getOutType := func(outTypes []reflect.Type) reflect.Type { return funcType.Out(0) }
 			getOutValue := func(outValues []reflect.Value) reflect.Value { return outValues[0] }
@@ -207,7 +216,17 @@ func NewService[T any](service T) Option {
 			// Factory registered.
 			return nil
 		},
-	)
+	}
+}
+
+// Entrypoint is a container option that registers an entrypoint function.
+type Entrypoint struct {
+	fn func(ctx context.Context, registry *registry) error
+}
+
+// apply applies the entrypoint option to the given registry.
+func (e *Entrypoint) apply(ctx context.Context, registry *registry) error {
+	return e.fn(ctx, registry)
 }
 
 // NewEntrypoint creates a new factory which will be called by the container.
@@ -216,7 +235,7 @@ func NewService[T any](service T) Option {
 //
 //	gontainer.NewEntrypoint(func(db *Database) error { ... })
 //	gontainer.NewEntrypoint(func(db *Database) { ... })
-func NewEntrypoint(function any) Option {
+func NewEntrypoint(function any) *Entrypoint {
 	funcValue := reflect.ValueOf(function)
 	funcType := reflect.TypeOf(function)
 
@@ -225,8 +244,8 @@ func NewEntrypoint(function any) Option {
 	source := getFuncSource(funcValue)
 
 	// Prepare option callback.
-	return newOption(
-		func(ctx context.Context, registry *registry) error {
+	return &Entrypoint{
+		fn: func(ctx context.Context, registry *registry) error {
 			// Validate function type.
 			if funcType.Kind() != reflect.Func {
 				return fmt.Errorf("invalid type: %s", funcType)
@@ -265,26 +284,11 @@ func NewEntrypoint(function any) Option {
 				return fmt.Errorf("failed to load %s: %w", name, err)
 			}
 
-			// Register factory in the registry.
+			// Register entrypoint in the registry.
 			registry.registerEntrypoint(state)
 
-			// Factory registered.
+			// Entrypoint registered.
 			return nil
 		},
-	)
-}
-
-// newOption creates a new option instance.
-func newOption(apply func(ctx context.Context, registry *registry) error) *option {
-	return &option{applyFn: apply}
-}
-
-// option is the option based on the internal function.
-type option struct {
-	applyFn func(ctx context.Context, registry *registry) error
-}
-
-// apply applies the option to the given registry.
-func (o *option) apply(ctx context.Context, registry *registry) error {
-	return o.applyFn(ctx, registry)
+	}
 }
