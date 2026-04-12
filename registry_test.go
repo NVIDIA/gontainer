@@ -47,12 +47,12 @@ func TestRegistryRegisterFactory(t *testing.T) {
 func TestRegistryValidateFactories(t *testing.T) {
 	tests := []struct {
 		name    string
-		options []option
+		options []Option
 		wantErr func(t *testing.T, err error)
 	}{
 		{
 			name: "NoValidationErrors",
-			options: []option{
+			options: []Option{
 				NewFactory(func(bool) (int, error) { return 1, nil }),
 				NewFactory(func(string) (bool, error) { return true, nil }),
 				NewFactory(func() (string, error) { return "s", nil }),
@@ -64,7 +64,7 @@ func TestRegistryValidateFactories(t *testing.T) {
 		},
 		{
 			name: "ServiceNotResolvedError",
-			options: []option{
+			options: []Option{
 				NewFactory(func(bool) (int, error) { return 0, nil }),
 				NewFactory(func(string) (int32, error) { return 0, nil }),
 				NewEntrypoint(func(int, int32) {}),
@@ -90,7 +90,7 @@ func TestRegistryValidateFactories(t *testing.T) {
 		},
 		{
 			name: "ServiceDuplicatedError",
-			options: []option{
+			options: []Option{
 				NewFactory(func() (string, error) { return "s1", nil }),
 				NewFactory(func() (string, error) { return "s2", nil }),
 				NewEntrypoint(func(string) {}),
@@ -116,7 +116,7 @@ func TestRegistryValidateFactories(t *testing.T) {
 		},
 		{
 			name: "CircularDependencyErrors",
-			options: []option{
+			options: []Option{
 				NewFactory(func(bool) (int, error) { return 1, nil }),
 				NewFactory(func(string) (bool, error) { return true, nil }),
 				NewFactory(func(int) (string, error) { return "s", nil }),
@@ -148,7 +148,7 @@ func TestRegistryValidateFactories(t *testing.T) {
 		},
 		{
 			name: "ComplexErrors",
-			options: []option{
+			options: []Option{
 				NewFactory(func(struct{ X int }) string { return "s1" }),                   // not resolved, duplicate
 				NewFactory(func(ctx context.Context) (string, error) { return "s2", nil }), // duplicate
 				NewFactory(func(bool) (int, error) { return 1, nil }),                      // cycle
@@ -271,7 +271,7 @@ func TestRegistryResolveFuncServices(t *testing.T) {
 	func2Calls := atomic.Int64{}
 	fact3Calls := atomic.Int64{}
 
-	options := []option{
+	options := []Option{
 		NewFactory(func() func() int {
 			return func() int {
 				func1Calls.Add(1)

@@ -21,10 +21,11 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"slices"
 )
 
 // Run runs a container with a set of configured factories.
-func Run(ctx context.Context, options ...option) error {
+func Run(ctx context.Context, options ...Option) error {
 	// Prepare container context ignoring the cancelling.
 	// When cancelled, it closes `container.Done()` channel
 	// and unblocks any waiting read from `container.Done()`.
@@ -76,19 +77,9 @@ func Run(ctx context.Context, options ...option) error {
 	return nil
 }
 
-// option is the internal interface for container options.
-type option interface {
+// Option is the interface for container options.
+type Option interface {
 	apply(ctx context.Context, registry *registry) error
-}
-
-// Factory is a container option that registers a service factory or singleton.
-type Factory struct {
-	fn func(ctx context.Context, registry *registry) error
-}
-
-// apply applies the factory option to the given registry.
-func (f *Factory) apply(ctx context.Context, registry *registry) error {
-	return f.fn(ctx, registry)
 }
 
 // NewFactory creates a new service load using the provided load function.
@@ -102,7 +93,7 @@ func (f *Factory) apply(ctx context.Context, registry *registry) error {
 //	gontainer.NewFactory(func(db *Database) (*Handler, error) { ... })
 //	gontainer.NewFactory(func(db *Database) (*Handler, func() error) { ... })
 //	gontainer.NewFactory(func(db *Database) (*Handler, func() error, error) { ... })
-func NewFactory(function any) *Factory {
+func NewFactory(function any, opts ...FactoryOption) *Factory {
 	funcValue := reflect.ValueOf(function)
 	funcType := reflect.TypeOf(function)
 
@@ -110,9 +101,18 @@ func NewFactory(function any) *Factory {
 	name := fmt.Sprintf("Factory[%s]", funcValue.Type())
 	source := getFuncSource(funcValue)
 
-	// Prepare option callback.
+	// Prepare factory settings.
+	settings := factorySettings{}
+	for _, opt := range opts {
+		opt.applyFactory(&settings)
+	}
+
+	// Prepare factory instance.
 	return &Factory{
-		fn: func(ctx context.Context, registry *registry) error {
+		name:        name,
+		source:      source,
+		annotations: settings.annotations,
+		register: func(ctx context.Context, registry *registry) error {
 			// Validate function type.
 			if funcType.Kind() != reflect.Func {
 				return fmt.Errorf("invalid type: %s", funcType)
@@ -185,7 +185,7 @@ func NewFactory(function any) *Factory {
 //
 //	logger := NewLogger()
 //	gontainer.NewService(logger)
-func NewService[T any](service T) *Factory {
+func NewService[T any](service T, opts ...FactoryOption) *Factory {
 	function := func() T { return service }
 	funcValue := reflect.ValueOf(function)
 	funcType := reflect.TypeOf(function)
@@ -195,9 +195,18 @@ func NewService[T any](service T) *Factory {
 	name := fmt.Sprintf("Service[%s]", serviceType)
 	source := serviceType.PkgPath()
 
-	// Prepare option callback.
+	// Prepare factory settings.
+	settings := factorySettings{}
+	for _, opt := range opts {
+		opt.applyFactory(&settings)
+	}
+
+	// Prepare factory instance.
 	return &Factory{
-		fn: func(ctx context.Context, registry *registry) error {
+		name:        name,
+		source:      source,
+		annotations: settings.annotations,
+		register: func(ctx context.Context, registry *registry) error {
 			// Prepare value and error getters.
 			getOutType := func(outTypes []reflect.Type) reflect.Type { return funcType.Out(0) }
 			getOutValue := func(outValues []reflect.Value) reflect.Value { return outValues[0] }
@@ -219,14 +228,48 @@ func NewService[T any](service T) *Factory {
 	}
 }
 
-// Entrypoint is a container option that registers an entrypoint function.
-type Entrypoint struct {
-	fn func(ctx context.Context, registry *registry) error
+// FactoryOption is an option for configuring a Factory or a Service.
+type FactoryOption interface {
+	// applyFactory applies the option to the factory settings.
+	applyFactory(*factorySettings)
 }
 
-// apply applies the entrypoint option to the given registry.
-func (e *Entrypoint) apply(ctx context.Context, registry *registry) error {
-	return e.fn(ctx, registry)
+// Factory is a container option that registers a service factory or singleton.
+type Factory struct {
+	name        string
+	source      string
+	annotations []any
+	register    func(ctx context.Context, registry *registry) error
+}
+
+// Name returns the human-readable name of the factory.
+func (f *Factory) Name() string {
+	return f.name
+}
+
+// Source returns the source package path of the factory.
+func (f *Factory) Source() string {
+	return f.source
+}
+
+// Annotations returns a copy of the associated annotations.
+func (f *Factory) Annotations() []any {
+	return slices.Clone(f.annotations)
+}
+
+// apply applies the factory option to the given registry.
+func (f *Factory) apply(ctx context.Context, registry *registry) error {
+	return f.register(ctx, registry)
+}
+
+// factorySettings holds configuration options applied to a Factory or Service.
+type factorySettings struct {
+	annotations []any
+}
+
+// appendAnnotation appends an annotation value.
+func (s *factorySettings) appendAnnotation(value any) {
+	s.annotations = append(s.annotations, value)
 }
 
 // NewEntrypoint creates a new factory which will be called by the container.
@@ -235,17 +278,26 @@ func (e *Entrypoint) apply(ctx context.Context, registry *registry) error {
 //
 //	gontainer.NewEntrypoint(func(db *Database) error { ... })
 //	gontainer.NewEntrypoint(func(db *Database) { ... })
-func NewEntrypoint(function any) *Entrypoint {
+func NewEntrypoint(function any, opts ...EntrypointOption) *Entrypoint {
 	funcValue := reflect.ValueOf(function)
 	funcType := reflect.TypeOf(function)
 
-	// Prepare factory description.
+	// Prepare entrypoint description.
 	name := fmt.Sprintf("Entrypoint[%s]", funcValue.Type())
 	source := getFuncSource(funcValue)
 
-	// Prepare option callback.
+	// Prepare entrypoint settings.
+	settings := entrypointSettings{}
+	for _, opt := range opts {
+		opt.applyEntrypoint(&settings)
+	}
+
+	// Prepare entrypoint instance.
 	return &Entrypoint{
-		fn: func(ctx context.Context, registry *registry) error {
+		name:        name,
+		source:      source,
+		annotations: settings.annotations,
+		register: func(ctx context.Context, registry *registry) error {
 			// Validate function type.
 			if funcType.Kind() != reflect.Func {
 				return fmt.Errorf("invalid type: %s", funcType)
@@ -291,4 +343,68 @@ func NewEntrypoint(function any) *Entrypoint {
 			return nil
 		},
 	}
+}
+
+// EntrypointOption is an option for configuring an Entrypoint.
+type EntrypointOption interface {
+	// applyEntrypoint applies the option to the entrypoint settings.
+	applyEntrypoint(*entrypointSettings)
+}
+
+// Entrypoint is a container option that registers an entrypoint function.
+type Entrypoint struct {
+	name        string
+	source      string
+	annotations []any
+	register    func(ctx context.Context, registry *registry) error
+}
+
+// Name returns the human-readable name of the entrypoint.
+func (e *Entrypoint) Name() string {
+	return e.name
+}
+
+// Source returns the source package path of the entrypoint.
+func (e *Entrypoint) Source() string {
+	return e.source
+}
+
+// Annotations returns a copy of the associated annotations.
+func (e *Entrypoint) Annotations() []any {
+	return slices.Clone(e.annotations)
+}
+
+// apply applies the entrypoint option to the given registry.
+func (e *Entrypoint) apply(ctx context.Context, registry *registry) error {
+	return e.register(ctx, registry)
+}
+
+// entrypointSettings holds configuration options applied to an Entrypoint.
+type entrypointSettings struct {
+	annotations []any
+}
+
+// appendAnnotation appends an annotation value.
+func (s *entrypointSettings) appendAnnotation(value any) {
+	s.annotations = append(s.annotations, value)
+}
+
+// WithAnnotation returns an option that attaches a value to a Factory or Entrypoint.
+func WithAnnotation(value any) annotationOpt {
+	return annotationOpt{value: value}
+}
+
+// annotationOpt is a value attachable to a Factory or Entrypoint.
+type annotationOpt struct {
+	value any
+}
+
+// applyFactorySettings applies the option to the factory settings.
+func (m annotationOpt) applyFactory(s *factorySettings) {
+	s.appendAnnotation(m.value)
+}
+
+// applyEntrypointSettings applies the option to the entrypoint settings.
+func (m annotationOpt) applyEntrypoint(s *entrypointSettings) {
+	s.appendAnnotation(m.value)
 }
