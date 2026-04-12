@@ -81,28 +81,6 @@ type option interface {
 	apply(ctx context.Context, registry *registry) error
 }
 
-// Factory is a container option that registers a service factory or singleton.
-type Factory struct {
-	fn     func(ctx context.Context, registry *registry) error
-	name   string
-	source string
-}
-
-// Name returns the human-readable name of the factory.
-func (f *Factory) Name() string {
-	return f.name
-}
-
-// Source returns the source package path of the factory.
-func (f *Factory) Source() string {
-	return f.source
-}
-
-// apply applies the factory option to the given registry.
-func (f *Factory) apply(ctx context.Context, registry *registry) error {
-	return f.fn(ctx, registry)
-}
-
 // NewFactory creates a new service load using the provided load function.
 //
 // The load function must be a function. It may accept dependencies as input parameters and return
@@ -235,26 +213,26 @@ func NewService[T any](service T) *Factory {
 	}
 }
 
-// Entrypoint is a container option that registers an entrypoint function.
-type Entrypoint struct {
-	fn     func(ctx context.Context, registry *registry) error
+// Factory is a container option that registers a service factory or singleton.
+type Factory struct {
 	name   string
 	source string
+	fn     func(ctx context.Context, registry *registry) error
 }
 
-// Name returns the human-readable name of the entrypoint.
-func (e *Entrypoint) Name() string {
-	return e.name
+// Name returns the human-readable name of the factory.
+func (f *Factory) Name() string {
+	return f.name
 }
 
-// Source returns the source package path of the entrypoint.
-func (e *Entrypoint) Source() string {
-	return e.source
+// Source returns the source package path of the factory.
+func (f *Factory) Source() string {
+	return f.source
 }
 
-// apply applies the entrypoint option to the given registry.
-func (e *Entrypoint) apply(ctx context.Context, registry *registry) error {
-	return e.fn(ctx, registry)
+// apply applies the factory option to the given registry.
+func (f *Factory) apply(ctx context.Context, registry *registry) error {
+	return f.fn(ctx, registry)
 }
 
 // NewEntrypoint creates a new factory which will be called by the container.
@@ -321,4 +299,26 @@ func NewEntrypoint(function any) *Entrypoint {
 			return nil
 		},
 	}
+}
+
+// Entrypoint is a container option that registers an entrypoint function.
+type Entrypoint struct {
+	name   string
+	source string
+	fn     func(ctx context.Context, registry *registry) error
+}
+
+// Name returns the human-readable name of the entrypoint.
+func (e *Entrypoint) Name() string {
+	return e.name
+}
+
+// Source returns the source package path of the entrypoint.
+func (e *Entrypoint) Source() string {
+	return e.source
+}
+
+// apply applies the entrypoint option to the given registry.
+func (e *Entrypoint) apply(ctx context.Context, registry *registry) error {
+	return e.fn(ctx, registry)
 }
