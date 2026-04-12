@@ -20,6 +20,7 @@ package gontainer
 import (
 	"context"
 	"fmt"
+	"maps"
 	"reflect"
 )
 
@@ -253,7 +254,7 @@ func (f *Factory) Source() string {
 
 // Metadata returns the associated factory metadata.
 func (f *Factory) Metadata() map[any]any {
-	return f.metadata
+	return maps.Clone(f.metadata)
 }
 
 // apply applies the factory option to the given registry.
@@ -370,7 +371,7 @@ func (e *Entrypoint) Source() string {
 
 // Metadata returns the associated entrypoint metadata.
 func (e *Entrypoint) Metadata() map[any]any {
-	return e.metadata
+	return maps.Clone(e.metadata)
 }
 
 // apply applies the entrypoint option to the given registry.
