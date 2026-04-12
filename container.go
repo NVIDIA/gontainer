@@ -92,7 +92,7 @@ type Option interface {
 //	gontainer.NewFactory(func(db *Database) (*Handler, error) { ... })
 //	gontainer.NewFactory(func(db *Database) (*Handler, func() error) { ... })
 //	gontainer.NewFactory(func(db *Database) (*Handler, func() error, error) { ... })
-func NewFactory(function any) *Factory {
+func NewFactory(function any, opts ...FactoryOption) *Factory {
 	funcValue := reflect.ValueOf(function)
 	funcType := reflect.TypeOf(function)
 
@@ -100,11 +100,18 @@ func NewFactory(function any) *Factory {
 	name := fmt.Sprintf("Factory[%s]", funcValue.Type())
 	source := getFuncSource(funcValue)
 
-	// Prepare option callback.
+	// Prepare factory settings.
+	settings := factorySettings{metadata: make(map[any]any)}
+	for _, opt := range opts {
+		opt.applyFactorySettings(&settings)
+	}
+
+	// Prepare factory instance.
 	return &Factory{
-		name:   name,
-		source: source,
-		fn: func(ctx context.Context, registry *registry) error {
+		name:     name,
+		source:   source,
+		metadata: settings.metadata,
+		register: func(ctx context.Context, registry *registry) error {
 			// Validate function type.
 			if funcType.Kind() != reflect.Func {
 				return fmt.Errorf("invalid type: %s", funcType)
@@ -177,7 +184,7 @@ func NewFactory(function any) *Factory {
 //
 //	logger := NewLogger()
 //	gontainer.NewService(logger)
-func NewService[T any](service T) *Factory {
+func NewService[T any](service T, opts ...FactoryOption) *Factory {
 	function := func() T { return service }
 	funcValue := reflect.ValueOf(function)
 	funcType := reflect.TypeOf(function)
@@ -187,11 +194,18 @@ func NewService[T any](service T) *Factory {
 	name := fmt.Sprintf("Service[%s]", serviceType)
 	source := serviceType.PkgPath()
 
-	// Prepare option callback.
+	// Prepare factory settings.
+	settings := factorySettings{metadata: make(map[any]any)}
+	for _, opt := range opts {
+		opt.applyFactorySettings(&settings)
+	}
+
+	// Prepare factory instance.
 	return &Factory{
-		name:   name,
-		source: source,
-		fn: func(ctx context.Context, registry *registry) error {
+		name:     name,
+		source:   source,
+		metadata: settings.metadata,
+		register: func(ctx context.Context, registry *registry) error {
 			// Prepare value and error getters.
 			getOutType := func(outTypes []reflect.Type) reflect.Type { return funcType.Out(0) }
 			getOutValue := func(outValues []reflect.Value) reflect.Value { return outValues[0] }
@@ -213,11 +227,18 @@ func NewService[T any](service T) *Factory {
 	}
 }
 
+// FactoryOption is an option for configuring a Factory or a Service.
+type FactoryOption interface {
+	// applyFactorySettings applies the metadata option to the factory settings.
+	applyFactorySettings(*factorySettings)
+}
+
 // Factory is a container option that registers a service factory or singleton.
 type Factory struct {
-	name   string
-	source string
-	fn     func(ctx context.Context, registry *registry) error
+	name     string
+	source   string
+	metadata map[any]any
+	register func(ctx context.Context, registry *registry) error
 }
 
 // Name returns the human-readable name of the factory.
@@ -230,9 +251,24 @@ func (f *Factory) Source() string {
 	return f.source
 }
 
+// Metadata returns the associated factory metadata.
+func (f *Factory) Metadata() map[any]any {
+	return f.metadata
+}
+
 // apply applies the factory option to the given registry.
 func (f *Factory) apply(ctx context.Context, registry *registry) error {
-	return f.fn(ctx, registry)
+	return f.register(ctx, registry)
+}
+
+// factorySettings holds configuration options applied to a Factory or Service.
+type factorySettings struct {
+	metadata map[any]any
+}
+
+// setMetadata sets metadata key-value pair.
+func (s *factorySettings) setMetadata(key any, value any) {
+	s.metadata[key] = value
 }
 
 // NewEntrypoint creates a new factory which will be called by the container.
@@ -241,19 +277,26 @@ func (f *Factory) apply(ctx context.Context, registry *registry) error {
 //
 //	gontainer.NewEntrypoint(func(db *Database) error { ... })
 //	gontainer.NewEntrypoint(func(db *Database) { ... })
-func NewEntrypoint(function any) *Entrypoint {
+func NewEntrypoint(function any, opts ...EntrypointOption) *Entrypoint {
 	funcValue := reflect.ValueOf(function)
 	funcType := reflect.TypeOf(function)
 
-	// Prepare factory description.
+	// Prepare entrypoint description.
 	name := fmt.Sprintf("Entrypoint[%s]", funcValue.Type())
 	source := getFuncSource(funcValue)
 
-	// Prepare option callback.
+	// Prepare entrypoint settings.
+	settings := entrypointSettings{metadata: make(map[any]any)}
+	for _, opt := range opts {
+		opt.applyEntrypointSettings(&settings)
+	}
+
+	// Prepare entrypoint instance.
 	return &Entrypoint{
-		name:   name,
-		source: source,
-		fn: func(ctx context.Context, registry *registry) error {
+		name:     name,
+		source:   source,
+		metadata: settings.metadata,
+		register: func(ctx context.Context, registry *registry) error {
 			// Validate function type.
 			if funcType.Kind() != reflect.Func {
 				return fmt.Errorf("invalid type: %s", funcType)
@@ -301,11 +344,18 @@ func NewEntrypoint(function any) *Entrypoint {
 	}
 }
 
+// EntrypointOption is an option for configuring an Entrypoint.
+type EntrypointOption interface {
+	// applyEntrypointSettings applies the metadata option to the entrypoint settings.
+	applyEntrypointSettings(*entrypointSettings)
+}
+
 // Entrypoint is a container option that registers an entrypoint function.
 type Entrypoint struct {
-	name   string
-	source string
-	fn     func(ctx context.Context, registry *registry) error
+	name     string
+	source   string
+	metadata map[any]any
+	register func(ctx context.Context, registry *registry) error
 }
 
 // Name returns the human-readable name of the entrypoint.
@@ -318,7 +368,43 @@ func (e *Entrypoint) Source() string {
 	return e.source
 }
 
+// Metadata returns the associated entrypoint metadata.
+func (e *Entrypoint) Metadata() map[any]any {
+	return e.metadata
+}
+
 // apply applies the entrypoint option to the given registry.
 func (e *Entrypoint) apply(ctx context.Context, registry *registry) error {
-	return e.fn(ctx, registry)
+	return e.register(ctx, registry)
+}
+
+// entrypointSettings holds configuration options applied to an Entrypoint.
+type entrypointSettings struct {
+	metadata map[any]any
+}
+
+// setMetadata sets metadata key-value pair.
+func (s *entrypointSettings) setMetadata(key any, value any) {
+	s.metadata[key] = value
+}
+
+// WithMetadata returns an option that attaches a key-value pair.
+func WithMetadata(key, value any) metadataOpt {
+	return metadataOpt{key: key, value: value}
+}
+
+// metadataOpt is a key-value pair attachable to a Factory or Entrypoint.
+type metadataOpt struct {
+	key   any
+	value any
+}
+
+// applyFactorySettings applies the metadata option to the factory settings.
+func (m metadataOpt) applyFactorySettings(s *factorySettings) {
+	s.setMetadata(m.key, m.value)
+}
+
+// applyEntrypointSettings applies the metadata option to the entrypoint settings.
+func (m metadataOpt) applyEntrypointSettings(s *entrypointSettings) {
+	s.setMetadata(m.key, m.value)
 }
