@@ -83,7 +83,19 @@ type option interface {
 
 // Factory is a container option that registers a service factory or singleton.
 type Factory struct {
-	fn func(ctx context.Context, registry *registry) error
+	fn     func(ctx context.Context, registry *registry) error
+	name   string
+	source string
+}
+
+// Name returns the human-readable name of the factory.
+func (f *Factory) Name() string {
+	return f.name
+}
+
+// Source returns the source package path of the factory.
+func (f *Factory) Source() string {
+	return f.source
 }
 
 // apply applies the factory option to the given registry.
@@ -112,6 +124,8 @@ func NewFactory(function any) *Factory {
 
 	// Prepare option callback.
 	return &Factory{
+		name:   name,
+		source: source,
 		fn: func(ctx context.Context, registry *registry) error {
 			// Validate function type.
 			if funcType.Kind() != reflect.Func {
@@ -197,6 +211,8 @@ func NewService[T any](service T) *Factory {
 
 	// Prepare option callback.
 	return &Factory{
+		name:   name,
+		source: source,
 		fn: func(ctx context.Context, registry *registry) error {
 			// Prepare value and error getters.
 			getOutType := func(outTypes []reflect.Type) reflect.Type { return funcType.Out(0) }
@@ -221,7 +237,19 @@ func NewService[T any](service T) *Factory {
 
 // Entrypoint is a container option that registers an entrypoint function.
 type Entrypoint struct {
-	fn func(ctx context.Context, registry *registry) error
+	fn     func(ctx context.Context, registry *registry) error
+	name   string
+	source string
+}
+
+// Name returns the human-readable name of the entrypoint.
+func (e *Entrypoint) Name() string {
+	return e.name
+}
+
+// Source returns the source package path of the entrypoint.
+func (e *Entrypoint) Source() string {
+	return e.source
 }
 
 // apply applies the entrypoint option to the given registry.
@@ -245,6 +273,8 @@ func NewEntrypoint(function any) *Entrypoint {
 
 	// Prepare option callback.
 	return &Entrypoint{
+		name:   name,
+		source: source,
 		fn: func(ctx context.Context, registry *registry) error {
 			// Validate function type.
 			if funcType.Kind() != reflect.Func {
