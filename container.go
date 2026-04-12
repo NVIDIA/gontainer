@@ -24,7 +24,7 @@ import (
 )
 
 // Run runs a container with a set of configured factories.
-func Run(ctx context.Context, options ...option) error {
+func Run(ctx context.Context, options ...Option) error {
 	// Prepare container context ignoring the cancelling.
 	// When cancelled, it closes `container.Done()` channel
 	// and unblocks any waiting read from `container.Done()`.
@@ -76,8 +76,8 @@ func Run(ctx context.Context, options ...option) error {
 	return nil
 }
 
-// option is the internal interface for container options.
-type option interface {
+// Option is the interface for container options.
+type Option interface {
 	apply(ctx context.Context, registry *registry) error
 }
 

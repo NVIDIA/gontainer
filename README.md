@@ -267,7 +267,7 @@ Gontainer module interface is really simple:
 
 ```go
 // Run creates and runs a container with provided factories and entrypoints.
-func Run(ctx context.Context, opts ...option) error
+func Run(ctx context.Context, opts ...Option) error
 
 // NewFactory registers a service factory.
 func NewFactory(fn any) *Factory
