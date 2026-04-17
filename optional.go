@@ -19,7 +19,6 @@ package gontainer
 
 import (
 	"reflect"
-	"unsafe"
 )
 
 // Optional defines a dependency on a service that may or may not be registered.
@@ -42,22 +41,29 @@ type Optional[T any] struct {
 }
 
 // Get returns optional service instance.
-func (o Optional[T]) Get() T {
+func (o *Optional[T]) Get() T {
 	return o.value
 }
 
 // Optional marks this type as optional.
-func (o Optional[T]) Optional() {}
+func (o *Optional[T]) Optional() {}
+
+// setValue populates the private value field.
+func (o *Optional[T]) setValue(v reflect.Value) {
+	reflect.ValueOf(&o.value).Elem().Set(v)
+}
 
 // isOptionalType checks and returns optional box type.
 func isOptionalType(typ reflect.Type) (reflect.Type, bool) {
-	if typ.Kind() == reflect.Struct {
-		if _, ok := typ.MethodByName("Optional"); ok {
-			if methodValue, ok := typ.MethodByName("Get"); ok {
-				if methodValue.Type.NumOut() == 1 {
-					methodType := methodValue.Type.Out(0)
-					return methodType, true
-				}
+	if typ.Kind() != reflect.Struct {
+		return nil, false
+	}
+	pointerType := reflect.PointerTo(typ)
+	if _, ok := pointerType.MethodByName("Optional"); ok {
+		if methodValue, ok := pointerType.MethodByName("Get"); ok {
+			if methodValue.Type.NumOut() == 1 {
+				methodType := methodValue.Type.Out(0)
+				return methodType, true
 			}
 		}
 	}
@@ -66,14 +72,11 @@ func isOptionalType(typ reflect.Type) (reflect.Type, bool) {
 
 // newOptionalValue creates new optional type with a value.
 func newOptionalValue(typ reflect.Type, value reflect.Value) reflect.Value {
-	// Prepare boxing struct for value.
-	box := reflect.New(typ).Elem()
+	// Allocate an addressable pointer to a zero Optional[T].
+	ptr := reflect.New(typ)
 
-	// Inject factory output value to the boxing struct.
-	field := box.FieldByName("value")
-	pointer := unsafe.Pointer(field.UnsafeAddr())
-	public := reflect.NewAt(field.Type(), pointer)
-	public.Elem().Set(value)
+	// Populate the private field via the internal setter interface.
+	ptr.Interface().(interface{ setValue(reflect.Value) }).setValue(value)
 
-	return box
+	return ptr.Elem()
 }

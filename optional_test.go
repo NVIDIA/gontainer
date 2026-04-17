@@ -50,11 +50,13 @@ func TestNewOptionalValue(t *testing.T) {
 	box := Optional[string]{}
 	data := reflect.New(reflect.TypeOf((*string)(nil)).Elem()).Elem()
 	value := newOptionalValue(reflect.TypeOf(box), data)
-	equal(t, value.Interface().(Optional[string]).Get(), "")
+	opt := value.Interface().(Optional[string])
+	equal(t, opt.Get(), "")
 
 	// When optional found.
 	box = Optional[string]{}
 	data = reflect.ValueOf("result")
 	value = newOptionalValue(reflect.TypeOf(box), data)
-	equal(t, value.Interface().(Optional[string]).Get(), "result")
+	opt = value.Interface().(Optional[string])
+	equal(t, opt.Get(), "result")
 }
