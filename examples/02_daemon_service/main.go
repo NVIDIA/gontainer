@@ -54,9 +54,6 @@ func main() {
 	// Execute service container.
 	log.Println("Executing service container")
 	err := gontainer.Run(
-		// Root context for container.
-		context.Background(),
-
 		// Inject singleton object.
 		gontainer.NewService(logger),
 
