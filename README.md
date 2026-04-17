@@ -259,6 +259,43 @@ gontainer.NewEntrypoint(func(newTx func() *Transaction) {
 })
 ```
 
+### Factory Annotations
+
+Attach arbitrary metadata to a factory or entrypoint with `WithAnnotation`.
+Annotations are exposed via `Factory.Annotations()` / `Entrypoint.Annotations()`
+and can be read **without starting the container** - useful for `--help`,
+config validation, CLI dispatch, or any pre-run tooling built on top of the
+same factory definitions.
+
+```go
+type cliHelp struct {
+    Cmd string
+    Doc string
+}
+
+configFactory := gontainer.NewFactory(
+    newConfig,
+    gontainer.WithAnnotation(cliHelp{Cmd: "config", Doc: "Print resolved config"}),
+)
+
+dbFactory := gontainer.NewFactory(
+    newDatabase,
+    gontainer.WithAnnotation(cliHelp{Cmd: "db", Doc: "Ping the database"}),
+)
+
+// Inspect annotations without starting the container.
+for _, f := range []*gontainer.Factory{configFactory, dbFactory} {
+    for _, a := range f.Annotations() {
+        if h, ok := a.(cliHelp); ok {
+            fmt.Printf("%s\t%s\n", h.Cmd, h.Doc)
+        }
+    }
+}
+
+// Start the container with the same factories when ready.
+_ = gontainer.Run(ctx, configFactory, dbFactory, entrypoint)
+```
+
 ## API Reference
 
 ### Module Functions
