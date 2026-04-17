@@ -217,6 +217,60 @@ gontainer.NewFactory(func(middlewares gontainer.Multiple[Middleware]) *Router {
 })
 ```
 
+### Multiple Instances of the Same Type
+
+The container matches services by exact type. To register several instances
+of the same underlying type, give each one a distinct named type (compile-time)
+or group them in a composite service (runtime):
+
+```go
+// Compile-time: the set of instances is known at build time.
+// Typos and wiring mistakes are caught by the compiler.
+type UsersDB  *sql.DB
+type OrdersDB *sql.DB
+
+gontainer.NewFactory(func(c *Config) (UsersDB, func() error) {
+    db, _ := sql.Open("postgres", c.UsersDSN)
+    return db, db.Close
+})
+
+gontainer.NewFactory(func(c *Config) (OrdersDB, func() error) {
+    db, _ := sql.Open("postgres", c.OrdersDSN)
+    return db, db.Close
+})
+
+gontainer.NewFactory(func(u UsersDB, o OrdersDB) *Service {
+    return &Service{users: u, orders: o}
+})
+```
+
+```go
+// Runtime: the set of instances comes from configuration.
+// Access is stringly-typed but flexible.
+type DBs struct{ byAlias map[string]*sql.DB }
+
+func (d *DBs) Get(alias string) *sql.DB { return d.byAlias[alias] }
+
+gontainer.NewFactory(func(c *Config) (*DBs, func() error) {
+    open := make(map[string]*sql.DB, len(c.Databases))
+    for alias, dsn := range c.Databases {
+        db, _ := sql.Open("postgres", dsn)
+        open[alias] = db
+    }
+    return &DBs{byAlias: open}, func() error {
+        var errs []error
+        for _, db := range open {
+            errs = append(errs, db.Close())
+        }
+        return errors.Join(errs...)
+    }
+})
+
+gontainer.NewFactory(func(dbs *DBs) *Service {
+    return &Service{users: dbs.Get("users")}
+})
+```
+
 ### Dynamic Resolution
 
 Resolve services on-demand:
