@@ -18,7 +18,6 @@
 package gontainer
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"testing"
@@ -30,10 +29,9 @@ func TestFactoryLoad(t *testing.T) {
 		return 100500, nil
 	}
 
-	ctx := context.Background()
 	option := NewFactory(fun)
 	registry := &registry{}
-	equal(t, option.apply(ctx, registry), nil)
+	equal(t, option.apply(registry), nil)
 	factory := registry.factories[0]
 
 	equal(t, factory.funcType.String(), "func(string, string, string) (int, error)")
@@ -87,9 +85,8 @@ func TestFactoryInfo(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
 			registry := &registry{}
-			equal(t, tt.arg1.apply(ctx, registry), nil)
+			equal(t, tt.arg1.apply(registry), nil)
 
 			factory := registry.factories[0]
 			equal(t, factory.name, tt.want1)
