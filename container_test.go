@@ -18,7 +18,7 @@
 package gontainer
 
 import (
-	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync/atomic"
@@ -42,7 +42,6 @@ func TestContainer(t *testing.T) {
 
 	// Run container.
 	equal(t, Run(
-		context.Background(),
 		NewService(float64(100500)),
 		NewFactory(func() string { return "string" }),
 		NewFactory(func() int { return 123 }),
@@ -60,7 +59,6 @@ func TestContainer(t *testing.T) {
 			}
 		}),
 		NewEntrypoint(func(
-			ctx context.Context,
 			dep1 float64,
 			dep2 string,
 			dep3 Optional[int],
@@ -124,4 +122,70 @@ func equal(t *testing.T, a, b any) {
 	if !reflect.DeepEqual(a, b) {
 		t.Fatalf("equal failed: '%v' != '%v'", a, b)
 	}
+}
+
+// TestDistinctTypes pins down the container's type-matching contract for
+// named types that share a common underlying type (e.g. `type UsersDB *sql.DB`
+// and `type OrdersDB *sql.DB`). Resolution is based on exact type identity:
+// there is no covariance between a defined type and its underlying type,
+// so users can register multiple instances of the "same" underlying type
+// by wrapping each one in a distinct named type.
+func TestDistinctTypes(t *testing.T) {
+	t.Run("DistinctDefinedTypesCoexist", func(t *testing.T) {
+		// Two defined pointer types share the same underlying `*connection`,
+		// yet the container treats them as fully independent service keys:
+		// both are registered without a duplicate-type error and each is
+		// injected into the entrypoint from its own factory.
+		type connection struct{ id string }
+		type usersDB *connection
+		type ordersDB *connection
+
+		var users usersDB
+		var orders ordersDB
+
+		equal(t, Run(
+			NewFactory(func() usersDB { return &connection{id: "users"} }),
+			NewFactory(func() ordersDB { return &connection{id: "orders"} }),
+			NewEntrypoint(func(u usersDB, o ordersDB) {
+				users = u
+				orders = o
+			}),
+		), nil)
+
+		equal(t, (*connection)(users).id, "users")
+		equal(t, (*connection)(orders).id, "orders")
+	})
+
+	t.Run("NoCovarianceBetweenDefinedAndUnderlying", func(t *testing.T) {
+		// A factory that returns a defined type does not satisfy a request
+		// for the underlying type: the container uses exact type matching,
+		// not assignability or convertibility.
+		type connection struct{ id string }
+		type usersDB *connection
+
+		err := Run(
+			NewFactory(func() usersDB { return &connection{id: "users"} }),
+			NewEntrypoint(func(_ *connection) {}),
+		)
+		equal(t, errors.Is(err, ErrDependencyNotResolved), true)
+	})
+
+	t.Run("MultipleDoesNotCollectDefinedTypes", func(t *testing.T) {
+		// Multiple[T] is polymorphic only for interfaces. For concrete types
+		// it follows the same exact-match rule, so it does not pick up
+		// factories of defined types that happen to share the same underlying.
+		type connection struct{ id string }
+		type usersDB *connection
+		type ordersDB *connection
+
+		var all Multiple[*connection]
+
+		equal(t, Run(
+			NewFactory(func() usersDB { return &connection{id: "users"} }),
+			NewFactory(func() ordersDB { return &connection{id: "orders"} }),
+			NewEntrypoint(func(m Multiple[*connection]) { all = m }),
+		), nil)
+
+		equal(t, len(all), 0)
+	})
 }

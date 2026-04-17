@@ -18,7 +18,6 @@
 package gontainer
 
 import (
-	"context"
 	"errors"
 	"sync/atomic"
 	"testing"
@@ -109,7 +108,6 @@ func TestInvokerService(t *testing.T) {
 
 			// Run container.
 			equal(t, Run(
-				context.Background(),
 				NewFactory(func() string { return "string" }),
 				NewFactory(func() int { return 123 }),
 				NewEntrypoint(func(invoker *Invoker) {

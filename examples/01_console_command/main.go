@@ -18,7 +18,6 @@
 package main
 
 import (
-	"context"
 	"log"
 
 	"github.com/NVIDIA/gontainer/v2"
@@ -48,9 +47,6 @@ func main() {
 	// Execute service container.
 	log.Println("Executing service container")
 	err := gontainer.Run(
-		// Root context for container.
-		context.Background(),
-
 		// Factory to create an instance of NameService.
 		gontainer.NewFactory(func() *NameService {
 			return &NameService{name: "Bob"}

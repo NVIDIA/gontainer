@@ -18,7 +18,6 @@
 package main
 
 import (
-	"context"
 	"os"
 	"os/signal"
 	"syscall"
@@ -44,9 +43,6 @@ func main() {
 
 	// Execute service container.
 	err := gontainer.Run(
-		// Root context for container.
-		context.Background(),
-
 		// Enable config service.
 		config.WithConfig(),
 

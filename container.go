@@ -18,20 +18,18 @@
 package gontainer
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"slices"
 )
 
 // Run runs a container with a set of configured factories.
-func Run(ctx context.Context, options ...Option) error {
-	// Prepare container context ignoring the cancelling.
-	// When cancelled, it closes `container.Done()` channel
-	// and unblocks any waiting read from `container.Done()`.
-	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	defer cancel()
-
+//
+// Run registers the provided options, validates the registry, invokes
+// entrypoints synchronously, and then tears down all spawned factories
+// in reverse order. It returns when all entrypoints have returned and
+// teardown has completed.
+func Run(options ...Option) error {
 	// Prepare services registry instance.
 	registry := &registry{}
 
@@ -42,18 +40,18 @@ func Run(ctx context.Context, options ...Option) error {
 	invoker := &Invoker{registry: registry}
 
 	// Register service resolver instance in the registry.
-	if err := NewService(resolver).apply(ctx, registry); err != nil {
+	if err := NewService(resolver).apply(registry); err != nil {
 		return fmt.Errorf("failed to register resolver: %w", err)
 	}
 
 	// Register function invoker instance in the registry.
-	if err := NewService(invoker).apply(ctx, registry); err != nil {
+	if err := NewService(invoker).apply(registry); err != nil {
 		return fmt.Errorf("failed to register invoker: %w", err)
 	}
 
 	// Register provided factories in the registry.
 	for _, option := range options {
-		if err := option.apply(ctx, registry); err != nil {
+		if err := option.apply(registry); err != nil {
 			return fmt.Errorf("failed to apply option: %w", err)
 		}
 	}
@@ -79,7 +77,7 @@ func Run(ctx context.Context, options ...Option) error {
 
 // Option is the interface for container options.
 type Option interface {
-	apply(ctx context.Context, registry *registry) error
+	apply(registry *registry) error
 }
 
 // NewFactory creates a new service load using the provided load function.
@@ -112,7 +110,7 @@ func NewFactory(function any, opts ...FactoryOption) *Factory {
 		name:        name,
 		source:      source,
 		annotations: settings.annotations,
-		register: func(ctx context.Context, registry *registry) error {
+		register: func(registry *registry) error {
 			// Validate function type.
 			if funcType.Kind() != reflect.Func {
 				return fmt.Errorf("invalid type: %s", funcType)
@@ -127,28 +125,28 @@ func NewFactory(function any, opts ...FactoryOption) *Factory {
 			// Prepare value and error getters.
 			switch {
 			// Factory returns exactly one service.
-			case funcType.NumOut() == 1 && isUsefulService(funcType.Out(0)):
+			case funcType.NumOut() == 1 && !isEmptyInterface(funcType.Out(0)) && !isErrorInterface(funcType.Out(0)):
 				getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
 				getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
 				getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 				getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 
 			// Factory returns a service and an error.
-			case funcType.NumOut() == 2 && isUsefulService(funcType.Out(0)) && isErrorInterface(funcType.Out(1)):
+			case funcType.NumOut() == 2 && !isEmptyInterface(funcType.Out(0)) && !isErrorInterface(funcType.Out(0)) && isErrorInterface(funcType.Out(1)):
 				getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
 				getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
 				getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 				getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
 
 			// Factory returns a service and a close callback.
-			case funcType.NumOut() == 2 && isUsefulService(funcType.Out(0)) && isCloseCallback(funcType.Out(1)):
+			case funcType.NumOut() == 2 && !isEmptyInterface(funcType.Out(0)) && !isErrorInterface(funcType.Out(0)) && isCloseCallback(funcType.Out(1)):
 				getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
 				getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
 				getOutClose = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
 				getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 
 			// Factory returns a service, a close callback and an error.
-			case funcType.NumOut() == 3 && isUsefulService(funcType.Out(0)) && isCloseCallback(funcType.Out(1)) && isErrorInterface(funcType.Out(2)):
+			case funcType.NumOut() == 3 && !isEmptyInterface(funcType.Out(0)) && !isErrorInterface(funcType.Out(0)) && isCloseCallback(funcType.Out(1)) && isErrorInterface(funcType.Out(2)):
 				getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
 				getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
 				getOutClose = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
@@ -160,7 +158,7 @@ func NewFactory(function any, opts ...FactoryOption) *Factory {
 			}
 
 			// Load the factory internal representation.
-			state, err := newFactory(ctx, name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
+			state, err := newFactory(name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
 			if err != nil {
 				return fmt.Errorf("failed to load %s: %w", name, err)
 			}
@@ -206,7 +204,7 @@ func NewService[T any](service T, opts ...FactoryOption) *Factory {
 		name:        name,
 		source:      source,
 		annotations: settings.annotations,
-		register: func(ctx context.Context, registry *registry) error {
+		register: func(registry *registry) error {
 			// Prepare value and error getters.
 			getOutType := func(outTypes []reflect.Type) reflect.Type { return funcType.Out(0) }
 			getOutValue := func(outValues []reflect.Value) reflect.Value { return outValues[0] }
@@ -214,7 +212,7 @@ func NewService[T any](service T, opts ...FactoryOption) *Factory {
 			getOutError := func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 
 			// Load the factory internal representation.
-			state, err := newFactory(ctx, name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
+			state, err := newFactory(name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
 			if err != nil {
 				return fmt.Errorf("failed to load %s: %w", name, err)
 			}
@@ -239,7 +237,7 @@ type Factory struct {
 	name        string
 	source      string
 	annotations []any
-	register    func(ctx context.Context, registry *registry) error
+	register    func(registry *registry) error
 }
 
 // Name returns the human-readable name of the factory.
@@ -258,8 +256,8 @@ func (f *Factory) Annotations() []any {
 }
 
 // apply applies the factory option to the given registry.
-func (f *Factory) apply(ctx context.Context, registry *registry) error {
-	return f.register(ctx, registry)
+func (f *Factory) apply(registry *registry) error {
+	return f.register(registry)
 }
 
 // factorySettings holds configuration options applied to a Factory or Service.
@@ -297,7 +295,7 @@ func NewEntrypoint(function any, opts ...EntrypointOption) *Entrypoint {
 		name:        name,
 		source:      source,
 		annotations: settings.annotations,
-		register: func(ctx context.Context, registry *registry) error {
+		register: func(registry *registry) error {
 			// Validate function type.
 			if funcType.Kind() != reflect.Func {
 				return fmt.Errorf("invalid type: %s", funcType)
@@ -331,7 +329,7 @@ func NewEntrypoint(function any, opts ...EntrypointOption) *Entrypoint {
 			}
 
 			// Load the factory internal representation.
-			state, err := newFactory(ctx, name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
+			state, err := newFactory(name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
 			if err != nil {
 				return fmt.Errorf("failed to load %s: %w", name, err)
 			}
@@ -356,7 +354,7 @@ type Entrypoint struct {
 	name        string
 	source      string
 	annotations []any
-	register    func(ctx context.Context, registry *registry) error
+	register    func(registry *registry) error
 }
 
 // Name returns the human-readable name of the entrypoint.
@@ -375,8 +373,8 @@ func (e *Entrypoint) Annotations() []any {
 }
 
 // apply applies the entrypoint option to the given registry.
-func (e *Entrypoint) apply(ctx context.Context, registry *registry) error {
-	return e.register(ctx, registry)
+func (e *Entrypoint) apply(registry *registry) error {
+	return e.register(registry)
 }
 
 // entrypointSettings holds configuration options applied to an Entrypoint.

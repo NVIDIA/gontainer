@@ -18,7 +18,6 @@
 package gontainer
 
 import (
-	"context"
 	"reflect"
 	"runtime"
 	"strings"
@@ -64,7 +63,6 @@ func splitFuncName(funcFullName string) (string, string) {
 
 // newFactory loads factory function to the internal representation.
 func newFactory(
-	ctx context.Context,
 	name, source string, funcValue reflect.Value,
 	getOutType getOutTypeFn, getOutValue getOutValueFn,
 	getOutClose getOutCloseFn, getOutError getOutErrorFn,
@@ -84,13 +82,8 @@ func newFactory(
 		outTypes = append(outTypes, funcType.Out(index))
 	}
 
-	// Prepare cancellable context for the factory services.
-	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-
 	// Prepare registry factory instance.
 	return &factory{
-		ctx:       ctx,
-		cancel:    cancel,
 		name:      name,
 		source:    source,
 		funcType:  funcType,
@@ -108,12 +101,6 @@ func newFactory(
 
 // factory is the factory internal representation.
 type factory struct {
-	// Factory context value.
-	ctx context.Context
-
-	// Factory context cancel.
-	cancel context.CancelFunc
-
 	// Factory func name.
 	name string
 

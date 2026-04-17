@@ -18,7 +18,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"math/rand"
 
@@ -29,9 +28,6 @@ func main() {
 	// Execute service container.
 	log.Println("Executing service container")
 	err := gontainer.Run(
-		// Root context for container.
-		context.Background(),
-
 		// Return a function that returns an int.
 		gontainer.NewFactory(func() func() int {
 			// From the container perspective this is a regular service.
