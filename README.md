@@ -26,7 +26,6 @@ The example shows how to build the simplest app using service container.
 package main
 
 import (
-    "context"
     "log"
     "github.com/NVIDIA/gontainer/v2"
 )
@@ -37,8 +36,6 @@ type UserService struct{ db *Database }
 
 func main() {
     err := gontainer.Run(
-        context.Background(),
-        
         // Register Database.
         gontainer.NewFactory(func() *Database {
             return &Database{connString: "postgres://localhost/myapp"}
@@ -157,7 +154,6 @@ gontainer.NewFactory(func() (*Database, func() error) {
 
 ```go
 err := gontainer.Run(
-    context.Background(),
     gontainer.NewFactory(...),
     gontainer.NewFactory(...),
     gontainer.NewEntrypoint(func(/* dependencies */) {
@@ -293,7 +289,7 @@ for _, f := range []*gontainer.Factory{configFactory, dbFactory} {
 }
 
 // Start the container with the same factories when ready.
-_ = gontainer.Run(ctx, configFactory, dbFactory, entrypoint)
+_ = gontainer.Run(configFactory, dbFactory, entrypoint)
 ```
 
 ## API Reference
@@ -304,7 +300,7 @@ Gontainer module interface is really simple:
 
 ```go
 // Run creates and runs a container with provided factories and entrypoints.
-func Run(ctx context.Context, opts ...Option) error
+func Run(options ...Option) error
 
 // NewFactory registers a service factory.
 func NewFactory(fn any) *Factory
@@ -323,7 +319,7 @@ and can optionally return an error and/or a cleanup function for the factory.
 
 **Dependencies** are other services that the factory needs which are automatically injected.
 
-**Service** is a user-provided type. It can be any type except untyped `any`, context and `error`.
+**Service** is a user-provided type. It can be any type except untyped `any` and `error`.
 
 
 ```go
@@ -346,12 +342,9 @@ func() (*Service, func() error, error)
 ### Built-in Services
 
 Gontainer provides several built-in services that can be injected into factories and functions.
-They provide access to container features like context, dynamic resolution, and invocation.
+They provide access to container features like dynamic resolution and invocation.
 
 ```go
-// context.Context - The factory's context.
-func(ctx context.Context) *Service
-
 // *gontainer.Resolver - Dynamic service resolution.
 func(resolver *gontainer.Resolver) *Service
 
@@ -382,7 +375,7 @@ func(providers gontainer.Multiple[AuthProvider]) *Router
 Gontainer provides typed errors for different failure scenarios:
 
 ```go
-err := gontainer.Run(ctx, factories...)
+err := gontainer.Run(factories...)
 
 switch {
 case errors.Is(err, gontainer.ErrFactoryReturnedError):
