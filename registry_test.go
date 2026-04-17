@@ -18,7 +18,6 @@
 package gontainer
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -34,10 +33,9 @@ func TestRegistryRegisterFactory(t *testing.T) {
 		return 1, nil
 	}
 
-	ctx := context.Background()
 	option := NewFactory(fun)
 	registry := &registry{}
-	equal(t, option.apply(ctx, registry), nil)
+	equal(t, option.apply(registry), nil)
 	factory := registry.factories[0]
 	equal(t, factory.funcValue.IsValid(), true)
 	equal(t, factory.funcValue.Kind(), reflect.Func)
@@ -149,12 +147,11 @@ func TestRegistryValidateFactories(t *testing.T) {
 		{
 			name: "ComplexErrors",
 			options: []Option{
-				NewFactory(func(struct{ X int }) string { return "s1" }),                   // not resolved, duplicate
-				NewFactory(func(ctx context.Context) (string, error) { return "s2", nil }), // duplicate
-				NewFactory(func(bool) (int, error) { return 1, nil }),                      // cycle
-				NewFactory(func(int) (bool, error) { return true, nil }),                   // cycle
-				NewFactory(func() string { return "s3" }),                                  // duplicate
-				NewEntrypoint(func(struct{ X int }) error { return nil }),                  // not resolved
+				NewFactory(func(struct{ X int }) string { return "s1" }),  // not resolved, duplicate
+				NewFactory(func(bool) (int, error) { return 1, nil }),     // cycle
+				NewFactory(func(int) (bool, error) { return true, nil }),  // cycle
+				NewFactory(func() string { return "s2" }),                 // duplicate
+				NewEntrypoint(func(struct{ X int }) error { return nil }), // not resolved
 			},
 			wantErr: func(t *testing.T, err error) {
 				equal(t, errors.Is(err, ErrDependencyNotResolved), true)
@@ -164,7 +161,7 @@ func TestRegistryValidateFactories(t *testing.T) {
 				unwrap, ok := err.(interface{ Unwrap() []error })
 				equal(t, ok, true)
 				errs := unwrap.Unwrap()
-				equal(t, len(errs), 7)
+				equal(t, len(errs), 6)
 
 				equal(t, errors.Is(errs[0], ErrDependencyNotResolved), true)
 				equal(t, errs[0].Error(), ""+
@@ -183,21 +180,16 @@ func TestRegistryValidateFactories(t *testing.T) {
 
 				equal(t, errors.Is(errs[3], ErrFactoryTypeDuplicated), true)
 				equal(t, errs[3].Error(), ""+
-					"Factory[func(context.Context) (string, error)] from 'github.com/NVIDIA/gontainer/v2': "+
-					"output 'string': factory type duplicated")
-
-				equal(t, errors.Is(errs[4], ErrFactoryTypeDuplicated), true)
-				equal(t, errs[4].Error(), ""+
 					"Factory[func() string] from 'github.com/NVIDIA/gontainer/v2': "+
 					"output 'string': factory type duplicated")
 
-				equal(t, errors.Is(errs[5], ErrCircularDependency), true)
-				equal(t, errs[5].Error(), ""+
+				equal(t, errors.Is(errs[4], ErrCircularDependency), true)
+				equal(t, errs[4].Error(), ""+
 					"Factory[func(bool) (int, error)] from 'github.com/NVIDIA/gontainer/v2': "+
 					"circular dependency")
 
-				equal(t, errors.Is(errs[6], ErrCircularDependency), true)
-				equal(t, errs[6].Error(), ""+
+				equal(t, errors.Is(errs[5], ErrCircularDependency), true)
+				equal(t, errs[5].Error(), ""+
 					"Factory[func(int) (bool, error)] from 'github.com/NVIDIA/gontainer/v2': "+
 					"circular dependency")
 			},
@@ -205,10 +197,9 @@ func TestRegistryValidateFactories(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
 			registry := &registry{}
 			for _, option := range tt.options {
-				equal(t, option.apply(ctx, registry), nil)
+				equal(t, option.apply(registry), nil)
 			}
 			tt.wantErr(t, registry.validateRegistry())
 		})
@@ -217,12 +208,11 @@ func TestRegistryValidateFactories(t *testing.T) {
 
 // TestRegistryInvokeFunctions tests corresponding registry method.
 func TestRegistryInvokeFunctions(t *testing.T) {
-	ctx := context.Background()
 	registry := &registry{}
 	invoked := atomic.Bool{}
 
-	equal(t, NewFactory(func() bool { return true }).apply(ctx, registry), nil)
-	equal(t, NewEntrypoint(func(_ bool) { invoked.Store(true) }).apply(ctx, registry), nil)
+	equal(t, NewFactory(func() bool { return true }).apply(registry), nil)
+	equal(t, NewEntrypoint(func(_ bool) { invoked.Store(true) }).apply(registry), nil)
 
 	factory := registry.factories[0]
 	equal(t, registry.invokeEntrypoints(), nil)
@@ -243,10 +233,9 @@ func TestRegistryResolveParallel(t *testing.T) {
 		return true
 	})
 
-	ctx := context.Background()
 	registry := &registry{}
 
-	equal(t, source.apply(ctx, registry), nil)
+	equal(t, source.apply(registry), nil)
 	factory := registry.factories[0]
 
 	wg := sync.WaitGroup{}
@@ -297,10 +286,9 @@ func TestRegistryResolveFuncServices(t *testing.T) {
 		}),
 	}
 
-	ctx := context.Background()
 	registry := &registry{}
 	for _, option := range options {
-		equal(t, option.apply(ctx, registry), nil)
+		equal(t, option.apply(registry), nil)
 	}
 
 	err := registry.invokeEntrypoints()
@@ -320,9 +308,8 @@ func TestRegistryResolveWithErrors(t *testing.T) {
 		return true, errors.New("some function-specific error message")
 	})
 
-	ctx := context.Background()
 	registry := &registry{}
-	equal(t, source.apply(ctx, registry), nil)
+	equal(t, source.apply(registry), nil)
 
 	value, err := registry.resolveService(reflect.TypeOf(true))
 	equal(t, err != nil, true)
@@ -339,9 +326,8 @@ func TestRegistryInvokeWithErrors(t *testing.T) {
 		return errors.New("some function-specific error message")
 	})
 
-	ctx := context.Background()
 	registry := &registry{}
-	equal(t, source.apply(ctx, registry), nil)
+	equal(t, source.apply(registry), nil)
 
 	err := registry.invokeEntrypoints()
 	equal(t, err != nil, true)
@@ -364,21 +350,6 @@ func TestIsEmptyInterface(t *testing.T) {
 	equal(t, isEmptyInterface(reflect.TypeOf(&t3).Elem()), false)
 	equal(t, isEmptyInterface(reflect.TypeOf(&t4).Elem()), false)
 	equal(t, isEmptyInterface(reflect.TypeOf(&t5).Elem()), false)
-}
-
-// TestIsContextInterface tests checking of argument to be context.
-func TestIsContextInterface(t *testing.T) {
-	var t1 any
-	var t2 interface{}
-	var t3 struct{}
-	var t4 string
-	var t5 context.Context
-
-	equal(t, isContextInterface(reflect.TypeOf(&t1).Elem()), false)
-	equal(t, isContextInterface(reflect.TypeOf(&t2).Elem()), false)
-	equal(t, isContextInterface(reflect.TypeOf(&t3).Elem()), false)
-	equal(t, isContextInterface(reflect.TypeOf(&t4).Elem()), false)
-	equal(t, isContextInterface(reflect.TypeOf(&t5).Elem()), true)
 }
 
 // TestIsErrorInterface tests checking of argument to be error.

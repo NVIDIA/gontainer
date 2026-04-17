@@ -18,7 +18,6 @@
 package gontainer
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -62,11 +61,6 @@ func (r *registry) validateRegistry() error {
 	// Validate all input types are resolvable.
 	for _, factory := range factories {
 		for _, inType := range factory.inTypes {
-			// Is this type a special factory context type?
-			if isContextInterface(inType) {
-				continue
-			}
-
 			// Is this type wrapped to the `Optional[type]`?
 			_, isOptional := isOptionalType(inType)
 			if isOptional {
@@ -122,11 +116,6 @@ func (r *registry) validateRegistry() error {
 			factories = factories[1:]
 
 			for _, inType := range factory.inTypes {
-				// Is this type a special factory context type?
-				if isContextInterface(inType) {
-					continue
-				}
-
 				// Is this type wrapped to the `Optional[type]`?
 				innerType, isOptional := isOptionalType(inType)
 				if isOptional {
@@ -204,11 +193,6 @@ func (r *registry) closeFactories() error {
 	// Close all spawned factories in the reverse order.
 	for index := len(r.sequence) - 1; index >= 0; index-- {
 		factory := r.sequence[index]
-
-		// Cancel factory context before calling close on services.
-		// This allows background goroutines to unblock from
-		// waiting of context done channels and finish work.
-		factory.cancel()
 
 		// Invoke close callback function.
 		if err := factory.getOutClose()(); err != nil {
@@ -390,13 +374,6 @@ func (r *registry) invokeFactory(factory *factory) error {
 	// Get or spawn factory input values recursively.
 	inValues := make([]reflect.Value, 0, len(factory.inTypes))
 	for _, inType := range factory.inTypes {
-		// Handle `context.Context` as a special case.
-		if isContextInterface(inType) {
-			ctxValue := reflect.ValueOf(factory.ctx)
-			inValues = append(inValues, ctxValue)
-			continue
-		}
-
 		// Resolve factory input dependency.
 		inValue, err := r.resolveService(inType)
 		if err != nil {
@@ -417,35 +394,9 @@ func (r *registry) invokeFactory(factory *factory) error {
 	return nil
 }
 
-// isUsefulService returns true if the type is a useful service.
-func isUsefulService(typ reflect.Type) bool {
-	// Any objects are not useful services.
-	if isEmptyInterface(typ) {
-		return false
-	}
-
-	// Contexts are not useful services.
-	if isContextInterface(typ) {
-		return false
-	}
-
-	// Errors are not useful services.
-	if isErrorInterface(typ) {
-		return false
-	}
-
-	return true
-}
-
 // isEmptyInterface returns true when argument is an `any` interface.
 func isEmptyInterface(typ reflect.Type) bool {
 	return typ.Kind() == reflect.Interface && typ.NumMethod() == 0
-}
-
-// isContextInterface returns true when argument is a context interface.
-func isContextInterface(typ reflect.Type) bool {
-	ctxType := reflect.TypeOf((*context.Context)(nil)).Elem()
-	return typ.Kind() == reflect.Interface && typ.Implements(ctxType)
 }
 
 // isErrorInterface returns true when argument is an error interface.
