@@ -7,7 +7,7 @@
 
 Simple but powerful dependency injection container for Go projects!
 
-<p align="center"><img src="splash.png" width="600"/></p>
+<p align="center"><img src="splash.gif" width="600"/></p>
 
 ## Features
 
