@@ -39,16 +39,23 @@ import (
 //	}
 type Optional[T any] struct {
 	value T
+	ok    bool
 }
 
-// Get returns optional service instance.
+// Get returns the optional service instance.
 func (o *Optional[T]) Get() T {
 	return o.value
+}
+
+// Ok reports whether the optional service was provided by the container.
+func (o *Optional[T]) Ok() bool {
+	return o.ok
 }
 
 // setValue populates the private value field.
 func (o *Optional[T]) setValue(v reflect.Value) {
 	reflect.ValueOf(&o.value).Elem().Set(v)
+	o.ok = true
 }
 
 // isOptionalType checks and returns optional box type.
