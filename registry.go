@@ -332,15 +332,22 @@ func (r *registry) findFactories(serviceType reflect.Type) []*factory {
 
 	// Lookup for factories in the registry.
 	for _, factory := range r.factories {
+		outType := factory.getOutType()
+
+		// Skip factories without an output type.
+		if outType == nil {
+			continue
+		}
+
 		// Desired service type matched.
-		if factory.getOutType() == serviceType {
+		if outType == serviceType {
 			factories = append(factories, factory)
 			continue
 		}
 
 		// Desired service type implements an interface.
 		if serviceType.Kind() == reflect.Interface {
-			if factory.getOutType().Implements(serviceType) {
+			if outType.Implements(serviceType) {
 				factories = append(factories, factory)
 				continue
 			}
