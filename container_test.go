@@ -18,7 +18,6 @@
 package gontainer
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"sync/atomic"
@@ -42,7 +41,6 @@ func TestContainer(t *testing.T) {
 
 	// Run container.
 	equal(t, Run(
-		context.Background(),
 		NewService(float64(100500)),
 		NewFactory(func() string { return "string" }),
 		NewFactory(func() int { return 123 }),
@@ -60,7 +58,6 @@ func TestContainer(t *testing.T) {
 			}
 		}),
 		NewEntrypoint(func(
-			ctx context.Context,
 			dep1 float64,
 			dep2 string,
 			dep3 Optional[int],
