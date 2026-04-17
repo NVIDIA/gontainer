@@ -19,6 +19,7 @@ package gontainer
 
 import (
 	"reflect"
+	"strings"
 )
 
 // Optional defines a dependency on a service that may or may not be registered.
@@ -45,9 +46,6 @@ func (o *Optional[T]) Get() T {
 	return o.value
 }
 
-// Optional marks this type as optional.
-func (o *Optional[T]) Optional() {}
-
 // setValue populates the private value field.
 func (o *Optional[T]) setValue(v reflect.Value) {
 	reflect.ValueOf(&o.value).Elem().Set(v)
@@ -55,19 +53,32 @@ func (o *Optional[T]) setValue(v reflect.Value) {
 
 // isOptionalType checks and returns optional box type.
 func isOptionalType(typ reflect.Type) (reflect.Type, bool) {
+	// Check if the type is a struct.
 	if typ.Kind() != reflect.Struct {
 		return nil, false
 	}
-	pointerType := reflect.PointerTo(typ)
-	if _, ok := pointerType.MethodByName("Optional"); ok {
-		if methodValue, ok := pointerType.MethodByName("Get"); ok {
-			if methodValue.Type.NumOut() == 1 {
-				methodType := methodValue.Type.Out(0)
-				return methodType, true
-			}
-		}
+
+	// Check if the type is a Optional type.
+	sample := reflect.TypeOf(Optional[struct{}]{})
+	if typ.PkgPath() != sample.PkgPath() {
+		return nil, false
 	}
-	return nil, false
+
+	// Check if the type is a Optional type.
+	sampleName := sample.Name()
+	sep := strings.IndexByte(sampleName, '[')
+	if sep < 0 || !strings.HasPrefix(typ.Name(), sampleName[:sep+1]) {
+		return nil, false
+	}
+
+	// Check if the type has a value field.
+	field, ok := typ.FieldByName("value")
+	if !ok {
+		return nil, false
+	}
+
+	// Return the type of the value field.
+	return field.Type, true
 }
 
 // newOptionalValue creates new optional type with a value.
