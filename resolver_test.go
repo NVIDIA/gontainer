@@ -18,7 +18,6 @@
 package gontainer
 
 import (
-	"context"
 	"sync/atomic"
 	"testing"
 )
@@ -33,7 +32,6 @@ func TestResolverService(t *testing.T) {
 
 	// Run container.
 	equal(t, Run(
-		context.Background(),
 		NewService(svc1),
 		NewService(svc2),
 		NewEntrypoint(func(resolver *Resolver) {
