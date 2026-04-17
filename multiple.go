@@ -19,6 +19,7 @@ package gontainer
 
 import (
 	"reflect"
+	"strings"
 )
 
 // Multiple defines a dependency on zero or more services of the same type.
@@ -39,20 +40,31 @@ import (
 //	}
 type Multiple[T any] []T
 
-// Multiple marks this type as multiple.
-func (m Multiple[T]) Multiple() {}
-
-// isMultipleType checks and returns optional box type.
+// isMultipleType checks and returns multiple box type.
 func isMultipleType(typ reflect.Type) (reflect.Type, bool) {
-	if typ.Kind() == reflect.Slice {
-		if _, ok := typ.MethodByName("Multiple"); ok {
-			return typ.Elem(), true
-		}
+	// Check if the type is a slice.
+	if typ.Kind() != reflect.Slice {
+		return nil, false
 	}
-	return nil, false
+
+	// Check if the type is a Multiple type.
+	sample := reflect.TypeOf(Multiple[struct{}]{})
+	if typ.PkgPath() != sample.PkgPath() {
+		return nil, false
+	}
+
+	// Check if the type is a Multiple type.
+	sampleName := sample.Name()
+	sep := strings.IndexByte(sampleName, '[')
+	if sep < 0 || !strings.HasPrefix(typ.Name(), sampleName[:sep+1]) {
+		return nil, false
+	}
+
+	// Return the element type of the slice.
+	return typ.Elem(), true
 }
 
-// newOptionalValue boxes an optional factory input to structs.
+// newMultipleValue packs multiple values to the slice.
 func newMultipleValue(typ reflect.Type, values []reflect.Value) reflect.Value {
 	box := reflect.New(typ).Elem()
 	return reflect.Append(box, values...)

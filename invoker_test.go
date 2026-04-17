@@ -89,6 +89,18 @@ func TestInvokerService(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name:    "InvokeNilReturnsError",
+			haveFn:  nil,
+			wantFn:  nil,
+			wantErr: true,
+		},
+		{
+			name:    "InvokeNonFuncReturnsError",
+			haveFn:  42,
+			wantFn:  nil,
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

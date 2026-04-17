@@ -259,6 +259,43 @@ gontainer.NewEntrypoint(func(newTx func() *Transaction) {
 })
 ```
 
+### Factory Annotations
+
+Attach arbitrary metadata to a factory or entrypoint with `WithAnnotation`.
+Annotations are exposed via `Factory.Annotations()` / `Entrypoint.Annotations()`
+and can be read **without starting the container** - useful for `--help`,
+config validation, CLI dispatch, or any pre-run tooling built on top of the
+same factory definitions.
+
+```go
+type cliHelp struct {
+    Cmd string
+    Doc string
+}
+
+configFactory := gontainer.NewFactory(
+    newConfig,
+    gontainer.WithAnnotation(cliHelp{Cmd: "config", Doc: "Print resolved config"}),
+)
+
+dbFactory := gontainer.NewFactory(
+    newDatabase,
+    gontainer.WithAnnotation(cliHelp{Cmd: "db", Doc: "Ping the database"}),
+)
+
+// Inspect annotations without starting the container.
+for _, f := range []*gontainer.Factory{configFactory, dbFactory} {
+    for _, a := range f.Annotations() {
+        if h, ok := a.(cliHelp); ok {
+            fmt.Printf("%s\t%s\n", h.Cmd, h.Doc)
+        }
+    }
+}
+
+// Start the container with the same factories when ready.
+_ = gontainer.Run(ctx, configFactory, dbFactory, entrypoint)
+```
+
 ## API Reference
 
 ### Module Functions
@@ -324,15 +361,20 @@ func(invoker *gontainer.Invoker) *Service
 
 ### Special Types
 
-Gontainer provides special types for optional and multiple dependencies.
+Gontainer provides special types for declaring optional and multiple
+dependencies in factory and entrypoint signatures. See
+[Optional Dependencies](#optional-dependencies) and
+[Multiple Dependencies](#multiple-dependencies) for full examples.
 
 ```go
-// Optional[T] - Optional dependency declaration.
-type Optional[T any] struct{}
-func (o Optional[T]) Get() T
+// Optional[T] - declares a dependency that may be absent from the container.
+// Call .Get() to read the value; the zero value of T is returned when no
+// matching factory is registered.
+func(logger gontainer.Optional[*Logger]) *Service
 
-// Multiple[T] - Multiple services of the same interface.
-type Multiple[T any] []T
+// Multiple[T] - declares a dependency on all services assignable to T.
+// Range over the slice to access each registered service.
+func(providers gontainer.Multiple[AuthProvider]) *Router
 ```
 
 ## Error Handling

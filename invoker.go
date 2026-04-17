@@ -46,8 +46,8 @@ func (i *Invoker) Invoke(function any) ([]any, error) {
 	// Get reflection of the function.
 	funcValue := reflect.ValueOf(function)
 	funcType := reflect.TypeOf(function)
-	if funcType.Kind() != reflect.Func {
-		return nil, fmt.Errorf("invalid type: %s", funcType)
+	if funcType == nil || funcType.Kind() != reflect.Func {
+		return nil, fmt.Errorf("invalid type: %v", funcType)
 	}
 
 	// Resolve function arguments.

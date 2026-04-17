@@ -254,8 +254,7 @@ func (r *registry) resolveOptional(optionalType, serviceType reflect.Type) (refl
 	// unregistered type `Config` triggers an error, while resolving `gontainer.Optional[Config]`
 	// returns a zero-value box.
 	if len(serviceValues) == 0 {
-		zeroValue := reflect.New(serviceType).Elem()
-		return newOptionalValue(optionalType, zeroValue), nil
+		return newOptionalZero(optionalType), nil
 	}
 
 	// Return resolved service in an optional box type.
@@ -332,15 +331,22 @@ func (r *registry) findFactories(serviceType reflect.Type) []*factory {
 
 	// Lookup for factories in the registry.
 	for _, factory := range r.factories {
+		outType := factory.getOutType()
+
+		// Skip factories without an output type.
+		if outType == nil {
+			continue
+		}
+
 		// Desired service type matched.
-		if factory.getOutType() == serviceType {
+		if outType == serviceType {
 			factories = append(factories, factory)
 			continue
 		}
 
 		// Desired service type implements an interface.
 		if serviceType.Kind() == reflect.Interface {
-			if factory.getOutType().Implements(serviceType) {
+			if outType.Implements(serviceType) {
 				factories = append(factories, factory)
 				continue
 			}

@@ -50,11 +50,39 @@ func TestNewOptionalValue(t *testing.T) {
 	box := Optional[string]{}
 	data := reflect.New(reflect.TypeOf((*string)(nil)).Elem()).Elem()
 	value := newOptionalValue(reflect.TypeOf(box), data)
-	equal(t, value.Interface().(Optional[string]).Get(), "")
+	opt := value.Interface().(Optional[string])
+	equal(t, opt.Get(), "")
 
 	// When optional found.
 	box = Optional[string]{}
 	data = reflect.ValueOf("result")
 	value = newOptionalValue(reflect.TypeOf(box), data)
-	equal(t, value.Interface().(Optional[string]).Get(), "result")
+	opt = value.Interface().(Optional[string])
+	equal(t, opt.Get(), "result")
+}
+
+// TestOptionalOkNotProvided tests that Ok returns false when the service is not provided.
+func TestOptionalOkNotProvided(t *testing.T) {
+	typ := reflect.TypeOf(Optional[string]{})
+	value := newOptionalZero(typ)
+	opt := value.Interface().(Optional[string])
+	if opt.Ok() {
+		t.Errorf("expected Ok() to return false for zero optional, got true")
+	}
+	if opt.Get() != "" {
+		t.Errorf("expected Get() to return zero value, got %q", opt.Get())
+	}
+}
+
+// TestOptionalOkProvided tests that Ok returns true when the service is provided.
+func TestOptionalOkProvided(t *testing.T) {
+	typ := reflect.TypeOf(Optional[string]{})
+	value := newOptionalValue(typ, reflect.ValueOf("hello"))
+	opt := value.Interface().(Optional[string])
+	if !opt.Ok() {
+		t.Errorf("expected Ok() to return true for provided optional, got false")
+	}
+	if opt.Get() != "hello" {
+		t.Errorf("expected Get() to return %q, got %q", "hello", opt.Get())
+	}
 }
