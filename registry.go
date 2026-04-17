@@ -254,8 +254,7 @@ func (r *registry) resolveOptional(optionalType, serviceType reflect.Type) (refl
 	// unregistered type `Config` triggers an error, while resolving `gontainer.Optional[Config]`
 	// returns a zero-value box.
 	if len(serviceValues) == 0 {
-		zeroValue := reflect.New(serviceType).Elem()
-		return newOptionalValue(optionalType, zeroValue), nil
+		return newOptionalZero(optionalType), nil
 	}
 
 	// Return resolved service in an optional box type.

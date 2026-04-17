@@ -98,3 +98,8 @@ func newOptionalValue(typ reflect.Type, value reflect.Value) reflect.Value {
 
 	return ptr.Elem()
 }
+
+// newOptionalZero creates a new optional type with no value and ok set to false.
+func newOptionalZero(typ reflect.Type) reflect.Value {
+	return reflect.New(typ).Elem()
+}
