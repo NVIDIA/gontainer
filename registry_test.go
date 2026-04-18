@@ -337,6 +337,72 @@ func TestRegistryInvokeWithErrors(t *testing.T) {
 	equal(t, errors.Is(err, ErrEntrypointReturnedError), true)
 }
 
+// TestRegistryInvokeEntrypointWithFailedDependency tests that a failed dependency
+// factory does not cause a nil-slice panic when the entrypoint returns an error.
+func TestRegistryInvokeEntrypointWithFailedDependency(t *testing.T) {
+	options := []Option{
+		NewFactory(func() (string, error) {
+			return "", errors.New("dependency factory error")
+		}),
+		NewEntrypoint(func(string) error { return nil }),
+	}
+
+	registry := &registry{}
+	for _, option := range options {
+		equal(t, option.apply(registry), nil)
+	}
+
+	err := registry.invokeEntrypoints()
+	equal(t, err != nil, true)
+	equal(t, errors.Is(err, ErrFactoryReturnedError), true)
+	equal(t, fmt.Sprint(err), ""+
+		"Entrypoint[func(string) error] from 'github.com/NVIDIA/gontainer/v2': "+
+		"invoke: failed to resolve service: "+
+		"Factory[func() (string, error)] from 'github.com/NVIDIA/gontainer/v2': "+
+		"factory returned error: dependency factory error")
+}
+
+// TestRegistryInvokeMultipleEntrypointsWithFailedDependency tests that a failed
+// dependency on one entrypoint does not abort invocation of the rest.
+func TestRegistryInvokeMultipleEntrypointsWithFailedDependency(t *testing.T) {
+	secondInvoked := false
+
+	options := []Option{
+		NewFactory(func() (string, error) {
+			return "", errors.New("dependency factory error")
+		}),
+		NewEntrypoint(func(string) error { return nil }),
+		NewEntrypoint(func() error {
+			secondInvoked = true
+			return errors.New("second entrypoint error")
+		}),
+	}
+
+	registry := &registry{}
+	for _, option := range options {
+		equal(t, option.apply(registry), nil)
+	}
+
+	err := registry.invokeEntrypoints()
+	equal(t, err != nil, true)
+	equal(t, secondInvoked, true)
+	equal(t, errors.Is(err, ErrFactoryReturnedError), true)
+	equal(t, errors.Is(err, ErrEntrypointReturnedError), true)
+
+	unwrap, ok := err.(interface{ Unwrap() []error })
+	equal(t, ok, true)
+	errs := unwrap.Unwrap()
+	equal(t, len(errs), 2)
+	equal(t, errs[0].Error(), ""+
+		"Entrypoint[func(string) error] from 'github.com/NVIDIA/gontainer/v2': "+
+		"invoke: failed to resolve service: "+
+		"Factory[func() (string, error)] from 'github.com/NVIDIA/gontainer/v2': "+
+		"factory returned error: dependency factory error")
+	equal(t, errs[1].Error(), ""+
+		"Entrypoint[func() error] from 'github.com/NVIDIA/gontainer/v2': "+
+		"entrypoint returned error: second entrypoint error")
+}
+
 // TestIsEmptyInterface tests checking of argument to be empty interface.
 func TestIsEmptyInterface(t *testing.T) {
 	var t1 any
