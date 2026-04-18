@@ -169,6 +169,9 @@ func (r *registry) invokeEntrypoints() error {
 				"%s from '%s': invoke: %w",
 				factory.name, factory.source, err,
 			))
+
+			// The entrypoint was not invoked.
+			continue
 		}
 
 		// Handle factory error.
