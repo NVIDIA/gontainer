@@ -41,34 +41,34 @@ func Run(options ...Option) error {
 
 	// Register service resolver instance in the registry.
 	if err := NewService(resolver).apply(registry); err != nil {
-		return fmt.Errorf("failed to register resolver: %w", err)
+		return err
 	}
 
 	// Register function invoker instance in the registry.
 	if err := NewService(invoker).apply(registry); err != nil {
-		return fmt.Errorf("failed to register invoker: %w", err)
+		return err
 	}
 
 	// Register provided factories in the registry.
 	for _, option := range options {
 		if err := option.apply(registry); err != nil {
-			return fmt.Errorf("failed to apply option: %w", err)
+			return err
 		}
 	}
 
 	// Validate all factories in the container.
 	if err := registry.validateRegistry(); err != nil {
-		return fmt.Errorf("failed to validate container: %w", err)
+		return err
 	}
 
 	// Start all factories in the container.
 	if err := registry.invokeEntrypoints(); err != nil {
-		return fmt.Errorf("failed to invoke functions: %w", err)
+		return err
 	}
 
 	// Close all factories in the container.
 	if err := registry.closeFactories(); err != nil {
-		return fmt.Errorf("failed to close factories: %w", err)
+		return err
 	}
 
 	// Service container executed.
