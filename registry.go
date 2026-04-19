@@ -54,12 +54,12 @@ func (r *registry) validateRegistry() error {
 	var errs []error
 
 	// Combine all factories and functions for validation.
-	factories := make([]*factory, 0, len(r.factories)+len(r.entrypoints))
-	factories = append(factories, r.factories...)
-	factories = append(factories, r.entrypoints...)
+	allFactories := make([]*factory, 0, len(r.factories)+len(r.entrypoints))
+	allFactories = append(allFactories, r.factories...)
+	allFactories = append(allFactories, r.entrypoints...)
 
 	// Validate all input types are resolvable.
-	for _, factory := range factories {
+	for _, factory := range allFactories {
 		for _, inType := range factory.inTypes {
 			// Is this type wrapped to the `Optional[type]`?
 			_, isOptional := isOptionalType(inType)
@@ -74,8 +74,8 @@ func (r *registry) validateRegistry() error {
 			}
 
 			// Could a factory for this type be resolved?
-			factories := r.findFactories(inType)
-			if len(factories) == 0 {
+			foundFactories := r.findFactories(inType)
+			if len(foundFactories) == 0 {
 				errs = append(errs, fmt.Errorf(
 					"%s from '%s': argument '%s': %w",
 					factory.name, factory.source, inType,
