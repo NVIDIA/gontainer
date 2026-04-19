@@ -20,6 +20,7 @@ package gontainer
 import (
 	"fmt"
 	"reflect"
+	"runtime"
 	"slices"
 )
 
@@ -97,7 +98,7 @@ func NewFactory(function any, opts ...FactoryOption) *Factory {
 
 	// Prepare factory description.
 	name := fmt.Sprintf("Factory[%s]", funcValue.Type())
-	source := getFuncSource(funcValue)
+	source := getCallerSource(1)
 
 	// Prepare factory settings.
 	settings := factorySettings{}
@@ -191,7 +192,7 @@ func NewService[T any](service T, opts ...FactoryOption) *Factory {
 
 	// Prepare factory description.
 	name := fmt.Sprintf("Service[%s]", serviceType)
-	source := serviceType.PkgPath()
+	source := getCallerSource(1)
 
 	// Prepare factory settings.
 	settings := factorySettings{}
@@ -282,7 +283,7 @@ func NewEntrypoint(function any, opts ...EntrypointOption) *Entrypoint {
 
 	// Prepare entrypoint description.
 	name := fmt.Sprintf("Entrypoint[%s]", funcValue.Type())
-	source := getFuncSource(funcValue)
+	source := getCallerSource(1)
 
 	// Prepare entrypoint settings.
 	settings := entrypointSettings{}
@@ -405,4 +406,13 @@ func (m annotationOpt) applyFactory(s *factorySettings) {
 // applyEntrypointSettings applies the option to the entrypoint settings.
 func (m annotationOpt) applyEntrypoint(s *entrypointSettings) {
 	s.appendAnnotation(m.value)
+}
+
+// getCallerSource returns the "<file>:<line>" of the skip-level caller.
+func getCallerSource(skip int) string {
+	_, file, line, ok := runtime.Caller(skip + 1)
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d", file, line)
 }
