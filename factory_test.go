@@ -20,6 +20,7 @@ package gontainer
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -56,31 +57,26 @@ func TestFactoryInfo(t *testing.T) {
 		name  string
 		arg1  *Factory
 		want1 string
-		want2 string
 	}{
 		{
 			name:  "ServiceLocalType",
 			arg1:  NewService(localType{}),
 			want1: "Service[gontainer.localType]",
-			want2: "github.com/NVIDIA/gontainer/v2",
 		},
 		{
 			name:  "ServiceGlobalType",
 			arg1:  NewService(globalType{}),
 			want1: "Service[gontainer.globalType]",
-			want2: "github.com/NVIDIA/gontainer/v2",
 		},
 		{
 			name:  "FactoryLocalFunc",
 			arg1:  NewFactory(localFunc),
 			want1: "Factory[func(gontainer.globalType) string]",
-			want2: "github.com/NVIDIA/gontainer/v2",
 		},
 		{
 			name:  "FactoryGlobalFunc",
 			arg1:  NewFactory(globalFunc),
 			want1: "Factory[func(string) bool]",
-			want2: "github.com/NVIDIA/gontainer/v2",
 		},
 	}
 	for _, tt := range tests {
@@ -90,7 +86,10 @@ func TestFactoryInfo(t *testing.T) {
 
 			factory := registry.factories[0]
 			equal(t, factory.name, tt.want1)
-			equal(t, factory.source, tt.want2)
+			// Source is now a clickable "<file>:<line>" location.
+			if !strings.Contains(factory.source, ".go:") {
+				t.Fatalf("expected file:line source, got %q", factory.source)
+			}
 		})
 	}
 }
