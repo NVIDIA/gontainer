@@ -159,7 +159,10 @@ func NewFactory(function any, opts ...FactoryOption) *Factory {
 			}
 
 			// Load the factory internal representation.
-			state, err := newFactory(name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
+			state, err := newFactory(
+				kindFactory, name, source, funcValue,
+				getOutType, getOutValue, getOutClose, getOutError,
+			)
 			if err != nil {
 				return fmt.Errorf("failed to load %s: %w", name, err)
 			}
@@ -213,7 +216,10 @@ func NewService[T any](service T, opts ...FactoryOption) *Factory {
 			getOutError := func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 
 			// Load the factory internal representation.
-			state, err := newFactory(name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
+			state, err := newFactory(
+				kindFactory, name, source, funcValue,
+				getOutType, getOutValue, getOutClose, getOutError,
+			)
 			if err != nil {
 				return fmt.Errorf("failed to load %s: %w", name, err)
 			}
@@ -330,7 +336,10 @@ func NewEntrypoint(function any, opts ...EntrypointOption) *Entrypoint {
 			}
 
 			// Load the factory internal representation.
-			state, err := newFactory(name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
+			state, err := newFactory(
+				kindEntrypoint, name, source, funcValue,
+				getOutType, getOutValue, getOutClose, getOutError,
+			)
 			if err != nil {
 				return fmt.Errorf("failed to load %s: %w", name, err)
 			}

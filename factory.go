@@ -55,7 +55,7 @@ func splitFuncName(funcFullName string) (string, string) {
 
 // newFactory loads factory function to the internal representation.
 func newFactory(
-	name, source string, funcValue reflect.Value,
+	kind factoryKind, name, source string, funcValue reflect.Value,
 	getOutType getOutTypeFn, getOutValue getOutValueFn,
 	getOutClose getOutCloseFn, getOutError getOutErrorFn,
 ) (*factory, error) {
@@ -76,6 +76,7 @@ func newFactory(
 
 	// Prepare registry factory instance.
 	return &factory{
+		kind:      kind,
 		name:      name,
 		source:    source,
 		funcType:  funcType,
@@ -91,8 +92,22 @@ func newFactory(
 	}, nil
 }
 
+// factoryKind defines a factory kind.
+type factoryKind int
+
+const (
+	// kindFactory is a regular service factory.
+	kindFactory factoryKind = iota
+
+	// kindEntrypoint is an entrypoint function.
+	kindEntrypoint
+)
+
 // factory is the factory internal representation.
 type factory struct {
+	// Factory kind.
+	kind factoryKind
+
 	// Factory func name.
 	name string
 
