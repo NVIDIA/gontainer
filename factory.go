@@ -19,17 +19,9 @@ package gontainer
 
 import (
 	"reflect"
-	"runtime"
 	"strings"
 	"sync"
 )
-
-// getFuncSource returns func source path.
-func getFuncSource(funcValue reflect.Value) string {
-	fullFuncName := runtime.FuncForPC(funcValue.Pointer()).Name()
-	funcPackage, _ := splitFuncName(fullFuncName)
-	return funcPackage
-}
 
 // splitFuncName splits specified func name to package and a name.
 func splitFuncName(funcFullName string) (string, string) {
