@@ -380,7 +380,7 @@ func (r *registry) invokeFactory(factory *factory) error {
 		// Resolve factory input dependency.
 		inValue, err := r.resolveService(inType)
 		if err != nil {
-			return fmt.Errorf("failed to resolve service: %w", err)
+			return err
 		}
 
 		// Append resolved input value.
