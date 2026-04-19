@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 	"sync/atomic"
 	"testing"
 )
@@ -188,4 +189,13 @@ func TestDistinctTypes(t *testing.T) {
 
 		equal(t, len(all), 0)
 	})
+}
+
+// normalizeSourceLines strips every "    at <file>:<line>" meta line
+// from a rendered error so tests can assert the structural shape of
+// Traceback / Source blocks without pinning brittle file paths or
+// line numbers.
+func normalizeSourceLines(s string) string {
+	sourceLineRegex := regexp.MustCompile(`\n {4}at [^\n]+`)
+	return sourceLineRegex.ReplaceAllString(s, "")
 }
