@@ -187,7 +187,7 @@ func (r *registry) closeFactories() error {
 
 		// Invoke close callback function.
 		if err := fact.getOutClose()(); err != nil {
-			errs = append(errs, errFactoryClose(fact, err))
+			errs = append(errs, errFactoryCloseFailed(fact, err))
 		}
 	}
 
