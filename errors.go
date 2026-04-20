@@ -46,9 +46,10 @@ var ErrCircularDependency = errors.New("circular dependency")
 func formatFactoryFrame(f *factory) string {
 	var sb strings.Builder
 	sb.WriteString("\n  ")
-	if f.kind == kindEntrypoint {
+	switch f.kind {
+	case kindEntrypoint:
 		sb.WriteString("Entrypoint")
-	} else {
+	case kindFactory:
 		sb.WriteString("Factory for ")
 		sb.WriteString(f.getOutType().String())
 	}
