@@ -76,14 +76,16 @@ func TestRegistryValidateFactories(t *testing.T) {
 				equal(t, len(errs), 2)
 
 				equal(t, errors.Is(errs[0], ErrDependencyNotResolved), true)
-				equal(t, errs[0].Error(), ""+
-					"Factory[func(bool) (int, error)] from 'github.com/NVIDIA/gontainer/v2': "+
-					"argument 'bool': dependency not resolved")
+				equal(t, normalizeSourceLines(errs[0].Error()), ""+
+					"dependency not resolved: bool\n\n"+
+					"Traceback:\n"+
+					"  Factory for int")
 
 				equal(t, errors.Is(errs[1], ErrDependencyNotResolved), true)
-				equal(t, errs[1].Error(), ""+
-					"Factory[func(string) (int32, error)] from 'github.com/NVIDIA/gontainer/v2': "+
-					"argument 'string': dependency not resolved")
+				equal(t, normalizeSourceLines(errs[1].Error()), ""+
+					"dependency not resolved: string\n\n"+
+					"Traceback:\n"+
+					"  Factory for int32")
 			},
 		},
 		{
@@ -102,14 +104,16 @@ func TestRegistryValidateFactories(t *testing.T) {
 				equal(t, len(errs), 2)
 
 				equal(t, errors.Is(errs[0], ErrFactoryTypeDuplicated), true)
-				equal(t, errs[0].Error(), ""+
-					"Factory[func() (string, error)] from 'github.com/NVIDIA/gontainer/v2': "+
-					"output 'string': factory type duplicated")
+				equal(t, normalizeSourceLines(errs[0].Error()), ""+
+					"factory type duplicated: string\n\n"+
+					"Traceback:\n"+
+					"  Factory for string")
 
 				equal(t, errors.Is(errs[1], ErrFactoryTypeDuplicated), true)
-				equal(t, errs[1].Error(), ""+
-					"Factory[func() (string, error)] from 'github.com/NVIDIA/gontainer/v2': "+
-					"output 'string': factory type duplicated")
+				equal(t, normalizeSourceLines(errs[1].Error()), ""+
+					"factory type duplicated: string\n\n"+
+					"Traceback:\n"+
+					"  Factory for string")
 			},
 		},
 		{
@@ -129,19 +133,22 @@ func TestRegistryValidateFactories(t *testing.T) {
 				equal(t, len(errs), 3)
 
 				equal(t, errors.Is(errs[0], ErrCircularDependency), true)
-				equal(t, errs[0].Error(), ""+
-					"Factory[func(bool) (int, error)] from 'github.com/NVIDIA/gontainer/v2': "+
-					"circular dependency")
+				equal(t, normalizeSourceLines(errs[0].Error()), ""+
+					"circular dependency\n\n"+
+					"Traceback:\n"+
+					"  Factory for int")
 
 				equal(t, errors.Is(errs[1], ErrCircularDependency), true)
-				equal(t, errs[1].Error(), ""+
-					"Factory[func(string) (bool, error)] from 'github.com/NVIDIA/gontainer/v2': "+
-					"circular dependency")
+				equal(t, normalizeSourceLines(errs[1].Error()), ""+
+					"circular dependency\n\n"+
+					"Traceback:\n"+
+					"  Factory for bool")
 
 				equal(t, errors.Is(errs[2], ErrCircularDependency), true)
-				equal(t, errs[2].Error(), ""+
-					"Factory[func(int) (string, error)] from 'github.com/NVIDIA/gontainer/v2': "+
-					"circular dependency")
+				equal(t, normalizeSourceLines(errs[2].Error()), ""+
+					"circular dependency\n\n"+
+					"Traceback:\n"+
+					"  Factory for string")
 			},
 		},
 		{
@@ -164,34 +171,40 @@ func TestRegistryValidateFactories(t *testing.T) {
 				equal(t, len(errs), 6)
 
 				equal(t, errors.Is(errs[0], ErrDependencyNotResolved), true)
-				equal(t, errs[0].Error(), ""+
-					"Factory[func(struct { X int }) string] from 'github.com/NVIDIA/gontainer/v2': "+
-					"argument 'struct { X int }': dependency not resolved")
+				equal(t, normalizeSourceLines(errs[0].Error()), ""+
+					"dependency not resolved: struct { X int }\n\n"+
+					"Traceback:\n"+
+					"  Factory for string")
 
 				equal(t, errors.Is(errs[1], ErrDependencyNotResolved), true)
-				equal(t, errs[1].Error(), ""+
-					"Entrypoint[func(struct { X int }) error] from 'github.com/NVIDIA/gontainer/v2': "+
-					"argument 'struct { X int }': dependency not resolved")
+				equal(t, normalizeSourceLines(errs[1].Error()), ""+
+					"dependency not resolved: struct { X int }\n\n"+
+					"Traceback:\n"+
+					"  Entrypoint")
 
 				equal(t, errors.Is(errs[2], ErrFactoryTypeDuplicated), true)
-				equal(t, errs[2].Error(), ""+
-					"Factory[func(struct { X int }) string] from 'github.com/NVIDIA/gontainer/v2': "+
-					"output 'string': factory type duplicated")
+				equal(t, normalizeSourceLines(errs[2].Error()), ""+
+					"factory type duplicated: string\n\n"+
+					"Traceback:\n"+
+					"  Factory for string")
 
 				equal(t, errors.Is(errs[3], ErrFactoryTypeDuplicated), true)
-				equal(t, errs[3].Error(), ""+
-					"Factory[func() string] from 'github.com/NVIDIA/gontainer/v2': "+
-					"output 'string': factory type duplicated")
+				equal(t, normalizeSourceLines(errs[3].Error()), ""+
+					"factory type duplicated: string\n\n"+
+					"Traceback:\n"+
+					"  Factory for string")
 
 				equal(t, errors.Is(errs[4], ErrCircularDependency), true)
-				equal(t, errs[4].Error(), ""+
-					"Factory[func(bool) (int, error)] from 'github.com/NVIDIA/gontainer/v2': "+
-					"circular dependency")
+				equal(t, normalizeSourceLines(errs[4].Error()), ""+
+					"circular dependency\n\n"+
+					"Traceback:\n"+
+					"  Factory for int")
 
 				equal(t, errors.Is(errs[5], ErrCircularDependency), true)
-				equal(t, errs[5].Error(), ""+
-					"Factory[func(int) (bool, error)] from 'github.com/NVIDIA/gontainer/v2': "+
-					"circular dependency")
+				equal(t, normalizeSourceLines(errs[5].Error()), ""+
+					"circular dependency\n\n"+
+					"Traceback:\n"+
+					"  Factory for bool")
 			},
 		},
 	}
@@ -314,9 +327,10 @@ func TestRegistryResolveWithErrors(t *testing.T) {
 	value, err := registry.resolveService(reflect.TypeOf(true))
 	equal(t, err != nil, true)
 	equal(t, value.IsValid(), false)
-	equal(t, fmt.Sprint(err), ""+
-		"Factory[func() (bool, error)] from 'github.com/NVIDIA/gontainer/v2': "+
-		"factory returned error: some function-specific error message")
+	equal(t, normalizeSourceLines(fmt.Sprint(err)), ""+
+		"some function-specific error message\n\n"+
+		"Traceback:\n"+
+		"  Factory for bool")
 	equal(t, errors.Is(err, ErrFactoryReturnedError), true)
 }
 
@@ -331,9 +345,10 @@ func TestRegistryInvokeWithErrors(t *testing.T) {
 
 	err := registry.invokeEntrypoints()
 	equal(t, err != nil, true)
-	equal(t, fmt.Sprint(err), ""+
-		"Entrypoint[func() error] from 'github.com/NVIDIA/gontainer/v2': "+
-		"entrypoint returned error: some function-specific error message")
+	equal(t, normalizeSourceLines(fmt.Sprint(err)), ""+
+		"some function-specific error message\n\n"+
+		"Traceback:\n"+
+		"  Entrypoint")
 	equal(t, errors.Is(err, ErrEntrypointReturnedError), true)
 }
 
@@ -355,11 +370,11 @@ func TestRegistryInvokeEntrypointWithFailedDependency(t *testing.T) {
 	err := registry.invokeEntrypoints()
 	equal(t, err != nil, true)
 	equal(t, errors.Is(err, ErrFactoryReturnedError), true)
-	equal(t, fmt.Sprint(err), ""+
-		"Entrypoint[func(string) error] from 'github.com/NVIDIA/gontainer/v2': "+
-		"invoke: failed to resolve service: "+
-		"Factory[func() (string, error)] from 'github.com/NVIDIA/gontainer/v2': "+
-		"factory returned error: dependency factory error")
+	equal(t, normalizeSourceLines(fmt.Sprint(err)), ""+
+		"dependency factory error\n\n"+
+		"Traceback:\n"+
+		"  Factory for string\n"+
+		"  Entrypoint")
 }
 
 // TestRegistryInvokeMultipleEntrypointsWithFailedDependency tests that a failed
@@ -393,14 +408,15 @@ func TestRegistryInvokeMultipleEntrypointsWithFailedDependency(t *testing.T) {
 	equal(t, ok, true)
 	errs := unwrap.Unwrap()
 	equal(t, len(errs), 2)
-	equal(t, errs[0].Error(), ""+
-		"Entrypoint[func(string) error] from 'github.com/NVIDIA/gontainer/v2': "+
-		"invoke: failed to resolve service: "+
-		"Factory[func() (string, error)] from 'github.com/NVIDIA/gontainer/v2': "+
-		"factory returned error: dependency factory error")
-	equal(t, errs[1].Error(), ""+
-		"Entrypoint[func() error] from 'github.com/NVIDIA/gontainer/v2': "+
-		"entrypoint returned error: second entrypoint error")
+	equal(t, normalizeSourceLines(errs[0].Error()), ""+
+		"dependency factory error\n\n"+
+		"Traceback:\n"+
+		"  Factory for string\n"+
+		"  Entrypoint")
+	equal(t, normalizeSourceLines(errs[1].Error()), ""+
+		"second entrypoint error\n\n"+
+		"Traceback:\n"+
+		"  Entrypoint")
 }
 
 // TestIsEmptyInterface tests checking of argument to be empty interface.

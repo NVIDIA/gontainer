@@ -20,6 +20,7 @@ package gontainer
 import (
 	"fmt"
 	"reflect"
+	"runtime"
 	"slices"
 )
 
@@ -41,34 +42,34 @@ func Run(options ...Option) error {
 
 	// Register service resolver instance in the registry.
 	if err := NewService(resolver).apply(registry); err != nil {
-		return fmt.Errorf("failed to register resolver: %w", err)
+		return err
 	}
 
 	// Register function invoker instance in the registry.
 	if err := NewService(invoker).apply(registry); err != nil {
-		return fmt.Errorf("failed to register invoker: %w", err)
+		return err
 	}
 
 	// Register provided factories in the registry.
 	for _, option := range options {
 		if err := option.apply(registry); err != nil {
-			return fmt.Errorf("failed to apply option: %w", err)
+			return err
 		}
 	}
 
 	// Validate all factories in the container.
 	if err := registry.validateRegistry(); err != nil {
-		return fmt.Errorf("failed to validate container: %w", err)
+		return err
 	}
 
 	// Start all factories in the container.
 	if err := registry.invokeEntrypoints(); err != nil {
-		return fmt.Errorf("failed to invoke functions: %w", err)
+		return err
 	}
 
 	// Close all factories in the container.
 	if err := registry.closeFactories(); err != nil {
-		return fmt.Errorf("failed to close factories: %w", err)
+		return err
 	}
 
 	// Service container executed.
@@ -97,7 +98,7 @@ func NewFactory(function any, opts ...FactoryOption) *Factory {
 
 	// Prepare factory description.
 	name := fmt.Sprintf("Factory[%s]", funcValue.Type())
-	source := getFuncSource(funcValue)
+	source := getCallerSource(1)
 
 	// Prepare factory settings.
 	settings := factorySettings{}
@@ -158,7 +159,10 @@ func NewFactory(function any, opts ...FactoryOption) *Factory {
 			}
 
 			// Load the factory internal representation.
-			state, err := newFactory(name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
+			state, err := newFactory(
+				kindFactory, name, source, funcValue,
+				getOutType, getOutValue, getOutClose, getOutError,
+			)
 			if err != nil {
 				return fmt.Errorf("failed to load %s: %w", name, err)
 			}
@@ -191,7 +195,7 @@ func NewService[T any](service T, opts ...FactoryOption) *Factory {
 
 	// Prepare factory description.
 	name := fmt.Sprintf("Service[%s]", serviceType)
-	source := serviceType.PkgPath()
+	source := getCallerSource(1)
 
 	// Prepare factory settings.
 	settings := factorySettings{}
@@ -212,7 +216,10 @@ func NewService[T any](service T, opts ...FactoryOption) *Factory {
 			getOutError := func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
 
 			// Load the factory internal representation.
-			state, err := newFactory(name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
+			state, err := newFactory(
+				kindFactory, name, source, funcValue,
+				getOutType, getOutValue, getOutClose, getOutError,
+			)
 			if err != nil {
 				return fmt.Errorf("failed to load %s: %w", name, err)
 			}
@@ -282,7 +289,7 @@ func NewEntrypoint(function any, opts ...EntrypointOption) *Entrypoint {
 
 	// Prepare entrypoint description.
 	name := fmt.Sprintf("Entrypoint[%s]", funcValue.Type())
-	source := getFuncSource(funcValue)
+	source := getCallerSource(1)
 
 	// Prepare entrypoint settings.
 	settings := entrypointSettings{}
@@ -329,7 +336,10 @@ func NewEntrypoint(function any, opts ...EntrypointOption) *Entrypoint {
 			}
 
 			// Load the factory internal representation.
-			state, err := newFactory(name, source, funcValue, getOutType, getOutValue, getOutClose, getOutError)
+			state, err := newFactory(
+				kindEntrypoint, name, source, funcValue,
+				getOutType, getOutValue, getOutClose, getOutError,
+			)
 			if err != nil {
 				return fmt.Errorf("failed to load %s: %w", name, err)
 			}
@@ -405,4 +415,13 @@ func (m annotationOpt) applyFactory(s *factorySettings) {
 // applyEntrypointSettings applies the option to the entrypoint settings.
 func (m annotationOpt) applyEntrypoint(s *entrypointSettings) {
 	s.appendAnnotation(m.value)
+}
+
+// getCallerSource returns the "<file>:<line>" of the skip-level caller.
+func getCallerSource(skip int) string {
+	_, file, line, ok := runtime.Caller(skip + 1)
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("%s:%d", file, line)
 }
