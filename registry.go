@@ -49,7 +49,7 @@ func (r *registry) registerEntrypoint(fact *factory) {
 // and for possible circular dependencies between factories.
 func (r *registry) validateRegistry() error {
 	// Prepare result errors accumulator.
-	var errs resolveErrors
+	var errs errorGroup
 
 	// Combine all factories and functions for validation.
 	allFactories := make([]*factory, 0, len(r.factories)+len(r.entrypoints))
@@ -149,7 +149,7 @@ func (r *registry) validateRegistry() error {
 // invokeEntrypoints invokes registered entrypoints.
 func (r *registry) invokeEntrypoints() error {
 	// Prepare result errors accumulator.
-	var errs resolveErrors
+	var errs errorGroup
 
 	// Invoke all functions in the registry.
 	for _, fact := range r.entrypoints {
@@ -179,7 +179,7 @@ func (r *registry) invokeEntrypoints() error {
 // closeFactories closes all factories in the reverse order.
 func (r *registry) closeFactories() error {
 	// Prepare result errors accumulator.
-	var errs closeErrors
+	var errs errorGroup
 
 	// Close all spawned factories in the reverse order.
 	for index := len(r.sequence) - 1; index >= 0; index-- {
