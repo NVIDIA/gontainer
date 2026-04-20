@@ -19,6 +19,9 @@ package gontainer
 
 import (
 	"errors"
+	"fmt"
+	"reflect"
+	"strings"
 )
 
 // ErrFactoryTypeDuplicated declares service duplicated error.
@@ -38,3 +41,112 @@ var ErrDependencyNotResolved = errors.New("dependency not resolved")
 
 // ErrCircularDependency declares a circular dependency error.
 var ErrCircularDependency = errors.New("circular dependency")
+
+// formatFactoryFrame renders a single factory or entrypoint as one traceback frame.
+func formatFactoryFrame(f *factory) string {
+	var sb strings.Builder
+	sb.WriteString("\n  ")
+	if f.kind == kindEntrypoint {
+		sb.WriteString("Entrypoint")
+	} else {
+		sb.WriteString("Factory for ")
+		sb.WriteString(f.getOutType().String())
+	}
+	if f.source != "" {
+		sb.WriteString("\n    at ")
+		sb.WriteString(f.source)
+	}
+	return sb.String()
+}
+
+// formatTerminalError renders a raw user error as a headline, expanding errors.Join children to bullets.
+func formatTerminalError(err error) string {
+	if multi, ok := err.(interface{ Unwrap() []error }); ok {
+		return formatJoinedErrors(multi.Unwrap())
+	}
+
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+		if inner := wrapped.Unwrap(); inner != nil {
+			if multi, ok := inner.(interface{ Unwrap() []error }); ok {
+				header := strings.TrimRight(strings.TrimSuffix(err.Error(), inner.Error()), ": \n\t")
+				joined := formatJoinedErrors(multi.Unwrap())
+				if header == "" {
+					return joined
+				}
+				return header + ":\n" + joined
+			}
+		}
+	}
+
+	return err.Error()
+}
+
+// formatJoinedErrors renders a slice of errors as bullet lines.
+func formatJoinedErrors(errs []error) string {
+	var sb strings.Builder
+	for i, e := range errs {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString("- ")
+		sb.WriteString(e.Error())
+	}
+	return sb.String()
+}
+
+// newDependencyNotResolvedError reports that no factory could satisfy missing for requester.
+func newDependencyNotResolvedError(requester *factory, missing reflect.Type) error {
+	tail := "\n\nTraceback:"
+	if requester != nil {
+		tail += formatFactoryFrame(requester)
+	}
+	return fmt.Errorf("%w: %s%s", ErrDependencyNotResolved, missing, tail)
+}
+
+// newFactoryTypeDuplicatedError reports that more than one factory produces the same output type.
+func newFactoryTypeDuplicatedError(f *factory) error {
+	return fmt.Errorf("%w: %s\n\nTraceback:%s", ErrFactoryTypeDuplicated, f.getOutType(), formatFactoryFrame(f))
+}
+
+// newCircularDependencyError reports a cycle in the dependency graph starting at f.
+func newCircularDependencyError(f *factory) error {
+	return fmt.Errorf("%w\n\nTraceback:%s", ErrCircularDependency, formatFactoryFrame(f))
+}
+
+// newFactoryResolveFailedError appends f as an outer frame to an already-rendered resolve error.
+func newFactoryResolveFailedError(f *factory, err error) error {
+	return fmt.Errorf("%w%s", err, formatFactoryFrame(f))
+}
+
+// newFactoryReturnedErrorError wraps a raw user error returned by a service factory and opens a Traceback section.
+func newFactoryReturnedErrorError(f *factory, err error) error {
+	return fmt.Errorf("%s\n\nTraceback:%s%.0w%.0w", formatTerminalError(err), formatFactoryFrame(f), err, ErrFactoryReturnedError)
+}
+
+// newEntrypointReturnedErrorError wraps a raw user error returned by an entrypoint and opens a Traceback section.
+func newEntrypointReturnedErrorError(f *factory, err error) error {
+	return fmt.Errorf("%s\n\nTraceback:%s%.0w%.0w", formatTerminalError(err), formatFactoryFrame(f), err, ErrEntrypointReturnedError)
+}
+
+// newFactoryCloseFailedError wraps a raw close-callback error under a Source section with f as the sole frame.
+func newFactoryCloseFailedError(f *factory, cause error) error {
+	return fmt.Errorf("%s\n\nSource:%s%.0w",
+		formatTerminalError(cause), formatFactoryFrame(f), cause)
+}
+
+// errorGroup is a group of independent errors, separated by a blank line when rendered.
+type errorGroup []error
+
+// Error renders each child error separated by a blank line.
+func (g errorGroup) Error() string {
+	parts := make([]string, 0, len(g))
+	for _, err := range g {
+		parts = append(parts, err.Error())
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// Unwrap exposes the underlying errors so errors.Is can walk into each child independently.
+func (g errorGroup) Unwrap() []error {
+	return g
+}
