@@ -18,8 +18,6 @@
 package gontainer
 
 import (
-	"errors"
-	"fmt"
 	"reflect"
 	"sync"
 )
@@ -50,8 +48,8 @@ func (r *registry) registerEntrypoint(fact *factory) {
 // Validate checks for availability of all non-optional types
 // and for possible circular dependencies between factories.
 func (r *registry) validateRegistry() error {
-	// Prepare result errors slice.
-	var errs []error
+	// Prepare result errors accumulator.
+	var errs resolveErrors
 
 	// Combine all factories and functions for validation.
 	allFactories := make([]*factory, 0, len(r.factories)+len(r.entrypoints))
@@ -76,11 +74,7 @@ func (r *registry) validateRegistry() error {
 			// Could a factory for this type be resolved?
 			foundFactories := r.findFactories(inType)
 			if len(foundFactories) == 0 {
-				errs = append(errs, fmt.Errorf(
-					"%s from '%s': argument '%s': %w",
-					fact.name, fact.source, inType,
-					ErrDependencyNotResolved,
-				))
+				errs = append(errs, errDependencyNotResolved(fact, inType))
 				continue
 			}
 		}
@@ -99,18 +93,14 @@ func (r *registry) validateRegistry() error {
 		// Validate uniqueness of the factory output type.
 		factories := r.findFactories(outType)
 		if len(factories) > 1 {
-			errs = append(errs, fmt.Errorf(
-				"%s from '%s': output '%s': %w",
-				fact.name, fact.source, outType,
-				ErrFactoryTypeDuplicated,
-			))
+			errs = append(errs, errFactoryTypeDuplicated(fact))
 		}
 	}
 
 	// Validate for circular dependencies.
-	for index := range r.factories {
-		factories := []*factory{r.factories[index]}
-	recursion:
+	for _, fact := range r.factories {
+		factories := []*factory{fact}
+	iteration:
 		for len(factories) > 0 {
 			nextFact := factories[0]
 			factories = factories[1:]
@@ -131,14 +121,9 @@ func (r *registry) validateRegistry() error {
 				// Walk through all factories for this in argument type.
 				typeFactories := r.findFactories(inType)
 				for _, factoryForType := range typeFactories {
-					if factoryForType == r.factories[index] {
-						errs = append(errs, fmt.Errorf(
-							"%s from '%s': %w",
-							r.factories[index].name,
-							r.factories[index].source,
-							ErrCircularDependency,
-						))
-						break recursion
+					if factoryForType == fact {
+						errs = append(errs, errCircularDependency(fact))
+						break iteration
 					}
 				}
 
@@ -152,23 +137,25 @@ func (r *registry) validateRegistry() error {
 		errs = append(errs, ErrNoEntrypointsProvided)
 	}
 
-	// Join all found errors.
-	return errors.Join(errs...)
+	// Return nil if no errors found.
+	if len(errs) == 0 {
+		return nil
+	}
+
+	// Return collected errors.
+	return errs
 }
 
 // invokeEntrypoints invokes registered entrypoints.
 func (r *registry) invokeEntrypoints() error {
-	// Prepare result errors slice.
-	var errs []error
+	// Prepare result errors accumulator.
+	var errs resolveErrors
 
 	// Invoke all functions in the registry.
 	for _, fact := range r.entrypoints {
 		// Invoke the factory.
 		if err := r.invokeFactory(fact); err != nil {
-			errs = append(errs, fmt.Errorf(
-				"%s from '%s': invoke: %w",
-				fact.name, fact.source, err,
-			))
+			errs = append(errs, errFactoryResolveFailed(fact, err))
 
 			// The entrypoint was not invoked.
 			continue
@@ -176,22 +163,23 @@ func (r *registry) invokeEntrypoints() error {
 
 		// Handle factory error.
 		if err := fact.getOutError(); err != nil {
-			errs = append(errs, fmt.Errorf(
-				"%s from '%s': %w: %w",
-				fact.name, fact.source,
-				ErrEntrypointReturnedError, err,
-			))
+			errs = append(errs, errEntrypointReturnedError(fact, err))
 		}
 	}
 
-	// Join all found errors.
-	return errors.Join(errs...)
+	// Return nil if no errors found.
+	if len(errs) == 0 {
+		return nil
+	}
+
+	// Return collected errors.
+	return errs
 }
 
 // closeFactories closes all factories in the reverse order.
 func (r *registry) closeFactories() error {
-	// Prepare result errors slice.
-	var errs []error
+	// Prepare result errors accumulator.
+	var errs closeErrors
 
 	// Close all spawned factories in the reverse order.
 	for index := len(r.sequence) - 1; index >= 0; index-- {
@@ -199,15 +187,17 @@ func (r *registry) closeFactories() error {
 
 		// Invoke close callback function.
 		if err := fact.getOutClose()(); err != nil {
-			errs = append(errs, fmt.Errorf(
-				"%s from '%s': close: %w",
-				fact.name, fact.source, err,
-			))
+			errs = append(errs, errFactoryClose(fact, err))
 		}
 	}
 
-	// Join all found errors.
-	return errors.Join(errs...)
+	// Return nil if no errors found.
+	if len(errs) == 0 {
+		return nil
+	}
+
+	// Return collected errors.
+	return errs
 }
 
 // resolveService resolves and returns the service based on the type.
@@ -230,6 +220,7 @@ func (r *registry) resolveService(serviceType reflect.Type) (reflect.Value, erro
 
 // resolveOptional resolves a service wrapped with an optional type.
 func (r *registry) resolveOptional(optionalType, serviceType reflect.Type) (reflect.Value, error) {
+	// Resolve all services by specified type.
 	serviceValues, err := r.resolveByType(serviceType)
 	if err != nil {
 		return reflect.Value{}, err
@@ -252,10 +243,13 @@ func (r *registry) resolveOptional(optionalType, serviceType reflect.Type) (refl
 
 // resolveMultiple resolves all services fits to the multiple type.
 func (r *registry) resolveMultiple(multipleType, serviceType reflect.Type) (reflect.Value, error) {
+	// Resolve all services by specified type.
 	serviceValues, err := r.resolveByType(serviceType)
 	if err != nil {
 		return reflect.Value{}, err
 	}
+
+	// Return resolved services in a multiple box type.
 	return newMultipleValue(multipleType, serviceValues), nil
 }
 
@@ -273,7 +267,7 @@ func (r *registry) resolveRegular(serviceType reflect.Type) (reflect.Value, erro
 	// unregistered type `Config` triggers an error, while resolving `gontainer.Optional[Config]`
 	// returns a zero-value box.
 	if len(resolvedValues) == 0 {
-		return reflect.Value{}, fmt.Errorf("%w: '%s'", ErrDependencyNotResolved, serviceType)
+		return reflect.Value{}, errDependencyNotResolved(nil, serviceType)
 	}
 
 	// Pick first found service value.
@@ -284,36 +278,33 @@ func (r *registry) resolveRegular(serviceType reflect.Type) (reflect.Value, erro
 func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, error) {
 	// Lookup factory definition by an output type.
 	factories := r.findFactories(serviceType)
-	resolvedValues := make([]reflect.Value, 0, len(factories))
+
+	// Prepare result values slice.
+	results := make([]reflect.Value, 0, len(factories))
 
 	// Spawn all found factories.
 	for _, fact := range factories {
 		// Handle found factory definition.
 		if err := r.spawnFactory(fact); err != nil {
-			return nil, fmt.Errorf(
-				"%s from '%s': spawn: %w",
-				fact.name, fact.source, err,
-			)
+			return nil, errFactoryResolveFailed(fact, err)
 		}
 
 		// Handle error returned by the factory.
 		if err := fact.getOutError(); err != nil {
-			return nil, fmt.Errorf(
-				"%s from '%s': %w: %w",
-				fact.name, fact.source,
-				ErrFactoryReturnedError, err,
-			)
+			return nil, errFactoryReturnedError(fact, err)
 		}
 
 		// Handle the factory result output.
-		resolvedValues = append(resolvedValues, fact.getOutValue())
+		results = append(results, fact.getOutValue())
 	}
 
-	return resolvedValues, nil
+	// Return resolved values.
+	return results, nil
 }
 
 // findFactories lookups for all factories for an output type in the registry.
 func (r *registry) findFactories(serviceType reflect.Type) []*factory {
+	// Prepare result factories slice.
 	var factories []*factory
 
 	// Lookup for factories in the registry.
@@ -369,6 +360,7 @@ func (r *registry) spawnFactory(fact *factory) error {
 	r.sequence = append(r.sequence, fact)
 	r.mutex.Unlock()
 
+	// Factory spawned successfully.
 	return nil
 }
 
