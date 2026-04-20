@@ -74,7 +74,7 @@ func (r *registry) validateRegistry() error {
 			// Could a factory for this type be resolved?
 			foundFactories := r.findFactories(inType)
 			if len(foundFactories) == 0 {
-				errs = append(errs, errDependencyNotResolved(fact, inType))
+				errs = append(errs, newDependencyNotResolvedError(fact, inType))
 				continue
 			}
 		}
@@ -93,7 +93,7 @@ func (r *registry) validateRegistry() error {
 		// Validate uniqueness of the factory output type.
 		factories := r.findFactories(outType)
 		if len(factories) > 1 {
-			errs = append(errs, errFactoryTypeDuplicated(fact))
+			errs = append(errs, newFactoryTypeDuplicatedError(fact))
 		}
 	}
 
@@ -122,7 +122,7 @@ func (r *registry) validateRegistry() error {
 				typeFactories := r.findFactories(inType)
 				for _, factoryForType := range typeFactories {
 					if factoryForType == fact {
-						errs = append(errs, errCircularDependency(fact))
+						errs = append(errs, newCircularDependencyError(fact))
 						break iteration
 					}
 				}
@@ -155,7 +155,7 @@ func (r *registry) invokeEntrypoints() error {
 	for _, fact := range r.entrypoints {
 		// Invoke the factory.
 		if err := r.invokeFactory(fact); err != nil {
-			errs = append(errs, errFactoryResolveFailed(fact, err))
+			errs = append(errs, newFactoryResolveFailedError(fact, err))
 
 			// The entrypoint was not invoked.
 			continue
@@ -163,7 +163,7 @@ func (r *registry) invokeEntrypoints() error {
 
 		// Handle factory error.
 		if err := fact.getOutError(); err != nil {
-			errs = append(errs, errEntrypointReturnedError(fact, err))
+			errs = append(errs, newEntrypointReturnedErrorError(fact, err))
 		}
 	}
 
@@ -187,7 +187,7 @@ func (r *registry) closeFactories() error {
 
 		// Invoke close callback function.
 		if err := fact.getOutClose()(); err != nil {
-			errs = append(errs, errFactoryCloseFailed(fact, err))
+			errs = append(errs, newFactoryCloseFailedError(fact, err))
 		}
 	}
 
@@ -267,7 +267,7 @@ func (r *registry) resolveRegular(serviceType reflect.Type) (reflect.Value, erro
 	// unregistered type `Config` triggers an error, while resolving `gontainer.Optional[Config]`
 	// returns a zero-value box.
 	if len(resolvedValues) == 0 {
-		return reflect.Value{}, errDependencyNotResolved(nil, serviceType)
+		return reflect.Value{}, newDependencyNotResolvedError(nil, serviceType)
 	}
 
 	// Pick first found service value.
@@ -286,12 +286,12 @@ func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, err
 	for _, fact := range factories {
 		// Handle found factory definition.
 		if err := r.spawnFactory(fact); err != nil {
-			return nil, errFactoryResolveFailed(fact, err)
+			return nil, newFactoryResolveFailedError(fact, err)
 		}
 
 		// Handle error returned by the factory.
 		if err := fact.getOutError(); err != nil {
-			return nil, errFactoryReturnedError(fact, err)
+			return nil, newFactoryReturnedErrorError(fact, err)
 		}
 
 		// Handle the factory result output.
