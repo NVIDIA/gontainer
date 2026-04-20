@@ -87,7 +87,7 @@ func TestErrorFormatDeepChainOneLineCause(t *testing.T) {
 	equal(t, errors.Is(err, ErrFactoryReturnedError), true)
 }
 
-// TestErrorFormatDeepChainJoinCause checks that an errors.Join cause renders each item as a "- " bullet.
+// TestErrorFormatDeepChainJoinCause checks that an errors.Join cause is rendered verbatim via err.Error().
 func TestErrorFormatDeepChainJoinCause(t *testing.T) {
 	joined := errors.Join(
 		errors.New("FIELD_A: 'required' rule failed"),
@@ -106,8 +106,8 @@ func TestErrorFormatDeepChainJoinCause(t *testing.T) {
 
 	equal(t, err != nil, true)
 	equal(t, normalizeSourceLines(err.Error()), ""+
-		"- FIELD_A: 'required' rule failed"+
-		"\n- FIELD_B: 'required' rule failed"+
+		"FIELD_A: 'required' rule failed"+
+		"\nFIELD_B: 'required' rule failed"+
 		"\n"+
 		"\nTraceback:"+
 		"\n  Factory for *gontainer.testFmtLeaf"+
@@ -116,7 +116,7 @@ func TestErrorFormatDeepChainJoinCause(t *testing.T) {
 	equal(t, errors.Is(err, ErrFactoryReturnedError), true)
 }
 
-// TestErrorFormatDeepChainWrapperOverJoin checks that a wrapper adds a header line above bullets from an inner Join.
+// TestErrorFormatDeepChainWrapperOverJoin checks that a wrapper over errors.Join is rendered verbatim.
 func TestErrorFormatDeepChainWrapperOverJoin(t *testing.T) {
 	joined := errors.Join(
 		errors.New("URL: 'required' rule failed"),
@@ -136,9 +136,8 @@ func TestErrorFormatDeepChainWrapperOverJoin(t *testing.T) {
 
 	equal(t, err != nil, true)
 	equal(t, normalizeSourceLines(err.Error()), ""+
-		"failed to load GitLab client config:"+
-		"\n- URL: 'required' rule failed"+
-		"\n- TOKEN: 'required' rule failed"+
+		"failed to load GitLab client config: URL: 'required' rule failed"+
+		"\nTOKEN: 'required' rule failed"+
 		"\n"+
 		"\nTraceback:"+
 		"\n  Factory for *gontainer.testFmtLeaf"+
@@ -419,7 +418,7 @@ func TestErrorFormatCloseMultiple(t *testing.T) {
 	equal(t, errors.Is(err, errMid), true)
 }
 
-// TestErrorFormatCloseJoinCause verifies that a close error whose cause is an errors.Join renders inner errors as "- " bullets.
+// TestErrorFormatCloseJoinCause verifies that a close error with a multi-line cause renders the cause verbatim.
 func TestErrorFormatCloseJoinCause(t *testing.T) {
 	joined := fmt.Errorf("failed to close pool connections: %w", errors.Join(
 		errors.New("conn1: write: broken pipe"),
@@ -435,9 +434,8 @@ func TestErrorFormatCloseJoinCause(t *testing.T) {
 
 	equal(t, err != nil, true)
 	equal(t, normalizeSourceLines(err.Error()), ""+
-		"failed to close pool connections:"+
-		"\n- conn1: write: broken pipe"+
-		"\n- conn2: context canceled"+
+		"failed to close pool connections: conn1: write: broken pipe"+
+		"\nconn2: context canceled"+
 		"\n"+
 		"\nSource:"+
 		"\n  Factory for *gontainer.testFmtLeaf")
