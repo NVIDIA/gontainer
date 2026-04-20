@@ -426,7 +426,37 @@ func(providers gontainer.Multiple[AuthProvider]) *Router
 
 ## Error Handling
 
-Gontainer provides typed errors for different failure scenarios:
+Container errors are rendered as a structured traceback: the root cause
+on the first line, followed by resolution frames with `file:line`
+references.
+
+Startup error - error returned by a factory:
+
+```
+Configuration load failed:
+ - DATABASE_USERNAME: required environment variable is not set
+ - DATABASE_PASSWORD: required environment variable is not set
+
+Traceback:
+  Factory for *myapp.Config
+    at /path/to/app/config.go:18
+  Factory for *myapp.Database
+    at /path/to/app/db.go:24
+  Entrypoint
+    at /path/to/app/main.go:15
+```
+
+Close error - errors returned from close callbacks:
+
+```
+connection reset by peer
+
+Source:
+  Factory for *myapp.Database
+    at /path/to/app/db.go:24
+```
+
+Typed errors are also exposed for programmatic matching:
 
 ```go
 err := gontainer.Run(factories...)
