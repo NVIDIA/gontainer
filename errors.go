@@ -68,12 +68,16 @@ func formatTerminalError(err error) string {
 	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
 		if inner := wrapped.Unwrap(); inner != nil {
 			if multi, ok := inner.(interface{ Unwrap() []error }); ok {
-				header := strings.TrimRight(strings.TrimSuffix(err.Error(), inner.Error()), ": \n\t")
-				joined := formatJoinedErrors(multi.Unwrap())
-				if header == "" {
-					return joined
+				outer := err.Error()
+				innerStr := inner.Error()
+				if strings.HasSuffix(outer, innerStr) {
+					header := strings.TrimRight(strings.TrimSuffix(outer, innerStr), ": \n\t")
+					joined := formatJoinedErrors(multi.Unwrap())
+					if header == "" {
+						return joined
+					}
+					return header + ":\n" + joined
 				}
-				return header + ":\n" + joined
 			}
 		}
 	}
@@ -129,9 +133,8 @@ func newEntrypointReturnedErrorError(f *factory, err error) error {
 }
 
 // newFactoryCloseFailedError wraps a raw close-callback error under a Source section with f as the sole frame.
-func newFactoryCloseFailedError(f *factory, cause error) error {
-	return fmt.Errorf("%s\n\nSource:%s%.0w",
-		formatTerminalError(cause), formatFactoryFrame(f), cause)
+func newFactoryCloseFailedError(f *factory, err error) error {
+	return fmt.Errorf("%s\n\nSource:%s%.0w", formatTerminalError(err), formatFactoryFrame(f), err)
 }
 
 // errorGroup is a group of independent errors, separated by a blank line when rendered.
