@@ -226,7 +226,7 @@ func (r *registry) resolveService(serviceType reflect.Type) (reflect.Value, erro
 
 // resolveOptional resolves a service wrapped with an optional type.
 func (r *registry) resolveOptional(optionalType, serviceType reflect.Type) (reflect.Value, error) {
-	// Resolve the first matching service by specified type.
+	// Resolve the first matching service by a specified type.
 	serviceValues, err := r.resolveByType(serviceType, false)
 	if err != nil {
 		return reflect.Value{}, err
@@ -263,7 +263,7 @@ func (r *registry) resolveMultiple(multipleType, serviceType reflect.Type) (refl
 // interface type with several registered implementations, the first one in
 // registration order is returned by design, and only that implementation is spawned.
 func (r *registry) resolveRegular(serviceType reflect.Type) (reflect.Value, error) {
-	// Resolve the first matching service by specified type.
+	// Resolve the first matching service by a specified type.
 	resolvedValues, err := r.resolveByType(serviceType, false)
 	if err != nil {
 		return reflect.Value{}, err
