@@ -100,10 +100,16 @@ func (r *registry) validateRegistry() error {
 	// Validate for circular dependencies.
 	for _, fact := range r.factories {
 		factories := []*factory{fact}
+		visited := make(map[*factory]bool)
 	iteration:
 		for len(factories) > 0 {
 			nextFact := factories[0]
 			factories = factories[1:]
+
+			if visited[nextFact] {
+				continue
+			}
+			visited[nextFact] = true
 
 			for _, inType := range nextFact.inTypes {
 				// Is this type wrapped to the `Optional[type]`?
