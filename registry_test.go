@@ -219,6 +219,42 @@ func TestRegistryValidateFactories(t *testing.T) {
 	}
 }
 
+// cycA, cycB and cycC model a dependency graph where an acyclic factory (cycA)
+// can reach a cycle (cycB <-> cycC) that does not include it.
+type (
+	cycA int
+	cycB int
+	cycC int
+)
+
+// TestRegistryValidateCycle ensures cycle validation terminates properly.
+func TestRegistryValidateCycle(t *testing.T) {
+	registry := &registry{}
+	options := []Option{
+		// Acyclic root, registered first, depends on the cycle below.
+		NewFactory(func(cycB) cycA { return 0 }),
+
+		// cycB and cycC form a cycle that does not involve cycA.
+		NewFactory(func(cycC) cycB { return 0 }),
+		NewFactory(func(cycB) cycC { return 0 }),
+
+		NewEntrypoint(func(cycA) {}),
+	}
+	for _, option := range options {
+		equal(t, option.apply(registry), nil)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- registry.validateRegistry() }()
+
+	select {
+	case err := <-done:
+		equal(t, errors.Is(err, ErrCircularDependency), true)
+	case <-time.After(5 * time.Second):
+		t.Fatal("validateRegistry did not terminate: the cycle walk looped")
+	}
+}
+
 // TestRegistryInvokeFunctions tests corresponding registry method.
 func TestRegistryInvokeFunctions(t *testing.T) {
 	registry := &registry{}
