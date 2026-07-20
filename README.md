@@ -9,6 +9,18 @@ Simple but powerful dependency injection container for Go projects!
 
 <p align="center"><img src="splash.gif" width="600"/></p>
 
+## Use Cases
+
+- 🚢 Building a **fleet of similar services** that share one uniform entry point, with
+  the specifics factored out into reusable modules.
+- 🤝 Keeping services consistent across a team or organization, so they are easy to
+  read, operate, and hand over.
+- ⚡ Standing up new services quickly by composing ready-made building blocks instead
+  of rewriting the same plumbing every time.
+
+See the [complete webapp example](./examples/03_complete_webapp/main.go) for this in
+action.
+
 ## Features
 
 - 🎯 Automatic dependency injection based on function signatures.
@@ -502,6 +514,17 @@ case errors.Is(err, gontainer.ErrFactoryTypeDuplicated):
     // Service type was duplicated.
 }
 ```
+
+## Panics Handling
+
+Gontainer treats a panic as a bug, not a control-flow mechanism, and never recovers
+from one. A panic in a factory, an entrypoint, or a cleanup callback propagates
+straight out of `Run` and crashes the process loudly, with the full stack trace
+intact.
+
+Expected failures should be returned as an `error` - which the container renders as
+the structured traceback shown above - while a panic signals a programming error that
+you want to surface immediately rather than silently absorb.
 
 ## Contributing
 
