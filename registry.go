@@ -259,9 +259,7 @@ func (r *registry) resolveMultiple(multipleType, serviceType reflect.Type) (refl
 	return newMultipleValue(multipleType, serviceValues), nil
 }
 
-// resolveRegular resolves a regular (non-optional, non-multiple) service. For an
-// interface type with several registered implementations, the first one in
-// registration order is returned by design, and only that implementation is spawned.
+// resolveRegular resolves a regular (non-optional, non-multiple) service.
 func (r *registry) resolveRegular(serviceType reflect.Type) (reflect.Value, error) {
 	// Resolve the first matching service by a specified type.
 	resolvedValues, err := r.resolveByType(serviceType, false)
