@@ -249,7 +249,7 @@ func (r *registry) resolveOptional(optionalType, serviceType reflect.Type) (refl
 
 // resolveMultiple resolves all services fits to the multiple type.
 func (r *registry) resolveMultiple(multipleType, serviceType reflect.Type) (reflect.Value, error) {
-	// Resolve all services by specified type; Multiple spawns every match.
+	// Resolve all matching services by a specified type.
 	serviceValues, err := r.resolveByType(serviceType, true)
 	if err != nil {
 		return reflect.Value{}, err
