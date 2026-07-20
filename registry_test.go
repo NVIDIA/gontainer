@@ -255,6 +255,64 @@ func TestRegistryValidateCycle(t *testing.T) {
 	}
 }
 
+// greeter and its implementations exercise regular interface resolution with more
+// than one candidate.
+type greeter interface{ greet() string }
+
+// englishGreeter is the first registered greeter implementation.
+type englishGreeter struct{}
+
+// greet returns the English greeting.
+func (englishGreeter) greet() string { return "hello" }
+
+// frenchGreeter is the second registered greeter implementation.
+type frenchGreeter struct{}
+
+// greet returns the French greeting.
+func (frenchGreeter) greet() string { return "bonjour" }
+
+// TestRegistryResolveInterfaceSingle verifies that resolving an interface as a regular
+// dependency returns the first registered implementation and does not spawn the others.
+func TestRegistryResolveInterfaceSingle(t *testing.T) {
+	var englishSpawned, frenchSpawned atomic.Int32
+	var got string
+
+	err := Run(
+		NewFactory(func() englishGreeter { englishSpawned.Add(1); return englishGreeter{} }),
+		NewFactory(func() frenchGreeter { frenchSpawned.Add(1); return frenchGreeter{} }),
+		NewEntrypoint(func(g greeter) { got = g.greet() }),
+	)
+
+	equal(t, err, nil)
+	equal(t, got, "hello")
+	equal(t, englishSpawned.Load(), int32(1))
+	equal(t, frenchSpawned.Load(), int32(0))
+}
+
+// TestRegistryResolveInterfaceMultiple verifies that resolving an interface through
+// Multiple returns every registered implementation and spawns all of them.
+func TestRegistryResolveInterfaceMultiple(t *testing.T) {
+	var englishSpawned, frenchSpawned atomic.Int32
+	var got []string
+
+	err := Run(
+		NewFactory(func() englishGreeter { englishSpawned.Add(1); return englishGreeter{} }),
+		NewFactory(func() frenchGreeter { frenchSpawned.Add(1); return frenchGreeter{} }),
+		NewEntrypoint(func(greeters Multiple[greeter]) {
+			for _, g := range greeters {
+				got = append(got, g.greet())
+			}
+		}),
+	)
+
+	equal(t, err, nil)
+	equal(t, len(got), 2)
+	equal(t, got[0], "hello")
+	equal(t, got[1], "bonjour")
+	equal(t, englishSpawned.Load(), int32(1))
+	equal(t, frenchSpawned.Load(), int32(1))
+}
+
 // TestRegistryInvokeFunctions tests corresponding registry method.
 func TestRegistryInvokeFunctions(t *testing.T) {
 	registry := &registry{}
@@ -291,7 +349,7 @@ func TestRegistryResolveParallel(t *testing.T) {
 	wg.Add(10)
 	for x := 0; x < 10; x++ {
 		go func() {
-			values, err := registry.resolveByType(reflect.TypeOf(true))
+			values, err := registry.resolveByType(reflect.TypeOf(true), false)
 			equal(t, err, nil)
 			equal(t, values[0].Interface(), true)
 			wg.Done()

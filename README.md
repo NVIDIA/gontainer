@@ -217,6 +217,32 @@ gontainer.NewFactory(func(middlewares gontainer.Multiple[Middleware]) *Router {
 })
 ```
 
+### Interface Dependencies
+
+A factory can depend on an interface, and the container injects a registered
+service that implements it:
+
+```go
+type Store interface {
+    Get(key string) (string, bool)
+}
+
+gontainer.NewFactory(func() *MemoryStore {
+    return &MemoryStore{} // implements Store
+})
+
+gontainer.NewFactory(func(store Store) *API {
+    return &API{store: store}
+})
+```
+
+> **When several services implement the same interface, a regular dependency
+> resolves to the _first one in registration order_, and only that
+> implementation is spawned - others are left untouched.** This is by
+> design: it keeps regular resolution deterministic and free of side effects.
+> To receive every implementation, depend on
+> [`Multiple[T]`](#multiple-dependencies) instead.
+
 ### Multiple Instances of the Same Type
 
 The container matches services by exact type. To register several instances
