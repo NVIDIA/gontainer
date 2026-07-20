@@ -220,8 +220,9 @@ func (r *registry) resolveService(serviceType reflect.Type) (reflect.Value, erro
 
 // resolveOptional resolves a service wrapped with an optional type.
 func (r *registry) resolveOptional(optionalType, serviceType reflect.Type) (reflect.Value, error) {
-	// Resolve all services by specified type.
-	serviceValues, err := r.resolveByType(serviceType)
+	// Resolve the service by specified type. Only the first matching factory is
+	// spawned; optional resolution never instantiates additional implementations.
+	serviceValues, err := r.resolveByType(serviceType, false)
 	if err != nil {
 		return reflect.Value{}, err
 	}
@@ -243,8 +244,8 @@ func (r *registry) resolveOptional(optionalType, serviceType reflect.Type) (refl
 
 // resolveMultiple resolves all services fits to the multiple type.
 func (r *registry) resolveMultiple(multipleType, serviceType reflect.Type) (reflect.Value, error) {
-	// Resolve all services by specified type.
-	serviceValues, err := r.resolveByType(serviceType)
+	// Resolve all services by specified type; Multiple spawns every match.
+	serviceValues, err := r.resolveByType(serviceType, true)
 	if err != nil {
 		return reflect.Value{}, err
 	}
@@ -253,10 +254,12 @@ func (r *registry) resolveMultiple(multipleType, serviceType reflect.Type) (refl
 	return newMultipleValue(multipleType, serviceValues), nil
 }
 
-// resolveRegular resolves a regular service.
+// resolveRegular resolves a regular (non-optional, non-multiple) service. For an
+// interface type with several registered implementations, the first one in
+// registration order is returned by design, and only that implementation is spawned.
 func (r *registry) resolveRegular(serviceType reflect.Type) (reflect.Value, error) {
-	// Resolve all services by specified type.
-	resolvedValues, err := r.resolveByType(serviceType)
+	// Resolve the service by specified type.
+	resolvedValues, err := r.resolveByType(serviceType, false)
 	if err != nil {
 		return reflect.Value{}, err
 	}
@@ -274,15 +277,25 @@ func (r *registry) resolveRegular(serviceType reflect.Type) (reflect.Value, erro
 	return resolvedValues[0], nil
 }
 
-// resolveByType resolves all service fits to specified type.
-func (r *registry) resolveByType(serviceType reflect.Type) ([]reflect.Value, error) {
+// resolveByType resolves the services that fit the specified type. When all is
+// false, only the first matching factory is spawned and returned, which is what
+// regular and optional resolution need; when all is true, every matching factory
+// is spawned, which is what Multiple resolution needs. This matters for interface
+// types with several implementations: a regular or optional dependency must not
+// instantiate the implementations it does not return.
+func (r *registry) resolveByType(serviceType reflect.Type, all bool) ([]reflect.Value, error) {
 	// Lookup factory definition by an output type.
 	factories := r.findFactories(serviceType)
+
+	// Avoid spawning the remaining implementations.
+	if !all && len(factories) > 1 {
+		factories = factories[:1]
+	}
 
 	// Prepare result values slice.
 	results := make([]reflect.Value, 0, len(factories))
 
-	// Spawn all found factories.
+	// Spawn the selected factories.
 	for _, fact := range factories {
 		// Handle found factory definition.
 		if err := r.spawnFactory(fact); err != nil {
