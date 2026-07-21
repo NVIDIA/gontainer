@@ -44,16 +44,9 @@ func TestIsOptionalType(t *testing.T) {
 	equal(t, ok, true)
 }
 
-// TestIsOptionalTypePointer verifies that a *Optional[T] parameter type is
-// rejected cleanly (regular dependency) rather than panicking. reflect.Zero of a
-// pointer is a nil pointer whose method set still includes Optional's value
-// receivers, so a bare marker-interface assertion would call optionalElem() on
-// nil and dereference it.
+// TestIsOptionalTypePointer tests that a *Optional[T] type is rejected without a panic.
 func TestIsOptionalTypePointer(t *testing.T) {
-	// DEFENSIVE (not a real use case): *Optional[T] is not a legitimate parameter
-	// type - Optional[T] is taken by value. This only pins that such input degrades
-	// to a clean dependency error instead of panicking, as it did pre-refactor.
-	typ := reflect.TypeOf((*Optional[int])(nil)) // *Optional[int]
+	typ := reflect.TypeOf((*Optional[int])(nil))
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -66,22 +59,15 @@ func TestIsOptionalTypePointer(t *testing.T) {
 	equal(t, ok, false)
 }
 
-// TestIsOptionalTypeEmbedded verifies that a user struct embedding Optional[T]
-// is not misdetected as an optional box. The embedded field promotes the marker
-// methods, so a bare interface assertion would match it and later build the
-// wrong (inner) type.
+// TestIsOptionalTypeEmbedded tests that a user struct embedding Optional[T] is
+// not misdetected as an optional box.
 func TestIsOptionalTypeEmbedded(t *testing.T) {
-	// embedsOptional is a user-defined struct that embeds Optional[T]. It is NOT an
-	// optional box: it merely promotes Optional's marker methods. The container must
-	// treat it as a regular dependency, not misdetect it as a box.
+	// embedsOptional inherits all embedded type methods.
 	type embedsOptional struct {
 		Optional[int]
 		Extra int
 	}
 
-	// DEFENSIVE (not a real use case): embedding Optional[T] in a struct is not how
-	// the API is used. This only pins that such input is not misdetected as a box
-	// (which would later build the wrong type), matching pre-refactor behaviour.
 	typ := reflect.TypeOf(embedsOptional{})
 
 	rtyp, ok := isOptionalType(typ)
@@ -89,17 +75,14 @@ func TestIsOptionalTypeEmbedded(t *testing.T) {
 	equal(t, rtyp, nil)
 }
 
-// TestNewOptionalValueNilInterface verifies that a service that resolves to a
-// nil interface value is boxed as a present optional (value nil, ok true) rather
-// than panicking. The old setValue path used reflect.Set, which accepts nil; a
-// v.Interface().(T) assertion panics because the interface is nil.
+// TestNewOptionalValueNilInterface tests that a service resolving to a nil
+// interface value is boxed as a present optional (nil value, ok true).
 func TestNewOptionalValueNilInterface(t *testing.T) {
-	// optNilIface is an interface used to exercise a service that resolves to a
-	// legitimately nil interface value.
+	// optNilIface exercises a service that resolves to a nil interface value.
 	type optNilIface interface{ marker() }
 
-	var svc optNilIface                  // nil interface
-	data := reflect.ValueOf(&svc).Elem() // reflect.Value of interface type, nil
+	var svc optNilIface
+	data := reflect.ValueOf(&svc).Elem()
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -143,9 +126,8 @@ func TestOptionalOkNotProvided(t *testing.T) {
 	}
 }
 
-// TestOptionalValueSemantics verifies that Get and Ok are callable on
-// non-addressable values (e.g. a map element), i.e. that they use value
-// receivers. With pointer receivers this would not compile.
+// TestOptionalValueSemantics tests that Get and Ok are callable on
+// non-addressable values, i.e. that they use value receivers.
 func TestOptionalValueSemantics(t *testing.T) {
 	boxes := map[string]Optional[string]{
 		"present": newOptionalValue(

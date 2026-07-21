@@ -37,16 +37,12 @@ import "reflect"
 //	}
 type Multiple[T any] []T
 
-// multipleElem reports the element type T. Inside the instantiated method T is
-// known statically, so it is read directly from the type parameter rather than
-// reverse-engineered from the slice's element type.
+// multipleElem reports the wrapped element type T.
 func (m Multiple[T]) multipleElem() reflect.Type {
 	return reflect.TypeOf((*T)(nil)).Elem()
 }
 
-// multipleBox is the internal contract implemented only by Multiple[T]. The
-// value receiver lets isMultipleType detect the box from a plain reflect.Zero
-// value without any pointer indirection.
+// multipleBox is the internal contract implemented only by Multiple[T].
 type multipleBox interface {
 	multipleElem() reflect.Type
 }

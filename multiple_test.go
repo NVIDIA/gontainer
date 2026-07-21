@@ -44,15 +44,9 @@ func TestIsMultipleType(t *testing.T) {
 	equal(t, ok, true)
 }
 
-// TestIsMultipleTypePointer verifies that a *Multiple[T] parameter type is
-// rejected cleanly rather than panicking. reflect.Zero of a pointer is a nil
-// pointer whose method set still includes Multiple's value receiver, so a bare
-// marker-interface assertion would call multipleElem() on nil and dereference it.
+// TestIsMultipleTypePointer tests that a *Multiple[T] type is rejected without a panic.
 func TestIsMultipleTypePointer(t *testing.T) {
-	// DEFENSIVE (not a real use case): *Multiple[T] is not a legitimate parameter
-	// type - Multiple[T] is taken by value. This only pins that such input degrades
-	// to a clean dependency error instead of panicking, as it did pre-refactor.
-	typ := reflect.TypeOf((*Multiple[int])(nil)) // *Multiple[int]
+	typ := reflect.TypeOf((*Multiple[int])(nil))
 
 	defer func() {
 		if r := recover(); r != nil {
