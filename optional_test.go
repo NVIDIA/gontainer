@@ -74,6 +74,24 @@ func TestOptionalOkNotProvided(t *testing.T) {
 	}
 }
 
+// TestOptionalValueSemantics verifies that Get and Ok are callable on
+// non-addressable values (e.g. a map element), i.e. that they use value
+// receivers. With pointer receivers this would not compile.
+func TestOptionalValueSemantics(t *testing.T) {
+	boxes := map[string]Optional[string]{
+		"present": newOptionalValue(
+			reflect.TypeOf(Optional[string]{}),
+			reflect.ValueOf("hi"),
+		).Interface().(Optional[string]),
+		"absent": {},
+	}
+
+	equal(t, boxes["present"].Ok(), true)
+	equal(t, boxes["present"].Get(), "hi")
+	equal(t, boxes["absent"].Ok(), false)
+	equal(t, boxes["absent"].Get(), "")
+}
+
 // TestOptionalOkProvided tests that Ok returns true when the service is provided.
 func TestOptionalOkProvided(t *testing.T) {
 	typ := reflect.TypeOf(Optional[string]{})
