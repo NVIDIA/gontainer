@@ -44,13 +44,6 @@ func TestIsMultipleType(t *testing.T) {
 	equal(t, ok, true)
 }
 
-// embedsMultiple is a user-defined struct that embeds Multiple[T]. It is NOT a
-// multiple box: it merely promotes Multiple's marker method. The container must
-// treat it as a regular dependency, not misdetect it as a box.
-type embedsMultiple struct {
-	Multiple[int]
-}
-
 // TestIsMultipleTypePointer verifies that a *Multiple[T] parameter type is
 // rejected cleanly rather than panicking. reflect.Zero of a pointer is a nil
 // pointer whose method set still includes Multiple's value receiver, so a bare
@@ -75,6 +68,16 @@ func TestIsMultipleTypePointer(t *testing.T) {
 // TestIsMultipleTypeEmbedded verifies that a user struct embedding Multiple[T]
 // is not misdetected as a multiple box via the promoted marker method.
 func TestIsMultipleTypeEmbedded(t *testing.T) {
+	// embedsMultiple is a user-defined struct that embeds Multiple[T]. It is NOT a
+	// multiple box: it merely promotes Multiple's marker method. The container must
+	// treat it as a regular dependency, not misdetect it as a box.
+	type embedsMultiple struct {
+		Multiple[int]
+	}
+
+	// DEFENSIVE (not a real use case): embedding Multiple[T] in a struct is not how
+	// the API is used. This only pins that such input is not misdetected as a box,
+	// matching pre-refactor behaviour.
 	typ := reflect.TypeOf(embedsMultiple{})
 
 	rtyp, ok := isMultipleType(typ)

@@ -44,18 +44,6 @@ func TestIsOptionalType(t *testing.T) {
 	equal(t, ok, true)
 }
 
-// embedsOptional is a user-defined struct that embeds Optional[T]. It is NOT an
-// optional box: it merely promotes Optional's marker methods. The container must
-// treat it as a regular dependency, not misdetect it as a box.
-type embedsOptional struct {
-	Optional[int]
-	Extra int
-}
-
-// optNilIface is an interface used to exercise a service that resolves to a
-// legitimately nil interface value.
-type optNilIface interface{ marker() }
-
 // TestIsOptionalTypePointer verifies that a *Optional[T] parameter type is
 // rejected cleanly (regular dependency) rather than panicking. reflect.Zero of a
 // pointer is a nil pointer whose method set still includes Optional's value
@@ -83,6 +71,17 @@ func TestIsOptionalTypePointer(t *testing.T) {
 // methods, so a bare interface assertion would match it and later build the
 // wrong (inner) type.
 func TestIsOptionalTypeEmbedded(t *testing.T) {
+	// embedsOptional is a user-defined struct that embeds Optional[T]. It is NOT an
+	// optional box: it merely promotes Optional's marker methods. The container must
+	// treat it as a regular dependency, not misdetect it as a box.
+	type embedsOptional struct {
+		Optional[int]
+		Extra int
+	}
+
+	// DEFENSIVE (not a real use case): embedding Optional[T] in a struct is not how
+	// the API is used. This only pins that such input is not misdetected as a box
+	// (which would later build the wrong type), matching pre-refactor behaviour.
 	typ := reflect.TypeOf(embedsOptional{})
 
 	rtyp, ok := isOptionalType(typ)
@@ -95,6 +94,10 @@ func TestIsOptionalTypeEmbedded(t *testing.T) {
 // than panicking. The old setValue path used reflect.Set, which accepts nil; a
 // v.Interface().(T) assertion panics because the interface is nil.
 func TestNewOptionalValueNilInterface(t *testing.T) {
+	// optNilIface is an interface used to exercise a service that resolves to a
+	// legitimately nil interface value.
+	type optNilIface interface{ marker() }
+
 	var svc optNilIface                  // nil interface
 	data := reflect.ValueOf(&svc).Elem() // reflect.Value of interface type, nil
 
