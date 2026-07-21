@@ -68,6 +68,11 @@ func TestIsMultipleTypeEmbedded(t *testing.T) {
 	}
 
 	typ := reflect.TypeOf(embedsMultiple{})
+
+	// The embedder satisfies multipleBox through promotion.
+	_, satisfies := reflect.Zero(typ).Interface().(multipleBox)
+	equal(t, satisfies, true)
+
 	rtyp, ok := isMultipleType(typ)
 	equal(t, ok, false)
 	equal(t, rtyp, nil)

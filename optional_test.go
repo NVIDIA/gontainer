@@ -70,6 +70,10 @@ func TestIsOptionalTypeEmbedded(t *testing.T) {
 
 	typ := reflect.TypeOf(embedsOptional{})
 
+	// The embedder satisfies optionalBox through promotion.
+	_, satisfies := reflect.Zero(typ).Interface().(optionalBox)
+	equal(t, satisfies, true)
+
 	rtyp, ok := isOptionalType(typ)
 	equal(t, ok, false)
 	equal(t, rtyp, nil)
