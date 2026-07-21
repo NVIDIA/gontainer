@@ -49,6 +49,14 @@ func (o Optional[T]) Ok() bool {
 	return o.ok
 }
 
+// optionalSelf reports Optional's own instantiated type. It lets isOptionalType
+// reject user types that merely embed Optional[T] and promote its markers: for
+// an embedder the promoted receiver is the embedded box, so optionalSelf still
+// returns the Optional type, not the outer type.
+func (o Optional[T]) optionalSelf() reflect.Type {
+	return reflect.TypeOf(o)
+}
+
 // optionalElem reports the wrapped type T. Inside the instantiated method T is
 // known statically, so it is read directly from the type parameter rather than
 // reverse-engineered from a struct field.
@@ -57,27 +65,43 @@ func (o Optional[T]) optionalElem() reflect.Type {
 }
 
 // withValue returns a present optional box carrying v. T is known inside the
-// instantiated method, so v is unwrapped with a plain type assertion - no
-// reflection-based mutation of an unexported field is needed.
+// instantiated method, so v is unwrapped with a comma-ok assertion rather than
+// reflection-based mutation of an unexported field. The comma-ok form is
+// deliberate: a service that resolved to a nil interface value yields the zero
+// (nil) T with ok still true - matching the old reflect.Set behaviour - instead
+// of panicking on a nil interface conversion.
 func (o Optional[T]) withValue(v reflect.Value) any {
-	return Optional[T]{value: v.Interface().(T), ok: true}
+	value, _ := v.Interface().(T)
+	return Optional[T]{value: value, ok: true}
 }
 
-// optionalBox is the internal contract implemented only by Optional[T]. Both
+// optionalBox is the internal contract implemented only by Optional[T]. All
 // methods use value receivers, so an instantiated Optional[T] satisfies it
 // without any pointer indirection - this is what lets isOptionalType detect the
 // box from a plain reflect.Zero value and build one without addressability.
 type optionalBox interface {
+	optionalSelf() reflect.Type
 	optionalElem() reflect.Type
 	withValue(v reflect.Value) any
 }
 
 // isOptionalType checks and returns optional box type.
 func isOptionalType(typ reflect.Type) (reflect.Type, bool) {
-	box, ok := reflect.Zero(typ).Interface().(optionalBox)
-	if !ok {
+	// The kind guard is essential: reflect.Zero of a pointer type is a nil
+	// pointer whose method set still includes the value-receiver markers, so
+	// without it a *Optional[T] parameter would satisfy optionalBox and then
+	// panic when a marker method dereferenced the nil pointer.
+	if typ.Kind() != reflect.Struct {
 		return nil, false
 	}
+
+	// The optionalSelf identity check rejects user structs that embed Optional[T]
+	// and inherit its promoted markers.
+	box, ok := reflect.Zero(typ).Interface().(optionalBox)
+	if !ok || box.optionalSelf() != typ {
+		return nil, false
+	}
+
 	return box.optionalElem(), true
 }
 
