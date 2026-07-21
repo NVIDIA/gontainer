@@ -62,6 +62,9 @@ type optNilIface interface{ marker() }
 // receivers, so a bare marker-interface assertion would call optionalElem() on
 // nil and dereference it.
 func TestIsOptionalTypePointer(t *testing.T) {
+	// DEFENSIVE (not a real use case): *Optional[T] is not a legitimate parameter
+	// type - Optional[T] is taken by value. This only pins that such input degrades
+	// to a clean dependency error instead of panicking, as it did pre-refactor.
 	typ := reflect.TypeOf((*Optional[int])(nil)) // *Optional[int]
 
 	defer func() {
