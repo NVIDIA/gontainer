@@ -37,14 +37,6 @@ import "reflect"
 //	}
 type Multiple[T any] []T
 
-// multipleSelf reports Multiple's own instantiated type. It lets isMultipleType
-// reject user types that merely embed Multiple[T] and promote its markers: for
-// an embedder the promoted receiver is the embedded box, so multipleSelf still
-// returns the Multiple type, not the outer type.
-func (m Multiple[T]) multipleSelf() reflect.Type {
-	return reflect.TypeOf(m)
-}
-
 // multipleElem reports the element type T. Inside the instantiated method T is
 // known statically, so it is read directly from the type parameter rather than
 // reverse-engineered from the slice's element type.
@@ -53,27 +45,31 @@ func (m Multiple[T]) multipleElem() reflect.Type {
 }
 
 // multipleBox is the internal contract implemented only by Multiple[T]. The
-// value receivers let isMultipleType detect the box from a plain reflect.Zero
+// value receiver lets isMultipleType detect the box from a plain reflect.Zero
 // value without any pointer indirection.
 type multipleBox interface {
-	multipleSelf() reflect.Type
 	multipleElem() reflect.Type
 }
 
 // isMultipleType checks and returns multiple box type.
 func isMultipleType(typ reflect.Type) (reflect.Type, bool) {
-	// The kind guard is essential: reflect.Zero of a pointer type is a nil
-	// pointer whose method set still includes the value-receiver markers, so
-	// without it a *Multiple[T] parameter would satisfy multipleBox and then
-	// panic when a marker method dereferenced the nil pointer.
+	// The kind guard both rejects embedders and prevents a nil-pointer panic.
+	// Embedding is the only way to inherit Multiple's promoted marker, and it is
+	// possible only in a struct, so anything that is not a slice cannot be a
+	// multiple box. The guard also stops a *Multiple[T] parameter: reflect.Zero
+	// of a pointer is a nil pointer whose method set still includes the
+	// value-receiver marker, which would panic when the marker dereferenced it.
 	if typ.Kind() != reflect.Slice {
 		return nil, false
 	}
 
-	// The multipleSelf identity check rejects user slices that embed Multiple[T]
-	// and inherit its promoted markers.
+	// A slice that implements multipleBox can only be Multiple[T] itself:
+	// multipleBox has an unexported method, so it is satisfiable only inside this
+	// package, and no other slice type carries that marker. Unlike Optional - a
+	// struct whose embedders share its kind - Multiple needs no self-identity
+	// check, because the kind guard above already excludes every embedder.
 	box, ok := reflect.Zero(typ).Interface().(multipleBox)
-	if !ok || box.multipleSelf() != typ {
+	if !ok {
 		return nil, false
 	}
 
