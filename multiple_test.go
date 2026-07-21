@@ -44,6 +44,41 @@ func TestIsMultipleType(t *testing.T) {
 	equal(t, ok, true)
 }
 
+// embedsMultiple is a user-defined struct that embeds Multiple[T]. It is NOT a
+// multiple box: it merely promotes Multiple's marker method. The container must
+// treat it as a regular dependency, not misdetect it as a box.
+type embedsMultiple struct {
+	Multiple[int]
+}
+
+// TestIsMultipleTypePointer verifies that a *Multiple[T] parameter type is
+// rejected cleanly rather than panicking. reflect.Zero of a pointer is a nil
+// pointer whose method set still includes Multiple's value receiver, so a bare
+// marker-interface assertion would call multipleElem() on nil and dereference it.
+func TestIsMultipleTypePointer(t *testing.T) {
+	typ := reflect.TypeOf((*Multiple[int])(nil)) // *Multiple[int]
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("isMultipleType panicked on *Multiple[int]: %v", r)
+		}
+	}()
+
+	rtyp, ok := isMultipleType(typ)
+	equal(t, rtyp, nil)
+	equal(t, ok, false)
+}
+
+// TestIsMultipleTypeEmbedded verifies that a user struct embedding Multiple[T]
+// is not misdetected as a multiple box via the promoted marker method.
+func TestIsMultipleTypeEmbedded(t *testing.T) {
+	typ := reflect.TypeOf(embedsMultiple{})
+
+	rtyp, ok := isMultipleType(typ)
+	equal(t, ok, false)
+	equal(t, rtyp, nil)
+}
+
 // TestNewMultipleValue tests creation of multiple value.
 func TestNewMultipleValue(t *testing.T) {
 	// When multiple not found.

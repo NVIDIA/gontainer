@@ -44,6 +44,69 @@ func TestIsOptionalType(t *testing.T) {
 	equal(t, ok, true)
 }
 
+// embedsOptional is a user-defined struct that embeds Optional[T]. It is NOT an
+// optional box: it merely promotes Optional's marker methods. The container must
+// treat it as a regular dependency, not misdetect it as a box.
+type embedsOptional struct {
+	Optional[int]
+	Extra int
+}
+
+// optNilIface is an interface used to exercise a service that resolves to a
+// legitimately nil interface value.
+type optNilIface interface{ marker() }
+
+// TestIsOptionalTypePointer verifies that a *Optional[T] parameter type is
+// rejected cleanly (regular dependency) rather than panicking. reflect.Zero of a
+// pointer is a nil pointer whose method set still includes Optional's value
+// receivers, so a bare marker-interface assertion would call optionalElem() on
+// nil and dereference it.
+func TestIsOptionalTypePointer(t *testing.T) {
+	typ := reflect.TypeOf((*Optional[int])(nil)) // *Optional[int]
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("isOptionalType panicked on *Optional[int]: %v", r)
+		}
+	}()
+
+	rtyp, ok := isOptionalType(typ)
+	equal(t, rtyp, nil)
+	equal(t, ok, false)
+}
+
+// TestIsOptionalTypeEmbedded verifies that a user struct embedding Optional[T]
+// is not misdetected as an optional box. The embedded field promotes the marker
+// methods, so a bare interface assertion would match it and later build the
+// wrong (inner) type.
+func TestIsOptionalTypeEmbedded(t *testing.T) {
+	typ := reflect.TypeOf(embedsOptional{})
+
+	rtyp, ok := isOptionalType(typ)
+	equal(t, ok, false)
+	equal(t, rtyp, nil)
+}
+
+// TestNewOptionalValueNilInterface verifies that a service that resolves to a
+// nil interface value is boxed as a present optional (value nil, ok true) rather
+// than panicking. The old setValue path used reflect.Set, which accepts nil; a
+// v.Interface().(T) assertion panics because the interface is nil.
+func TestNewOptionalValueNilInterface(t *testing.T) {
+	var svc optNilIface                  // nil interface
+	data := reflect.ValueOf(&svc).Elem() // reflect.Value of interface type, nil
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("newOptionalValue panicked on nil interface service: %v", r)
+		}
+	}()
+
+	value := newOptionalValue(reflect.TypeOf(Optional[optNilIface]{}), data)
+	opt := value.Interface().(Optional[optNilIface])
+	equal(t, opt.Ok(), true)
+	equal(t, opt.Get(), nil)
+}
+
 // TestNewOptionalValue tests creation of optional value.
 func TestNewOptionalValue(t *testing.T) {
 	// When optional not found.
