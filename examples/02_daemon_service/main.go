@@ -45,7 +45,7 @@ type MyServer struct {
 
 func main() {
 	// Prepare terminate signals channel.
-	terminate := make(chan os.Signal)
+	terminate := make(chan os.Signal, 1)
 	signal.Notify(terminate, syscall.SIGTERM, syscall.SIGINT)
 
 	// Prepare external to container object.
