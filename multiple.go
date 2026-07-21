@@ -53,21 +53,12 @@ type multipleBox interface {
 
 // isMultipleType checks and returns multiple box type.
 func isMultipleType(typ reflect.Type) (reflect.Type, bool) {
-	// The kind guard both rejects embedders and prevents a nil-pointer panic.
-	// Embedding is the only way to inherit Multiple's promoted marker, and it is
-	// possible only in a struct, so anything that is not a slice cannot be a
-	// multiple box. The guard also stops a *Multiple[T] parameter: reflect.Zero
-	// of a pointer is a nil pointer whose method set still includes the
-	// value-receiver marker, which would panic when the marker dereferenced it.
+	// Check if the type is a slice.
 	if typ.Kind() != reflect.Slice {
 		return nil, false
 	}
 
-	// A slice that implements multipleBox can only be Multiple[T] itself:
-	// multipleBox has an unexported method, so it is satisfiable only inside this
-	// package, and no other slice type carries that marker. Unlike Optional - a
-	// struct whose embedders share its kind - Multiple needs no self-identity
-	// check, because the kind guard above already excludes every embedder.
+	// Check if the type is a Multiple type.
 	box, ok := reflect.Zero(typ).Interface().(multipleBox)
 	if !ok {
 		return nil, false
