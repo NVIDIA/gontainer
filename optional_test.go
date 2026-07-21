@@ -44,6 +44,62 @@ func TestIsOptionalType(t *testing.T) {
 	equal(t, ok, true)
 }
 
+// TestIsOptionalTypePointer tests that a *Optional[T] type is rejected without a panic.
+func TestIsOptionalTypePointer(t *testing.T) {
+	typ := reflect.TypeOf((*Optional[int])(nil))
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("isOptionalType panicked on *Optional[int]: %v", r)
+		}
+	}()
+
+	rtyp, ok := isOptionalType(typ)
+	equal(t, rtyp, nil)
+	equal(t, ok, false)
+}
+
+// TestIsOptionalTypeEmbedded tests that a user struct embedding Optional[T] is
+// not misdetected as an optional box.
+func TestIsOptionalTypeEmbedded(t *testing.T) {
+	// embedsOptional inherits all embedded type methods.
+	type embedsOptional struct {
+		Optional[int]
+		Extra int
+	}
+
+	typ := reflect.TypeOf(embedsOptional{})
+
+	// The embedder satisfies optionalBox through promotion.
+	_, satisfies := reflect.Zero(typ).Interface().(optionalBox)
+	equal(t, satisfies, true)
+
+	rtyp, ok := isOptionalType(typ)
+	equal(t, ok, false)
+	equal(t, rtyp, nil)
+}
+
+// TestNewOptionalValueNilInterface tests that a service resolving to a nil
+// interface value is boxed as a present optional (nil value, ok true).
+func TestNewOptionalValueNilInterface(t *testing.T) {
+	// optNilIface exercises a service that resolves to a nil interface value.
+	type optNilIface interface{ marker() }
+
+	var svc optNilIface
+	data := reflect.ValueOf(&svc).Elem()
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("newOptionalValue panicked on nil interface service: %v", r)
+		}
+	}()
+
+	value := newOptionalValue(reflect.TypeOf(Optional[optNilIface]{}), data)
+	opt := value.Interface().(Optional[optNilIface])
+	equal(t, opt.Ok(), true)
+	equal(t, opt.Get(), nil)
+}
+
 // TestNewOptionalValue tests creation of optional value.
 func TestNewOptionalValue(t *testing.T) {
 	// When optional not found.
@@ -72,6 +128,23 @@ func TestOptionalOkNotProvided(t *testing.T) {
 	if opt.Get() != "" {
 		t.Errorf("expected Get() to return zero value, got %q", opt.Get())
 	}
+}
+
+// TestOptionalValueSemantics tests that Get and Ok are callable on
+// non-addressable values, i.e. that they use value receivers.
+func TestOptionalValueSemantics(t *testing.T) {
+	boxes := map[string]Optional[string]{
+		"present": newOptionalValue(
+			reflect.TypeOf(Optional[string]{}),
+			reflect.ValueOf("hi"),
+		).Interface().(Optional[string]),
+		"absent": {},
+	}
+
+	equal(t, boxes["present"].Ok(), true)
+	equal(t, boxes["present"].Get(), "hi")
+	equal(t, boxes["absent"].Ok(), false)
+	equal(t, boxes["absent"].Get(), "")
 }
 
 // TestOptionalOkProvided tests that Ok returns true when the service is provided.

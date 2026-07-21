@@ -17,10 +17,7 @@
 
 package gontainer
 
-import (
-	"reflect"
-	"strings"
-)
+import "reflect"
 
 // Multiple defines a dependency on zero or more services of the same type.
 //
@@ -40,6 +37,16 @@ import (
 //	}
 type Multiple[T any] []T
 
+// multipleElem reports the wrapped element type T.
+func (m Multiple[T]) multipleElem() reflect.Type {
+	return reflect.TypeOf((*T)(nil)).Elem()
+}
+
+// multipleBox is the internal contract implemented only by Multiple[T].
+type multipleBox interface {
+	multipleElem() reflect.Type
+}
+
 // isMultipleType checks and returns multiple box type.
 func isMultipleType(typ reflect.Type) (reflect.Type, bool) {
 	// Check if the type is a slice.
@@ -48,24 +55,15 @@ func isMultipleType(typ reflect.Type) (reflect.Type, bool) {
 	}
 
 	// Check if the type is a Multiple type.
-	sample := reflect.TypeOf(Multiple[struct{}]{})
-	if typ.PkgPath() != sample.PkgPath() {
+	box, ok := reflect.Zero(typ).Interface().(multipleBox)
+	if !ok {
 		return nil, false
 	}
 
-	// Check if the type is a Multiple type.
-	sampleName := sample.Name()
-	sep := strings.IndexByte(sampleName, '[')
-	if sep < 0 || !strings.HasPrefix(typ.Name(), sampleName[:sep+1]) {
-		return nil, false
-	}
-
-	// Return the element type of the slice.
-	return typ.Elem(), true
+	return box.multipleElem(), true
 }
 
 // newMultipleValue packs multiple values to the slice.
 func newMultipleValue(typ reflect.Type, values []reflect.Value) reflect.Value {
-	box := reflect.New(typ).Elem()
-	return reflect.Append(box, values...)
+	return reflect.Append(reflect.Zero(typ), values...)
 }

@@ -17,10 +17,7 @@
 
 package gontainer
 
-import (
-	"reflect"
-	"strings"
-)
+import "reflect"
 
 // Optional defines a dependency on a service that may or may not be registered.
 //
@@ -43,19 +40,38 @@ type Optional[T any] struct {
 }
 
 // Get returns the optional service instance.
-func (o *Optional[T]) Get() T {
+func (o Optional[T]) Get() T {
 	return o.value
 }
 
 // Ok reports whether the optional service was provided by the container.
-func (o *Optional[T]) Ok() bool {
+func (o Optional[T]) Ok() bool {
 	return o.ok
 }
 
-// setValue populates the private value field.
-func (o *Optional[T]) setValue(v reflect.Value) {
-	reflect.ValueOf(&o.value).Elem().Set(v)
-	o.ok = true
+// optionalSelf reports Optional's own instantiated type, used to reject types
+// that merely embed Optional[T] and promote its methods.
+func (o Optional[T]) optionalSelf() reflect.Type {
+	return reflect.TypeOf(o)
+}
+
+// optionalElem reports the wrapped type T.
+func (o Optional[T]) optionalElem() reflect.Type {
+	return reflect.TypeOf((*T)(nil)).Elem()
+}
+
+// withValue returns a present optional box carrying v. The comma-ok assertion
+// keeps a nil interface value as the zero T with ok set, instead of panicking.
+func (o Optional[T]) withValue(v reflect.Value) any {
+	value, _ := v.Interface().(T)
+	return Optional[T]{value: value, ok: true}
+}
+
+// optionalBox is the internal contract implemented only by Optional[T].
+type optionalBox interface {
+	optionalSelf() reflect.Type
+	optionalElem() reflect.Type
+	withValue(v reflect.Value) any
 }
 
 // isOptionalType checks and returns optional box type.
@@ -65,38 +81,19 @@ func isOptionalType(typ reflect.Type) (reflect.Type, bool) {
 		return nil, false
 	}
 
-	// Check if the type is a Optional type.
-	sample := reflect.TypeOf(Optional[struct{}]{})
-	if typ.PkgPath() != sample.PkgPath() {
+	// Check if the type is an Optional type, rejecting structs that only embed it.
+	box, ok := reflect.Zero(typ).Interface().(optionalBox)
+	if !ok || box.optionalSelf() != typ {
 		return nil, false
 	}
 
-	// Check if the type is a Optional type.
-	sampleName := sample.Name()
-	sep := strings.IndexByte(sampleName, '[')
-	if sep < 0 || !strings.HasPrefix(typ.Name(), sampleName[:sep+1]) {
-		return nil, false
-	}
-
-	// Check if the type has a value field.
-	field, ok := typ.FieldByName("value")
-	if !ok {
-		return nil, false
-	}
-
-	// Return the type of the value field.
-	return field.Type, true
+	return box.optionalElem(), true
 }
 
 // newOptionalValue creates new optional type with a value.
 func newOptionalValue(typ reflect.Type, value reflect.Value) reflect.Value {
-	// Allocate an addressable pointer to a zero Optional[T].
-	ptr := reflect.New(typ)
-
-	// Populate the private field via the internal setter interface.
-	ptr.Interface().(interface{ setValue(reflect.Value) }).setValue(value)
-
-	return ptr.Elem()
+	box := reflect.Zero(typ).Interface().(optionalBox)
+	return reflect.ValueOf(box.withValue(value))
 }
 
 // newOptionalZero creates a new optional type with no value and ok set to false.

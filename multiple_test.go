@@ -44,6 +44,40 @@ func TestIsMultipleType(t *testing.T) {
 	equal(t, ok, true)
 }
 
+// TestIsMultipleTypePointer tests that a *Multiple[T] type is rejected without a panic.
+func TestIsMultipleTypePointer(t *testing.T) {
+	typ := reflect.TypeOf((*Multiple[int])(nil))
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("isMultipleType panicked on *Multiple[int]: %v", r)
+		}
+	}()
+
+	rtyp, ok := isMultipleType(typ)
+	equal(t, rtyp, nil)
+	equal(t, ok, false)
+}
+
+// TestIsMultipleTypeEmbedded verifies that a user struct embedding Multiple[T]
+// is not misdetected as a multiple box.
+func TestIsMultipleTypeEmbedded(t *testing.T) {
+	// embedsMultiple inherits all embedded type methods.
+	type embedsMultiple struct {
+		Multiple[int]
+	}
+
+	typ := reflect.TypeOf(embedsMultiple{})
+
+	// The embedder satisfies multipleBox through promotion.
+	_, satisfies := reflect.Zero(typ).Interface().(multipleBox)
+	equal(t, satisfies, true)
+
+	rtyp, ok := isMultipleType(typ)
+	equal(t, ok, false)
+	equal(t, rtyp, nil)
+}
+
 // TestNewMultipleValue tests creation of multiple value.
 func TestNewMultipleValue(t *testing.T) {
 	// When multiple not found.
