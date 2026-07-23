@@ -110,7 +110,7 @@ type Option interface {
 // that occur later for a valid factory (during dependency resolution, graph construction,
 // factory execution, or cleanup) are reported as an error from Run, never as a panic.
 func NewFactory(function any, opts ...FactoryOption) *Factory {
-	// Examples of valid factory functions, shown to the caller on misuse.
+	// Examples shown to the caller on misuse.
 	const examples = "Valid usage:\n" +
 		"  gontainer.NewFactory(func(/* deps */) *Service { ... })\n" +
 		"  gontainer.NewFactory(func(/* deps */) (*Service, error) { ... })\n" +
@@ -320,12 +320,11 @@ func (s *factorySettings) appendAnnotation(value any) {
 //
 // NewEntrypoint validates its function argument at the public API boundary and
 // panics on a programmer error: when function is an untyped nil, is not a
-// function, is a typed nil function, or has an unsupported signature. Every
-// panic message is prefixed with "gontainer:". Failures that occur later for a
-// valid entrypoint (during dependency resolution or entrypoint execution) are
-// reported as an error from Run, never as a panic.
+// function, is a typed nil function, or has an unsupported signature. Failures
+// that occur later for a valid entrypoint (during dependency resolution or entrypoint
+// execution) are reported as an error from Run, never as a panic.
 func NewEntrypoint(function any, opts ...EntrypointOption) *Entrypoint {
-	// Examples of valid entrypoint functions, shown to the caller on misuse.
+	// Examples shown to the caller on misuse.
 	const examples = "Valid usage:\n" +
 		"  gontainer.NewEntrypoint(func(/* deps */) { ... })\n" +
 		"  gontainer.NewEntrypoint(func(/* deps */) error { ... })"
@@ -363,8 +362,7 @@ func NewEntrypoint(function any, opts ...EntrypointOption) *Entrypoint {
 	var getOutClose getOutCloseFn
 	var getOutError getOutErrorFn
 
-	// Resolve the output getters for the supported entrypoint signatures,
-	// rejecting any unsupported signature at the public API boundary.
+	// Prepare value and error getters.
 	switch {
 	// Function returns nothing.
 	case funcType.NumOut() == 0:
