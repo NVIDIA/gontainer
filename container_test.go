@@ -397,6 +397,58 @@ func TestLifecycleCleanupRunsExactlyOnce(t *testing.T) {
 	equal(t, countB.Load(), int32(1))
 }
 
+// TestLifecycleFactoryErrorJoinedWithCleanupError verifies that when a factory
+// fails and a cleanup callback also fails, both the primary error and the
+// cleanup error are preserved together on the joined result.
+func TestLifecycleFactoryErrorJoinedWithCleanupError(t *testing.T) {
+	type serviceA struct{}
+	type serviceB struct{}
+
+	factoryErr := errors.New("factory boom")
+	closeErr := errors.New("a close failed")
+
+	// serviceA registers a failing cleanup; serviceB then fails to build.
+	err := Run(
+		NewFactory(func() (*serviceA, func() error) {
+			return &serviceA{}, func() error { return closeErr }
+		}),
+		NewFactory(func(*serviceA) (*serviceB, error) {
+			return nil, factoryErr
+		}),
+		NewEntrypoint(func(*serviceB) {}),
+	)
+
+	// Both the primary factory error and the cleanup error must be reachable.
+	equal(t, err != nil, true)
+	equal(t, errors.Is(err, factoryErr), true)
+	equal(t, errors.Is(err, closeErr), true)
+	equal(t, errors.Is(err, ErrFactoryReturnedError), true)
+}
+
+// TestLifecycleEntrypointErrorJoinedWithCleanupError verifies that when the
+// entrypoint fails and a cleanup callback also fails, both the primary error
+// and the cleanup error are preserved together on the joined result.
+func TestLifecycleEntrypointErrorJoinedWithCleanupError(t *testing.T) {
+	type serviceA struct{}
+
+	entrypointErr := errors.New("entrypoint boom")
+	closeErr := errors.New("a close failed")
+
+	// serviceA registers a failing cleanup; the entrypoint then returns an error.
+	err := Run(
+		NewFactory(func() (*serviceA, func() error) {
+			return &serviceA{}, func() error { return closeErr }
+		}),
+		NewEntrypoint(func(*serviceA) error { return entrypointErr }),
+	)
+
+	// Both the primary entrypoint error and the cleanup error must be reachable.
+	equal(t, err != nil, true)
+	equal(t, errors.Is(err, entrypointErr), true)
+	equal(t, errors.Is(err, closeErr), true)
+	equal(t, errors.Is(err, ErrEntrypointReturnedError), true)
+}
+
 // TestLifecycleFactoryPanicSkipsCleanup verifies that a panic raised inside a
 // factory propagates out of Run unchanged and skips every cleanup callback,
 // including those already registered by its dependencies.
