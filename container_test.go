@@ -396,3 +396,70 @@ func TestLifecycleCleanupRunsExactlyOnce(t *testing.T) {
 	equal(t, countA.Load(), int32(1))
 	equal(t, countB.Load(), int32(1))
 }
+
+// TestLifecycleFactoryPanicSkipsCleanup verifies that a panic raised inside a
+// factory propagates out of Run unchanged and skips every cleanup callback,
+// including those already registered by its dependencies.
+func TestLifecycleFactoryPanicSkipsCleanup(t *testing.T) {
+	type serviceA struct{}
+	type serviceB struct{}
+
+	// Track whether the dependency's cleanup callback was invoked.
+	cleaned := atomic.Bool{}
+	var recovered any
+
+	// Run the container in a helper that recovers the propagated panic so the
+	// test process survives; Run itself must not recover.
+	func() {
+		defer func() { recovered = recover() }()
+
+		_ = Run(
+			NewFactory(func() (*serviceA, func() error) {
+				return &serviceA{}, func() error {
+					cleaned.Store(true)
+					return nil
+				}
+			}),
+			NewFactory(func(*serviceA) *serviceB {
+				panic("factory boom")
+			}),
+			NewEntrypoint(func(*serviceB) {}),
+		)
+	}()
+
+	// The panic must reach the caller unchanged and skip all cleanup.
+	equal(t, recovered, "factory boom")
+	equal(t, cleaned.Load(), false)
+}
+
+// TestLifecycleEntrypointPanicSkipsCleanup verifies that a panic raised inside
+// an entrypoint propagates out of Run unchanged and skips every cleanup callback.
+func TestLifecycleEntrypointPanicSkipsCleanup(t *testing.T) {
+	type serviceA struct{}
+
+	// Track whether the cleanup callback was invoked.
+	cleaned := atomic.Bool{}
+	var recovered any
+
+	// Run the container in a helper that recovers the propagated panic so the
+	// test process survives; Run itself must not recover.
+	func() {
+		defer func() { recovered = recover() }()
+
+		_ = Run(
+			NewFactory(func() (*serviceA, func() error) {
+				return &serviceA{}, func() error {
+					cleaned.Store(true)
+					return nil
+				}
+			}),
+			NewEntrypoint(func(*serviceA) {
+				panic("entrypoint boom")
+			}),
+		)
+	}()
+
+	// The panic must reach the caller unchanged and skip all cleanup.
+	equal(t, recovered, "entrypoint boom")
+	equal(t, cleaned.Load(), false)
+}
