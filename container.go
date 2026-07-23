@@ -69,8 +69,23 @@ func Run(options ...Option) error {
 	// Close all factories in the reverse order.
 	closeErr := registry.closeFactories()
 
-	// Join the invocation and teardown errors.
-	return errors.Join(invokeErr, closeErr)
+	// Return the joined invocation and teardown errors.
+	if invokeErr != nil && closeErr != nil {
+		return errors.Join(invokeErr, closeErr)
+	}
+
+	// Return the invocation error if it occurred.
+	if invokeErr != nil {
+		return invokeErr
+	}
+
+	// Return the teardown error if it occurred.
+	if closeErr != nil {
+		return closeErr
+	}
+
+	// No errors occurred.
+	return nil
 }
 
 // Option is the interface for container options.
