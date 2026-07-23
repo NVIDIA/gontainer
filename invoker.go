@@ -48,10 +48,9 @@ type Invoker struct {
 //
 // Invoke validates its function argument at the public API boundary and panics
 // on a programmer error: when function is an untyped nil, is not a function, or
-// is a typed nil function. The panic message is prefixed with "gontainer:". For
-// a valid function, Invoke returns an error only when a dependency cannot be
-// resolved; errors produced by the function itself are returned among the []any
-// results, not as the error.
+// is a typed nil function. For a valid function, Invoke returns an error only when
+// a dependency cannot be resolved; errors produced by the function itself are returned
+// among the []any results, not as the error.
 func (i *Invoker) Invoke(function any) ([]any, error) {
 	// Validate the function is not a nil.
 	funcType := reflect.TypeOf(function)

@@ -42,9 +42,8 @@ type Resolver struct {
 //
 // Resolve validates its target argument at the public API boundary and panics on
 // a programmer error: when target is an untyped nil, is not a pointer, is a nil
-// pointer, or points to a value that cannot be set. The panic message is prefixed
-// with "gontainer:". For a valid pointer, Resolve returns an error when the
-// requested service is not found or cannot be resolved.
+// pointer, or points to a value that cannot be set. For a valid pointer, Resolve
+// returns an error when the requested service is not found or cannot be resolved.
 func (r *Resolver) Resolve(target any) error {
 	// Validate the target is not a nil.
 	pointerType := reflect.TypeOf(target)
