@@ -18,6 +18,7 @@
 package gontainer
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -28,7 +29,10 @@ import (
 //
 // Run registers the provided options, validates the registry, invokes
 // entrypoints synchronously, and then tears down all spawned factories
-// in reverse order. It returns when all entrypoints have returned and
+// in reverse acquisition order. Teardown runs on every outcome: after a
+// successful execution, after a factory error, and after an entrypoint
+// error. The primary error and every cleanup error are preserved together
+// via errors.Join. It returns when all entrypoints have returned and
 // teardown has completed.
 func Run(options ...Option) error {
 	// Prepare services registry instance.
@@ -62,18 +66,14 @@ func Run(options ...Option) error {
 		return err
 	}
 
-	// Start all factories in the container.
-	if err := registry.invokeEntrypoints(); err != nil {
-		return err
-	}
+	// Invoke all specified entrypoints.
+	invokeErr := registry.invokeEntrypoints()
 
-	// Close all factories in the container.
-	if err := registry.closeFactories(); err != nil {
-		return err
-	}
+	// Close all factories in the reverse order.
+	closeErr := registry.closeFactories()
 
-	// Service container executed.
-	return nil
+	// Join the invocation and teardown errors.
+	return errors.Join(invokeErr, closeErr)
 }
 
 // Option is the interface for container options.
