@@ -46,19 +46,24 @@ type Resolver struct {
 // with "gontainer:". For a valid pointer, Resolve returns an error when the
 // requested service is not found or cannot be resolved.
 func (r *Resolver) Resolve(target any) error {
-	// Validate the target at the public API boundary, rejecting an untyped nil, a
-	// non-pointer, a nil pointer, or a pointer to a non-writable value.
+	// Validate the target is not a nil.
 	pointerType := reflect.TypeOf(target)
 	if pointerType == nil {
 		panic(fmt.Sprintf("%s Resolver.Resolve: expected a non-nil pointer, got nil", panicPrefix))
 	}
+
+	// Validate the target type is a pointer.
 	if pointerType.Kind() != reflect.Pointer {
 		panic(fmt.Sprintf("%s Resolver.Resolve: expected a non-nil pointer, got %s", panicPrefix, pointerType))
 	}
+
+	// Validate the target value is not a nil pointer.
 	pointerValue := reflect.ValueOf(target)
 	if pointerValue.IsNil() {
 		panic(fmt.Sprintf("%s Resolver.Resolve: expected a non-nil pointer, got nil %s", panicPrefix, pointerType))
 	}
+
+	// Validate the target value is a writable value.
 	value := pointerValue.Elem()
 	if !value.CanSet() {
 		panic(fmt.Sprintf("%s Resolver.Resolve: expected a pointer to a writable value, got %s", panicPrefix, pointerType))

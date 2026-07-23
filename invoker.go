@@ -53,15 +53,18 @@ type Invoker struct {
 // resolved; errors produced by the function itself are returned among the []any
 // results, not as the error.
 func (i *Invoker) Invoke(function any) ([]any, error) {
-	// Validate the function at the public API boundary, rejecting an untyped nil,
-	// a non-function, or a typed nil function with a clear message.
+	// Validate the function is not a nil.
 	funcType := reflect.TypeOf(function)
 	if funcType == nil {
 		panic(fmt.Sprintf("%s Invoker.Invoke: expected a function, got nil", panicPrefix))
 	}
+
+	// Validate the function type is a function.
 	if funcType.Kind() != reflect.Func {
 		panic(fmt.Sprintf("%s Invoker.Invoke: expected a function, got %s", panicPrefix, funcType))
 	}
+
+	// Validate the function value is not a typed nil.
 	funcValue := reflect.ValueOf(function)
 	if funcValue.IsNil() {
 		panic(fmt.Sprintf("%s Invoker.Invoke: expected a non-nil function, got nil %s", panicPrefix, funcType))

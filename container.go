@@ -99,10 +99,10 @@ type Option interface {
 // exactly one service instance, optionally followed by a cleanup callback and/or
 // an error. The supported signatures are:
 //
-//	gontainer.NewFactory(func(db *Database) *Handler { ... })
-//	gontainer.NewFactory(func(db *Database) (*Handler, error) { ... })
-//	gontainer.NewFactory(func(db *Database) (*Handler, func() error) { ... })
-//	gontainer.NewFactory(func(db *Database) (*Handler, func() error, error) { ... })
+//	gontainer.NewFactory(func(/* deps */) *Service { ... })
+//	gontainer.NewFactory(func(/* deps */) (*Service, error) { ... })
+//	gontainer.NewFactory(func(/* deps */) (*Service, func() error) { ... })
+//	gontainer.NewFactory(func(/* deps */) (*Service, func() error, error) { ... })
 //
 // NewFactory validates its function argument at the public API boundary and
 // panics on a programmer error: when function is an untyped nil, is not a
@@ -315,8 +315,8 @@ func (s *factorySettings) appendAnnotation(value any) {
 // The entrypoint function may accept dependencies as input parameters and must
 // return nothing or a single error. The supported signatures are:
 //
-//	gontainer.NewEntrypoint(func(db *Database) { ... })
-//	gontainer.NewEntrypoint(func(db *Database) error { ... })
+//	gontainer.NewEntrypoint(func(/* deps */) { ... })
+//	gontainer.NewEntrypoint(func(/* deps */) error { ... })
 //
 // NewEntrypoint validates its function argument at the public API boundary and
 // panics on a programmer error: when function is an untyped nil, is not a
