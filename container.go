@@ -29,10 +29,7 @@ import (
 //
 // Run registers the provided options, validates the registry, invokes
 // entrypoints synchronously, and then tears down all spawned factories
-// in reverse acquisition order. Teardown runs on every outcome: after a
-// successful execution, after a factory error, and after an entrypoint
-// error. The primary error and every cleanup error are preserved together
-// via errors.Join. It returns when all entrypoints have returned and
+// in reverse order. It returns when all entrypoints have returned and
 // teardown has completed.
 func Run(options ...Option) error {
 	// Prepare services registry instance.
