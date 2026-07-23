@@ -93,23 +93,49 @@ type Option interface {
 	apply(registry *registry) error
 }
 
-// NewFactory creates a new service load using the provided load function.
+// NewFactory creates a new service factory using the provided load function.
 //
-// The load function must be a function. It may accept dependencies as input parameters and return
-// exactly one service instances, optionally followed by an error as the second return value.
-//
-// Example:
+// The load function may accept dependencies as input parameters and must return
+// exactly one service instance, optionally followed by a cleanup callback and/or
+// an error. The supported signatures are:
 //
 //	gontainer.NewFactory(func(db *Database) *Handler { ... })
 //	gontainer.NewFactory(func(db *Database) (*Handler, error) { ... })
 //	gontainer.NewFactory(func(db *Database) (*Handler, func() error) { ... })
 //	gontainer.NewFactory(func(db *Database) (*Handler, func() error, error) { ... })
+//
+// NewFactory validates its function argument at the public API boundary and
+// panics on a programmer error: when function is an untyped nil, is not a
+// function, is a typed nil function, or has an unsupported signature. Failures
+// that occur later for a valid factory (during dependency resolution, graph construction,
+// factory execution, or cleanup) are reported as an error from Run, never as a panic.
 func NewFactory(function any, opts ...FactoryOption) *Factory {
-	funcValue := reflect.ValueOf(function)
+	// Examples of valid factory functions, shown to the caller on misuse.
+	const examples = "Valid usage:\n" +
+		"  gontainer.NewFactory(func(/* deps */) *Service { ... })\n" +
+		"  gontainer.NewFactory(func(/* deps */) (*Service, error) { ... })\n" +
+		"  gontainer.NewFactory(func(/* deps */) (*Service, func() error) { ... })\n" +
+		"  gontainer.NewFactory(func(/* deps */) (*Service, func() error, error) { ... })"
+
+	// Validate the function is not a nil.
 	funcType := reflect.TypeOf(function)
+	if funcType == nil {
+		panic(fmt.Sprintf("%s NewFactory: expected a function, got nil\n\n%s", panicPrefix, examples))
+	}
+
+	// Validate the function type is a function.
+	if funcType.Kind() != reflect.Func {
+		panic(fmt.Sprintf("%s NewFactory: expected a function, got %s\n\n%s", panicPrefix, funcType, examples))
+	}
+
+	// Validate the function value is not a typed nil.
+	funcValue := reflect.ValueOf(function)
+	if funcValue.IsNil() {
+		panic(fmt.Sprintf("%s NewFactory: expected a non-nil function, got nil %s\n\n%s", panicPrefix, funcType, examples))
+	}
 
 	// Prepare factory description.
-	name := fmt.Sprintf("Factory[%s]", funcValue.Type())
+	name := fmt.Sprintf("Factory[%s]", funcType)
 	source := getCallerSource(1)
 
 	// Prepare factory settings.
@@ -118,58 +144,53 @@ func NewFactory(function any, opts ...FactoryOption) *Factory {
 		opt.applyFactory(&settings)
 	}
 
+	// Prepare default value and error getters.
+	var getOutType getOutTypeFn
+	var getOutValue getOutValueFn
+	var getOutClose getOutCloseFn
+	var getOutError getOutErrorFn
+
+	// Prepare value and error getters.
+	switch {
+	// Factory returns exactly one service.
+	case funcType.NumOut() == 1 && !isEmptyInterface(funcType.Out(0)) && !isErrorInterface(funcType.Out(0)):
+		getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
+		getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+		getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+		getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+
+	// Factory returns a service and an error.
+	case funcType.NumOut() == 2 && !isEmptyInterface(funcType.Out(0)) && !isErrorInterface(funcType.Out(0)) && isErrorInterface(funcType.Out(1)):
+		getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
+		getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+		getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+		getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
+
+	// Factory returns a service and a close callback.
+	case funcType.NumOut() == 2 && !isEmptyInterface(funcType.Out(0)) && !isErrorInterface(funcType.Out(0)) && isCloseCallback(funcType.Out(1)):
+		getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
+		getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+		getOutClose = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
+		getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+
+	// Factory returns a service, a close callback and an error.
+	case funcType.NumOut() == 3 && !isEmptyInterface(funcType.Out(0)) && !isErrorInterface(funcType.Out(0)) && isCloseCallback(funcType.Out(1)) && isErrorInterface(funcType.Out(2)):
+		getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
+		getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+		getOutClose = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
+		getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[2] }
+
+	// Factory signature is unsupported.
+	default:
+		panic(fmt.Sprintf("%s NewFactory: unsupported function signature %s\n\n%s", panicPrefix, funcType, examples))
+	}
+
 	// Prepare factory instance.
 	return &Factory{
 		name:        name,
 		source:      source,
 		annotations: settings.annotations,
 		register: func(registry *registry) error {
-			// Validate function type.
-			if funcType.Kind() != reflect.Func {
-				return fmt.Errorf("invalid type: %s", funcType)
-			}
-
-			// Prepare default value and error getters.
-			var getOutType getOutTypeFn
-			var getOutValue getOutValueFn
-			var getOutClose getOutCloseFn
-			var getOutError getOutErrorFn
-
-			// Prepare value and error getters.
-			switch {
-			// Factory returns exactly one service.
-			case funcType.NumOut() == 1 && !isEmptyInterface(funcType.Out(0)) && !isErrorInterface(funcType.Out(0)):
-				getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
-				getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
-				getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
-				getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
-
-			// Factory returns a service and an error.
-			case funcType.NumOut() == 2 && !isEmptyInterface(funcType.Out(0)) && !isErrorInterface(funcType.Out(0)) && isErrorInterface(funcType.Out(1)):
-				getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
-				getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
-				getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
-				getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
-
-			// Factory returns a service and a close callback.
-			case funcType.NumOut() == 2 && !isEmptyInterface(funcType.Out(0)) && !isErrorInterface(funcType.Out(0)) && isCloseCallback(funcType.Out(1)):
-				getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
-				getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
-				getOutClose = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
-				getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
-
-			// Factory returns a service, a close callback and an error.
-			case funcType.NumOut() == 3 && !isEmptyInterface(funcType.Out(0)) && !isErrorInterface(funcType.Out(0)) && isCloseCallback(funcType.Out(1)) && isErrorInterface(funcType.Out(2)):
-				getOutType = func(outTypes []reflect.Type) reflect.Type { return outTypes[0] }
-				getOutValue = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
-				getOutClose = func(outValues []reflect.Value) reflect.Value { return outValues[1] }
-				getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[2] }
-
-			// Factory signature is invalid.
-			default:
-				return fmt.Errorf("invalid signature: %s", funcType)
-			}
-
 			// Load the factory internal representation.
 			state, err := newFactory(
 				kindFactory, name, source, funcValue,
@@ -289,18 +310,45 @@ func (s *factorySettings) appendAnnotation(value any) {
 	s.annotations = append(s.annotations, value)
 }
 
-// NewEntrypoint creates a new factory which will be called by the container.
+// NewEntrypoint creates a new entrypoint function which will be called by the container.
 //
-// Example:
+// The entrypoint function may accept dependencies as input parameters and must
+// return nothing or a single error. The supported signatures are:
 //
-//	gontainer.NewEntrypoint(func(db *Database) error { ... })
 //	gontainer.NewEntrypoint(func(db *Database) { ... })
+//	gontainer.NewEntrypoint(func(db *Database) error { ... })
+//
+// NewEntrypoint validates its function argument at the public API boundary and
+// panics on a programmer error: when function is an untyped nil, is not a
+// function, is a typed nil function, or has an unsupported signature. Every
+// panic message is prefixed with "gontainer:". Failures that occur later for a
+// valid entrypoint (during dependency resolution or entrypoint execution) are
+// reported as an error from Run, never as a panic.
 func NewEntrypoint(function any, opts ...EntrypointOption) *Entrypoint {
-	funcValue := reflect.ValueOf(function)
+	// Examples of valid entrypoint functions, shown to the caller on misuse.
+	const examples = "Valid usage:\n" +
+		"  gontainer.NewEntrypoint(func(/* deps */) { ... })\n" +
+		"  gontainer.NewEntrypoint(func(/* deps */) error { ... })"
+
+	// Validate the function is not a nil.
 	funcType := reflect.TypeOf(function)
+	if funcType == nil {
+		panic(fmt.Sprintf("%s NewEntrypoint: expected a function, got nil\n\n%s", panicPrefix, examples))
+	}
+
+	// Validate the function type is a function.
+	if funcType.Kind() != reflect.Func {
+		panic(fmt.Sprintf("%s NewEntrypoint: expected a function, got %s\n\n%s", panicPrefix, funcType, examples))
+	}
+
+	// Validate the function value is not a typed nil.
+	funcValue := reflect.ValueOf(function)
+	if funcValue.IsNil() {
+		panic(fmt.Sprintf("%s NewEntrypoint: expected a non-nil function, got nil %s\n\n%s", panicPrefix, funcType, examples))
+	}
 
 	// Prepare entrypoint description.
-	name := fmt.Sprintf("Entrypoint[%s]", funcValue.Type())
+	name := fmt.Sprintf("Entrypoint[%s]", funcType)
 	source := getCallerSource(1)
 
 	// Prepare entrypoint settings.
@@ -309,44 +357,40 @@ func NewEntrypoint(function any, opts ...EntrypointOption) *Entrypoint {
 		opt.applyEntrypoint(&settings)
 	}
 
+	// Prepare default value and error getters.
+	var getOutType getOutTypeFn
+	var getOutValue getOutValueFn
+	var getOutClose getOutCloseFn
+	var getOutError getOutErrorFn
+
+	// Resolve the output getters for the supported entrypoint signatures,
+	// rejecting any unsupported signature at the public API boundary.
+	switch {
+	// Function returns nothing.
+	case funcType.NumOut() == 0:
+		getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
+		getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+		getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+		getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+
+	// Function returns an error.
+	case funcType.NumOut() == 1 && isErrorInterface(funcType.Out(0)):
+		getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
+		getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+		getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
+		getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
+
+	// Function signature is unsupported.
+	default:
+		panic(fmt.Sprintf("%s NewEntrypoint: unsupported function signature %s\n\n%s", panicPrefix, funcType, examples))
+	}
+
 	// Prepare entrypoint instance.
 	return &Entrypoint{
 		name:        name,
 		source:      source,
 		annotations: settings.annotations,
 		register: func(registry *registry) error {
-			// Validate function type.
-			if funcType.Kind() != reflect.Func {
-				return fmt.Errorf("invalid type: %s", funcType)
-			}
-
-			// Prepare default value and error getters.
-			var getOutType getOutTypeFn
-			var getOutValue getOutValueFn
-			var getOutClose getOutCloseFn
-			var getOutError getOutErrorFn
-
-			// Prepare value and error getters.
-			switch {
-			// Function returns nothing.
-			case funcType.NumOut() == 0:
-				getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
-				getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
-				getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
-				getOutError = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
-
-			// Function returns an error.
-			case funcType.NumOut() == 1 && isErrorInterface(funcType.Out(0)):
-				getOutType = func(outTypes []reflect.Type) reflect.Type { return nil }
-				getOutValue = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
-				getOutClose = func(outValues []reflect.Value) reflect.Value { return reflect.Value{} }
-				getOutError = func(outValues []reflect.Value) reflect.Value { return outValues[0] }
-
-			// Function signature is invalid.
-			default:
-				return fmt.Errorf("invalid signature: %s", funcType)
-			}
-
 			// Load the factory internal representation.
 			state, err := newFactory(
 				kindEntrypoint, name, source, funcValue,

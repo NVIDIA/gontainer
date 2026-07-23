@@ -24,7 +24,7 @@ import (
 
 // Invoker invokes functions with automatic dependency resolution.
 //
-// The Invoke method accepts a function `fn`, resolves its input parameters using the invoker's
+// The Invoke method accepts a function, resolves its input parameters using the invoker's
 // dependency resolver, and then calls the function with the resolved arguments.
 //
 // If the container has not been started yet, dependency resolution happens in lazy mode — only
@@ -32,22 +32,39 @@ import (
 //
 // The Invoke method returns:
 //   - []any - all values returned by the function (including any errors)
-//   - error - only if dependency resolution fails or fn is not a function
+//   - error - only if dependency resolution fails
 //
 // All return values from the invoked function are collected in the []any slice,
 // including any error values. The caller is responsible for checking and handling
 // these values as appropriate.
+//
+// Invoke panics when its function argument is not a valid, non-nil function; see
+// the Invoke method for details.
 type Invoker struct {
 	registry *registry
 }
 
-// Invoke invokes specified function.
+// Invoke invokes the specified function with dependencies resolved from the container.
+//
+// Invoke validates its function argument at the public API boundary and panics
+// on a programmer error: when function is an untyped nil, is not a function, or
+// is a typed nil function. The panic message is prefixed with "gontainer:". For
+// a valid function, Invoke returns an error only when a dependency cannot be
+// resolved; errors produced by the function itself are returned among the []any
+// results, not as the error.
 func (i *Invoker) Invoke(function any) ([]any, error) {
-	// Get reflection of the function.
-	funcValue := reflect.ValueOf(function)
+	// Validate the function at the public API boundary, rejecting an untyped nil,
+	// a non-function, or a typed nil function with a clear message.
 	funcType := reflect.TypeOf(function)
-	if funcType == nil || funcType.Kind() != reflect.Func {
-		return nil, fmt.Errorf("invalid type: %v", funcType)
+	if funcType == nil {
+		panic(fmt.Sprintf("%s Invoker.Invoke: expected a function, got nil", panicPrefix))
+	}
+	if funcType.Kind() != reflect.Func {
+		panic(fmt.Sprintf("%s Invoker.Invoke: expected a function, got %s", panicPrefix, funcType))
+	}
+	funcValue := reflect.ValueOf(function)
+	if funcValue.IsNil() {
+		panic(fmt.Sprintf("%s Invoker.Invoke: expected a non-nil function, got nil %s", panicPrefix, funcType))
 	}
 
 	// Resolve function arguments.

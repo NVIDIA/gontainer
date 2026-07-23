@@ -24,6 +24,10 @@ import (
 	"strings"
 )
 
+// panicPrefix is the stable prefix shared by every programmer-error panic so
+// callers can reliably recognize a gontainer misuse panic.
+const panicPrefix = "gontainer:"
+
 // ErrFactoryTypeDuplicated declares service duplicated error.
 var ErrFactoryTypeDuplicated = errors.New("factory type duplicated")
 

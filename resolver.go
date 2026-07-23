@@ -18,30 +18,59 @@
 package gontainer
 
 import (
+	"fmt"
 	"reflect"
 )
 
 // Resolver resolves service dependencies.
 //
-// The Resolve method accepts a pointer to a variable (`varPtr`) and attempts to populate it
-// with an instance of the requested type. The type is determined via reflection based on the
-// element type of `varPtr`.
+// The Resolve method accepts a non-nil pointer to a variable and populates it with an instance
+// of the requested type. The type is determined via reflection from the element the pointer
+// refers to.
 //
 // If the container has not been started yet, Resolve operates in lazy mode — it instantiates
 // only the requested type and its transitive dependencies on demand.
 //
-// An error is returned if the service of the requested type is not found or cannot be resolved.
+// Resolve panics when its target argument is not a valid, non-nil, writable pointer; see the
+// Resolve method for details. For a valid pointer, an error is returned if the service of the
+// requested type is not found or cannot be resolved.
 type Resolver struct {
 	registry *registry
 }
 
-// Resolve sets the required dependency via the pointer.
-func (r *Resolver) Resolve(varPtr any) error {
-	value := reflect.ValueOf(varPtr).Elem()
+// Resolve populates the target variable with the resolved service.
+//
+// Resolve validates its target argument at the public API boundary and panics on
+// a programmer error: when target is an untyped nil, is not a pointer, is a nil
+// pointer, or points to a value that cannot be set. The panic message is prefixed
+// with "gontainer:". For a valid pointer, Resolve returns an error when the
+// requested service is not found or cannot be resolved.
+func (r *Resolver) Resolve(target any) error {
+	// Validate the target at the public API boundary, rejecting an untyped nil, a
+	// non-pointer, a nil pointer, or a pointer to a non-writable value.
+	pointerType := reflect.TypeOf(target)
+	if pointerType == nil {
+		panic(fmt.Sprintf("%s Resolver.Resolve: expected a non-nil pointer, got nil", panicPrefix))
+	}
+	if pointerType.Kind() != reflect.Pointer {
+		panic(fmt.Sprintf("%s Resolver.Resolve: expected a non-nil pointer, got %s", panicPrefix, pointerType))
+	}
+	pointerValue := reflect.ValueOf(target)
+	if pointerValue.IsNil() {
+		panic(fmt.Sprintf("%s Resolver.Resolve: expected a non-nil pointer, got nil %s", panicPrefix, pointerType))
+	}
+	value := pointerValue.Elem()
+	if !value.CanSet() {
+		panic(fmt.Sprintf("%s Resolver.Resolve: expected a pointer to a writable value, got %s", panicPrefix, pointerType))
+	}
+
+	// Resolve the service by the target element type.
 	result, err := r.registry.resolveService(value.Type())
 	if err != nil {
 		return err
 	}
+
+	// Populate the target with the resolved service.
 	value.Set(result)
 	return nil
 }
