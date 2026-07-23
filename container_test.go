@@ -199,3 +199,319 @@ func normalizeSourceLines(s string) string {
 	sourceLineRegex := regexp.MustCompile(`\n {4}at [^\n]+`)
 	return sourceLineRegex.ReplaceAllString(s, "")
 }
+
+// TestLifecycleCleanupOnFactoryError verifies that cleanup runs when a factory
+// returns an error and that the primary error is preserved alongside the run.
+func TestLifecycleCleanupOnFactoryError(t *testing.T) {
+	type serviceA struct{}
+
+	// Track whether the cleanup callback was invoked.
+	cleaned := atomic.Bool{}
+	factoryErr := errors.New("factory boom")
+
+	// Run a container whose only factory fails after providing a cleanup.
+	err := Run(
+		NewFactory(func() (*serviceA, func() error, error) {
+			return &serviceA{}, func() error {
+				cleaned.Store(true)
+				return nil
+			}, factoryErr
+		}),
+		NewEntrypoint(func(*serviceA) {}),
+	)
+
+	// The cleanup must run and the factory error must be reported.
+	equal(t, cleaned.Load(), true)
+	equal(t, errors.Is(err, factoryErr), true)
+	equal(t, errors.Is(err, ErrFactoryReturnedError), true)
+}
+
+// TestLifecycleCleanupOnEntrypointError verifies that cleanup runs when the
+// entrypoint returns an error and that both errors are preserved.
+func TestLifecycleCleanupOnEntrypointError(t *testing.T) {
+	type serviceA struct{}
+
+	// Track whether the cleanup callback was invoked.
+	cleaned := atomic.Bool{}
+	entrypointErr := errors.New("entrypoint boom")
+
+	// Run a container whose entrypoint fails after the service is acquired.
+	err := Run(
+		NewFactory(func() (*serviceA, func() error) {
+			return &serviceA{}, func() error {
+				cleaned.Store(true)
+				return nil
+			}
+		}),
+		NewEntrypoint(func(*serviceA) error { return entrypointErr }),
+	)
+
+	// The cleanup must run and the entrypoint error must be reported.
+	equal(t, cleaned.Load(), true)
+	equal(t, errors.Is(err, entrypointErr), true)
+	equal(t, errors.Is(err, ErrEntrypointReturnedError), true)
+}
+
+// TestLifecycleCleanupReverseOrder verifies that cleanup callbacks run in the
+// reverse of their acquisition order.
+func TestLifecycleCleanupReverseOrder(t *testing.T) {
+	type serviceA struct{}
+	type serviceB struct{}
+	type serviceC struct{}
+
+	// Record the order in which cleanups run; closeFactories is sequential.
+	var order []string
+
+	// Chain three services so that A is acquired first and C last.
+	err := Run(
+		NewFactory(func() (*serviceA, func() error) {
+			return &serviceA{}, func() error { order = append(order, "A"); return nil }
+		}),
+		NewFactory(func(*serviceA) (*serviceB, func() error) {
+			return &serviceB{}, func() error { order = append(order, "B"); return nil }
+		}),
+		NewFactory(func(*serviceB) (*serviceC, func() error) {
+			return &serviceC{}, func() error { order = append(order, "C"); return nil }
+		}),
+		NewEntrypoint(func(*serviceC) {}),
+	)
+
+	// Cleanups must unwind in reverse acquisition order.
+	equal(t, err, nil)
+	equal(t, order, []string{"C", "B", "A"})
+}
+
+// TestLifecycleCleanupErrorFactoryRunsBeforeDependencies verifies that a factory
+// returning both a cleanup and an error has its cleanup invoked before its
+// dependencies, and that the service value returned with the error is not exposed.
+func TestLifecycleCleanupErrorFactoryRunsBeforeDependencies(t *testing.T) {
+	type dependency struct{}
+	type failing struct{ id string }
+
+	// Record cleanup order and capture any value injected into the entrypoint.
+	var order []string
+	var injected *failing
+	factoryErr := errors.New("failing factory boom")
+
+	// The failing factory depends on another service that also provides cleanup.
+	err := Run(
+		NewFactory(func() (*dependency, func() error) {
+			return &dependency{}, func() error { order = append(order, "dependency"); return nil }
+		}),
+		NewFactory(func(*dependency) (*failing, func() error, error) {
+			return &failing{id: "leaked"}, func() error { order = append(order, "failing"); return nil }, factoryErr
+		}),
+		NewEntrypoint(func(f *failing) { injected = f }),
+	)
+
+	// The failing factory's cleanup must precede its dependency's cleanup.
+	equal(t, errors.Is(err, factoryErr), true)
+	equal(t, order, []string{"failing", "dependency"})
+
+	// The service returned together with the error must never be injected.
+	equal(t, injected, (*failing)(nil))
+}
+
+// TestLifecycleMultipleCleanupErrors verifies that every cleanup error is
+// preserved together via errors.Join.
+func TestLifecycleMultipleCleanupErrors(t *testing.T) {
+	type serviceA struct{}
+	type serviceB struct{}
+
+	errA := errors.New("cleanup A failed")
+	errB := errors.New("cleanup B failed")
+
+	// Both services fail during cleanup while execution otherwise succeeds.
+	err := Run(
+		NewFactory(func() (*serviceA, func() error) {
+			return &serviceA{}, func() error { return errA }
+		}),
+		NewFactory(func(*serviceA) (*serviceB, func() error) {
+			return &serviceB{}, func() error { return errB }
+		}),
+		NewEntrypoint(func(*serviceB) {}),
+	)
+
+	// Both cleanup errors must be reachable on the joined error.
+	equal(t, err != nil, true)
+	equal(t, errors.Is(err, errA), true)
+	equal(t, errors.Is(err, errB), true)
+}
+
+// TestLifecycleCleanupContinuesAfterError verifies that a failing cleanup does
+// not prevent the remaining cleanup callbacks from running.
+func TestLifecycleCleanupContinuesAfterError(t *testing.T) {
+	type serviceA struct{}
+	type serviceB struct{}
+	type serviceC struct{}
+
+	// Track the cleanups on both sides of the failing one.
+	firstCleaned := atomic.Bool{}
+	lastCleaned := atomic.Bool{}
+	middleErr := errors.New("middle cleanup failed")
+
+	// The middle service fails to clean up; the outer ones must still run.
+	err := Run(
+		NewFactory(func() (*serviceA, func() error) {
+			return &serviceA{}, func() error { firstCleaned.Store(true); return nil }
+		}),
+		NewFactory(func(*serviceA) (*serviceB, func() error) {
+			return &serviceB{}, func() error { return middleErr }
+		}),
+		NewFactory(func(*serviceB) (*serviceC, func() error) {
+			return &serviceC{}, func() error { lastCleaned.Store(true); return nil }
+		}),
+		NewEntrypoint(func(*serviceC) {}),
+	)
+
+	// Cleanups before and after the failing one must both have run.
+	equal(t, errors.Is(err, middleErr), true)
+	equal(t, firstCleaned.Load(), true)
+	equal(t, lastCleaned.Load(), true)
+}
+
+// TestLifecycleCleanupRunsExactlyOnce verifies that no cleanup callback is
+// invoked more than once, even when a factory and a cleanup both fail.
+func TestLifecycleCleanupRunsExactlyOnce(t *testing.T) {
+	type serviceA struct{}
+	type serviceB struct{}
+
+	// Count how many times each cleanup runs.
+	var countA, countB atomic.Int32
+	factoryErr := errors.New("factory boom")
+
+	// serviceB fails with a cleanup and an error; serviceA cleanup also fails.
+	err := Run(
+		NewFactory(func() (*serviceA, func() error) {
+			return &serviceA{}, func() error { countA.Add(1); return errors.New("A close failed") }
+		}),
+		NewFactory(func(*serviceA) (*serviceB, func() error, error) {
+			return &serviceB{}, func() error { countB.Add(1); return nil }, factoryErr
+		}),
+		NewEntrypoint(func(*serviceB) {}),
+	)
+
+	// Each cleanup must run exactly once despite the errors.
+	equal(t, errors.Is(err, factoryErr), true)
+	equal(t, countA.Load(), int32(1))
+	equal(t, countB.Load(), int32(1))
+}
+
+// TestLifecycleFactoryErrorJoinedWithCleanupError verifies that when a factory
+// fails and a cleanup callback also fails, both the primary error and the
+// cleanup error are preserved together on the joined result.
+func TestLifecycleFactoryErrorJoinedWithCleanupError(t *testing.T) {
+	type serviceA struct{}
+	type serviceB struct{}
+
+	factoryErr := errors.New("factory boom")
+	closeErr := errors.New("a close failed")
+
+	// serviceA registers a failing cleanup; serviceB then fails to build.
+	err := Run(
+		NewFactory(func() (*serviceA, func() error) {
+			return &serviceA{}, func() error { return closeErr }
+		}),
+		NewFactory(func(*serviceA) (*serviceB, error) {
+			return nil, factoryErr
+		}),
+		NewEntrypoint(func(*serviceB) {}),
+	)
+
+	// Both the primary factory error and the cleanup error must be reachable.
+	equal(t, err != nil, true)
+	equal(t, errors.Is(err, factoryErr), true)
+	equal(t, errors.Is(err, closeErr), true)
+	equal(t, errors.Is(err, ErrFactoryReturnedError), true)
+}
+
+// TestLifecycleEntrypointErrorJoinedWithCleanupError verifies that when the
+// entrypoint fails and a cleanup callback also fails, both the primary error
+// and the cleanup error are preserved together on the joined result.
+func TestLifecycleEntrypointErrorJoinedWithCleanupError(t *testing.T) {
+	type serviceA struct{}
+
+	entrypointErr := errors.New("entrypoint boom")
+	closeErr := errors.New("a close failed")
+
+	// serviceA registers a failing cleanup; the entrypoint then returns an error.
+	err := Run(
+		NewFactory(func() (*serviceA, func() error) {
+			return &serviceA{}, func() error { return closeErr }
+		}),
+		NewEntrypoint(func(*serviceA) error { return entrypointErr }),
+	)
+
+	// Both the primary entrypoint error and the cleanup error must be reachable.
+	equal(t, err != nil, true)
+	equal(t, errors.Is(err, entrypointErr), true)
+	equal(t, errors.Is(err, closeErr), true)
+	equal(t, errors.Is(err, ErrEntrypointReturnedError), true)
+}
+
+// TestLifecycleFactoryPanicSkipsCleanup verifies that a panic raised inside a
+// factory propagates out of Run unchanged and skips every cleanup callback,
+// including those already registered by its dependencies.
+func TestLifecycleFactoryPanicSkipsCleanup(t *testing.T) {
+	type serviceA struct{}
+	type serviceB struct{}
+
+	// Track whether the dependency's cleanup callback was invoked.
+	cleaned := atomic.Bool{}
+	var recovered any
+
+	// Run the container in a helper that recovers the propagated panic so the
+	// test process survives; Run itself must not recover.
+	func() {
+		defer func() { recovered = recover() }()
+
+		_ = Run(
+			NewFactory(func() (*serviceA, func() error) {
+				return &serviceA{}, func() error {
+					cleaned.Store(true)
+					return nil
+				}
+			}),
+			NewFactory(func(*serviceA) *serviceB {
+				panic("factory boom")
+			}),
+			NewEntrypoint(func(*serviceB) {}),
+		)
+	}()
+
+	// The panic must reach the caller unchanged and skip all cleanup.
+	equal(t, recovered, "factory boom")
+	equal(t, cleaned.Load(), false)
+}
+
+// TestLifecycleEntrypointPanicSkipsCleanup verifies that a panic raised inside
+// an entrypoint propagates out of Run unchanged and skips every cleanup callback.
+func TestLifecycleEntrypointPanicSkipsCleanup(t *testing.T) {
+	type serviceA struct{}
+
+	// Track whether the cleanup callback was invoked.
+	cleaned := atomic.Bool{}
+	var recovered any
+
+	// Run the container in a helper that recovers the propagated panic so the
+	// test process survives; Run itself must not recover.
+	func() {
+		defer func() { recovered = recover() }()
+
+		_ = Run(
+			NewFactory(func() (*serviceA, func() error) {
+				return &serviceA{}, func() error {
+					cleaned.Store(true)
+					return nil
+				}
+			}),
+			NewEntrypoint(func(*serviceA) {
+				panic("entrypoint boom")
+			}),
+		)
+	}()
+
+	// The panic must reach the caller unchanged and skip all cleanup.
+	equal(t, recovered, "entrypoint boom")
+	equal(t, cleaned.Load(), false)
+}

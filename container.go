@@ -18,6 +18,7 @@
 package gontainer
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -62,17 +63,28 @@ func Run(options ...Option) error {
 		return err
 	}
 
-	// Start all factories in the container.
-	if err := registry.invokeEntrypoints(); err != nil {
-		return err
+	// Invoke all specified entrypoints.
+	invokeErr := registry.invokeEntrypoints()
+
+	// Close all factories in the reverse order.
+	closeErr := registry.closeFactories()
+
+	// Return the joined invocation and teardown errors.
+	if invokeErr != nil && closeErr != nil {
+		return errors.Join(invokeErr, closeErr)
 	}
 
-	// Close all factories in the container.
-	if err := registry.closeFactories(); err != nil {
-		return err
+	// Return the invocation error if it occurred.
+	if invokeErr != nil {
+		return invokeErr
 	}
 
-	// Service container executed.
+	// Return the teardown error if it occurred.
+	if closeErr != nil {
+		return closeErr
+	}
+
+	// No errors occurred.
 	return nil
 }
 
