@@ -45,7 +45,7 @@ type Resolver struct {
 // pointer, or points to a value that cannot be set. For a valid pointer, Resolve
 // returns an error when the requested service is not found or cannot be resolved.
 func (r *Resolver) Resolve(target any) error {
-	// Validate the target is not a nil.
+	// Validate the target is not nil.
 	pointerType := reflect.TypeOf(target)
 	if pointerType == nil {
 		panic(fmt.Sprintf("%s Resolver.Resolve: expected a non-nil pointer, got nil", panicPrefix))
@@ -62,7 +62,7 @@ func (r *Resolver) Resolve(target any) error {
 		panic(fmt.Sprintf("%s Resolver.Resolve: expected a non-nil pointer, got nil %s", panicPrefix, pointerType))
 	}
 
-	// Validate the target value is a writable value.
+	// Validate the target points to a writable value.
 	value := pointerValue.Elem()
 	if !value.CanSet() {
 		panic(fmt.Sprintf("%s Resolver.Resolve: expected a pointer to a writable value, got %s", panicPrefix, pointerType))

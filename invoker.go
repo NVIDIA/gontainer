@@ -52,7 +52,7 @@ type Invoker struct {
 // a dependency cannot be resolved; errors produced by the function itself are returned
 // among the []any results, not as the error.
 func (i *Invoker) Invoke(function any) ([]any, error) {
-	// Validate the function is not a nil.
+	// Validate the function is not nil.
 	funcType := reflect.TypeOf(function)
 	if funcType == nil {
 		panic(fmt.Sprintf("%s Invoker.Invoke: expected a function, got nil", panicPrefix))

@@ -117,7 +117,7 @@ func NewFactory(function any, opts ...FactoryOption) *Factory {
 		"  gontainer.NewFactory(func(/* deps */) (*Service, func() error) { ... })\n" +
 		"  gontainer.NewFactory(func(/* deps */) (*Service, func() error, error) { ... })"
 
-	// Validate the function is not a nil.
+	// Validate the function is not nil.
 	funcType := reflect.TypeOf(function)
 	if funcType == nil {
 		panic(fmt.Sprintf("%s NewFactory: expected a function, got nil\n\n%s", panicPrefix, examples))
@@ -329,7 +329,7 @@ func NewEntrypoint(function any, opts ...EntrypointOption) *Entrypoint {
 		"  gontainer.NewEntrypoint(func(/* deps */) { ... })\n" +
 		"  gontainer.NewEntrypoint(func(/* deps */) error { ... })"
 
-	// Validate the function is not a nil.
+	// Validate the function is not nil.
 	funcType := reflect.TypeOf(function)
 	if funcType == nil {
 		panic(fmt.Sprintf("%s NewEntrypoint: expected a function, got nil\n\n%s", panicPrefix, examples))
