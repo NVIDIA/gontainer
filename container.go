@@ -104,11 +104,11 @@ type Option interface {
 //	gontainer.NewFactory(func(/* deps */) (*Service, func() error) { ... })
 //	gontainer.NewFactory(func(/* deps */) (*Service, func() error, error) { ... })
 //
-// NewFactory validates its function argument at the public API boundary and
-// panics on a programmer error: when function is an untyped nil, is not a
-// function, is a typed nil function, or has an unsupported signature. Failures
-// that occur later for a valid factory (during dependency resolution, graph construction,
-// factory execution, or cleanup) are reported as an error from Run, never as a panic.
+// NewFactory validates its function argument eagerly and panics on a programmer
+// error: when function is an untyped nil, is not a function, is a typed nil
+// function, or has an unsupported signature. Failures that occur later for a
+// valid factory (during dependency resolution, graph construction, factory
+// execution, or cleanup) are reported as an error from Run, never as a panic.
 func NewFactory(function any, opts ...FactoryOption) *Factory {
 	// Examples shown to the caller on misuse.
 	const examples = "Valid usage:\n" +
@@ -318,10 +318,10 @@ func (s *factorySettings) appendAnnotation(value any) {
 //	gontainer.NewEntrypoint(func(/* deps */) { ... })
 //	gontainer.NewEntrypoint(func(/* deps */) error { ... })
 //
-// NewEntrypoint validates its function argument at the public API boundary and
-// panics on a programmer error: when function is an untyped nil, is not a
-// function, is a typed nil function, or has an unsupported signature. Failures
-// that occur later for a valid entrypoint (during dependency resolution or entrypoint
+// NewEntrypoint validates its function argument eagerly and panics on a
+// programmer error: when function is an untyped nil, is not a function, is a
+// typed nil function, or has an unsupported signature. Failures that occur
+// later for a valid entrypoint (during dependency resolution or entrypoint
 // execution) are reported as an error from Run, never as a panic.
 func NewEntrypoint(function any, opts ...EntrypointOption) *Entrypoint {
 	// Examples shown to the caller on misuse.

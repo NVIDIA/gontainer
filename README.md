@@ -526,7 +526,7 @@ Expected failures should be returned as an `error` - which the container renders
 the structured traceback shown above - while a panic signals a programming error that
 you want to surface immediately rather than silently absorb.
 
-In addition, the public interface validates its arguments at the boundary and panics on
+In addition, the public interface validates its arguments eagerly and panics on
 misuse. These panics indicate a programming error in the caller, not a runtime failure:
 
 - `NewFactory` and `NewEntrypoint` panic when the argument is `nil`, is not a

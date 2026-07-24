@@ -40,10 +40,10 @@ type Resolver struct {
 
 // Resolve populates the target variable with the resolved service.
 //
-// Resolve validates its target argument at the public API boundary and panics on
-// a programmer error: when target is an untyped nil, is not a pointer, is a nil
-// pointer, or points to a value that cannot be set. For a valid pointer, Resolve
-// returns an error when the requested service is not found or cannot be resolved.
+// Resolve validates its target argument eagerly and panics on a programmer error: when target
+// is an untyped nil, is not a pointer, is a nil pointer, or points to a value that cannot be
+// set. For a valid pointer, Resolve returns an error when the requested service is not found
+// or cannot be resolved.
 func (r *Resolver) Resolve(target any) error {
 	// Validate the target is not nil.
 	pointerType := reflect.TypeOf(target)
