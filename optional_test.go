@@ -159,3 +159,62 @@ func TestOptionalOkProvided(t *testing.T) {
 		t.Errorf("expected Get() to return %q, got %q", "hello", opt.Get())
 	}
 }
+
+// optService is a sample service used by the constructor tests.
+type optService struct{ id int }
+
+// TestOptionalZeroValueAbsent tests that the natural zero value of Optional[T]
+// represents an absent value.
+func TestOptionalZeroValueAbsent(t *testing.T) {
+	var optional Optional[*optService]
+	equal(t, optional.Ok(), false)
+	equal(t, optional.Get(), (*optService)(nil))
+}
+
+// TestNewOptional tests that NewOptional creates a present value carrying an
+// ordinary value.
+func TestNewOptional(t *testing.T) {
+	present := NewOptional(42)
+	equal(t, present.Ok(), true)
+	equal(t, present.Get(), 42)
+}
+
+// TestNewOptionalZeroValue tests that NewOptional creates a present value even
+// when the wrapped value is the zero value of a value type.
+func TestNewOptionalZeroValue(t *testing.T) {
+	presentZero := NewOptional(0)
+	equal(t, presentZero.Ok(), true)
+	equal(t, presentZero.Get(), 0)
+}
+
+// TestNewOptionalNil tests that NewOptional[*T](nil) creates a present value
+// that carries nil, rather than an absent value.
+func TestNewOptionalNil(t *testing.T) {
+	presentNil := NewOptional[*optService](nil)
+	equal(t, presentNil.Ok(), true)
+	equal(t, presentNil.Get(), (*optService)(nil))
+}
+
+// TestNewOptionalFactoryCall tests that an Optional built by NewOptional is
+// usable when a factory function is called directly.
+func TestNewOptionalFactoryCall(t *testing.T) {
+	// factory consumes an optional dependency the same way a container would.
+	factory := func(dep Optional[*optService]) (bool, *optService) {
+		return dep.Ok(), dep.Get()
+	}
+
+	svc := &optService{id: 7}
+	ok, got := factory(NewOptional(svc))
+	equal(t, ok, true)
+	equal(t, got, svc)
+
+	// A present nil dependency is still reported as present.
+	ok, got = factory(NewOptional[*optService](nil))
+	equal(t, ok, true)
+	equal(t, got, (*optService)(nil))
+
+	// A zero-value Optional is reported as absent.
+	ok, got = factory(Optional[*optService]{})
+	equal(t, ok, false)
+	equal(t, got, (*optService)(nil))
+}

@@ -91,3 +91,67 @@ func TestNewMultipleValue(t *testing.T) {
 	value = newMultipleValue(reflect.TypeOf(box), data)
 	equal(t, value.Interface().(Multiple[string]), Multiple[string]{"result1", "result2"})
 }
+
+// mulService is a sample service used by the constructor tests.
+type mulService struct{ id int }
+
+// TestNewMultipleEmpty tests that calling NewMultiple without arguments creates
+// a valid empty collection.
+func TestNewMultipleEmpty(t *testing.T) {
+	empty := NewMultiple[*mulService]()
+	equal(t, len(empty), 0)
+}
+
+// TestNewMultipleSingle tests that NewMultiple creates a collection holding a
+// single provided value.
+func TestNewMultipleSingle(t *testing.T) {
+	serviceA := &mulService{id: 1}
+	multiple := NewMultiple(serviceA)
+	equal(t, multiple, Multiple[*mulService]{serviceA})
+}
+
+// TestNewMultipleValues tests that NewMultiple creates a collection holding all
+// provided values.
+func TestNewMultipleValues(t *testing.T) {
+	serviceA := &mulService{id: 1}
+	serviceB := &mulService{id: 2}
+	multiple := NewMultiple(serviceA, serviceB)
+	equal(t, multiple, Multiple[*mulService]{serviceA, serviceB})
+}
+
+// TestNewMultipleOrder tests that NewMultiple preserves the order of the values.
+func TestNewMultipleOrder(t *testing.T) {
+	multiple := NewMultiple(3, 1, 2)
+	equal(t, multiple, Multiple[int]{3, 1, 2})
+}
+
+// TestNewMultipleCopiesInput tests that NewMultiple copies its input and does
+// not alias a slice expanded at the call site.
+func TestNewMultipleCopiesInput(t *testing.T) {
+	source := []int{1, 2, 3}
+	multiple := NewMultiple(source...)
+
+	// Mutating the source must not affect the constructed collection.
+	source[0] = 99
+	equal(t, multiple, Multiple[int]{1, 2, 3})
+}
+
+// TestNewMultipleFactoryCall tests that a Multiple built by NewMultiple is
+// usable when a factory function is called directly.
+func TestNewMultipleFactoryCall(t *testing.T) {
+	// factory consumes a multiple dependency the same way a container would.
+	factory := func(deps Multiple[*mulService]) []int {
+		ids := make([]int, 0, len(deps))
+		for _, dep := range deps {
+			ids = append(ids, dep.id)
+		}
+		return ids
+	}
+
+	serviceA := &mulService{id: 1}
+	serviceB := &mulService{id: 2}
+	equal(t, factory(NewMultiple(serviceA, serviceB)), []int{1, 2})
+
+	// An empty collection yields no ids.
+	equal(t, factory(NewMultiple[*mulService]()), []int{})
+}

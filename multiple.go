@@ -17,7 +17,10 @@
 
 package gontainer
 
-import "reflect"
+import (
+	"reflect"
+	"slices"
+)
 
 // Multiple defines a dependency on zero or more services of the same type.
 //
@@ -66,4 +69,18 @@ func isMultipleType(typ reflect.Type) (reflect.Type, bool) {
 // newMultipleValue packs multiple values to the slice.
 func newMultipleValue(typ reflect.Type, values []reflect.Value) reflect.Value {
 	return reflect.Append(reflect.Zero(typ), values...)
+}
+
+// NewMultiple creates a Multiple collection from the given values, preserving
+// their order. Calling it without arguments creates a valid empty collection.
+//
+// It is primarily meant for testing factory functions in isolation: a factory
+// that accepts a Multiple[T] parameter can be called directly with a value
+// built here, without standing up a container.
+//
+// The returned collection owns its backing storage: it holds a copy of the
+// provided values and never aliases a slice expanded at the call site with the
+// "values..." syntax, mirroring how the container builds Multiple internally.
+func NewMultiple[T any](values ...T) Multiple[T] {
+	return slices.Clone(values)
 }
