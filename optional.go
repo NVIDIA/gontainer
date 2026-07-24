@@ -100,3 +100,23 @@ func newOptionalValue(typ reflect.Type, value reflect.Value) reflect.Value {
 func newOptionalZero(typ reflect.Type) reflect.Value {
 	return reflect.New(typ).Elem()
 }
+
+// NewOptional creates a present Optional that carries the given value.
+//
+// It is primarily meant for testing factory functions in isolation: a factory
+// that accepts an Optional[T] parameter can be called directly with a value
+// built here, without standing up a container.
+//
+// The constructor always creates a present value: Ok reports true even when
+// value is the zero value of its type or a nil pointer, map, slice, channel,
+// function or interface. A present value may therefore be nil, and a nil value
+// passed here represents a present nil rather than an absent value.
+//
+// The absence of a value is represented by the zero value of Optional[T], for
+// which Ok reports false:
+//
+//	var absent Optional[*Service]         // absent, Ok() == false
+//	present := NewOptional[*Service](nil) // present nil, Ok() == true
+func NewOptional[T any](value T) Optional[T] {
+	return Optional[T]{value: value, ok: true}
+}

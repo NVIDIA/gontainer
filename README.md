@@ -384,6 +384,90 @@ for _, f := range []*gontainer.Factory{configFactory, dbFactory} {
 _ = gontainer.Run(configFactory, dbFactory, entrypoint)
 ```
 
+### Testing Factories
+
+A factory is an ordinary function, so it can be unit-tested directly - without
+starting a container. Build its `Optional[T]` and `Multiple[T]` parameters by
+hand with `NewOptional` and `NewMultiple`, then call the function and assert on
+the result:
+
+```go
+// newAPI is the function normally passed to gontainer.NewFactory.
+func newAPI(
+    metrics gontainer.Optional[*MetricsService],
+    plugins gontainer.Multiple[Plugin],
+) *API {
+    api := &API{plugins: plugins}
+    if m := metrics.Get(); m != nil {
+        api.metrics = m
+    }
+    return api
+}
+
+func TestNewAPI(t *testing.T) {
+    // A present optional (even a nil value is present) plus an ordered collection.
+    api := newAPI(
+        gontainer.NewOptional(&MetricsService{}),
+        gontainer.NewMultiple(pluginA, pluginB),
+    )
+    if api.metrics == nil || len(api.plugins) != 2 {
+        t.Fatal("expected metrics and both plugins to be wired")
+    }
+
+    // An absent optional is the zero value; no arguments make an empty collection.
+    api = newAPI(
+        gontainer.Optional[*MetricsService]{},
+        gontainer.NewMultiple[Plugin](),
+    )
+    if api.metrics != nil || len(api.plugins) != 0 {
+        t.Fatal("expected no metrics and no plugins")
+    }
+}
+```
+
+- `NewOptional(v)` always creates a present value (`Ok() == true`), even when
+  `v` is `nil`; an absent dependency is the natural zero value
+  `gontainer.Optional[T]{}`.
+- `NewMultiple(vs...)` creates a collection from `vs`, preserving their order,
+  while `NewMultiple[T]()` creates a valid empty collection.
+
+> **Note:** this approach does not work for factories that depend on the
+> built-in `*gontainer.Resolver` or `*gontainer.Invoker` services. Both are
+> provided by the container and hold an unexported reference to its registry,
+> so a working instance exists only inside a running container and cannot be
+> constructed by hand. A factory whose signature requires either of them has to
+> be tested through a container rather than in isolation.
+
+To keep such a factory testable, depend on a **local interface** that covers
+only the methods you actually call, instead of on the concrete type. The
+container still injects its built-in `*gontainer.Resolver` / `*gontainer.Invoker`
+(they satisfy the interface structurally), while a unit test can pass a fake:
+
+```go
+// resolver is the narrow slice of *gontainer.Resolver the factory relies on.
+type resolver interface {
+    Resolve(varPtr any) error
+}
+
+// newHandler is the function normally passed to gontainer.NewFactory.
+func newHandler(r resolver) *Handler {
+    var dep *Dependency
+    _ = r.Resolve(&dep)
+    return &Handler{dep: dep}
+}
+
+func TestNewHandler(t *testing.T) {
+    // fakeResolver stands in for the container-provided resolver.
+    handler := newHandler(fakeResolver{dep: &Dependency{}})
+    if handler.dep == nil {
+        t.Fatal("expected the dependency to be resolved")
+    }
+}
+```
+
+The same pattern applies to `*gontainer.Invoker` through a local
+`Invoke(function any) ([]any, error)` interface.
+
 ## API Reference
 
 ### Module Functions
@@ -461,6 +545,11 @@ func(logger gontainer.Optional[*Logger]) *Service
 // Range over the slice to access each registered service.
 func(providers gontainer.Multiple[AuthProvider]) *Router
 ```
+
+To build `Optional[T]` and `Multiple[T]` values by hand - for example, to
+unit-test a factory function without a container - use the `NewOptional` and
+`NewMultiple` constructors. See
+[Testing Factories](#testing-factories).
 
 ## Error Handling
 
