@@ -89,14 +89,10 @@ func TestInvokerService(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "InvokeNilReturnsError",
-			haveFn:  nil,
-			wantFn:  nil,
-			wantErr: true,
-		},
-		{
-			name:    "InvokeNonFuncReturnsError",
-			haveFn:  42,
+			// A well-formed function whose dependency is unregistered must
+			// surface the failure as an error rather than a panic.
+			name:    "UnresolvedDependencyReturnsError",
+			haveFn:  func(dep float64) {},
 			wantFn:  nil,
 			wantErr: true,
 		},
@@ -128,4 +124,52 @@ func TestInvokerService(t *testing.T) {
 			equal(t, started.Load(), true)
 		})
 	}
+}
+
+// TestInvokerInvokePanics verifies that Invoker.Invoke rejects invalid function
+// arguments with a stable, gontainer-prefixed panic instead of returning an
+// error or leaking a reflect panic.
+func TestInvokerInvokePanics(t *testing.T) {
+	invoker := &Invoker{registry: &registry{}}
+
+	// A typed nil invoker function exercises the typed nil rejection path.
+	var nilInvokeFunc func()
+
+	tests := []struct {
+		name string
+		call func()
+		want string
+	}{
+		{
+			name: "UntypedNil",
+			call: func() { _, _ = invoker.Invoke(nil) },
+			want: "expected a function, got nil",
+		},
+		{
+			name: "NonFunctionValue",
+			call: func() { _, _ = invoker.Invoke(42) },
+			want: "expected a function, got int",
+		},
+		{
+			name: "TypedNilFunction",
+			call: func() { _, _ = invoker.Invoke(nilInvokeFunc) },
+			want: "expected a non-nil function",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertPanics(t, tt.want, tt.call)
+		})
+	}
+}
+
+// TestInvokerInvokeValidReturnsError verifies that a valid function never panics:
+// an unresolved dependency is surfaced as an error for well-formed input.
+func TestInvokerInvokeValidReturnsError(t *testing.T) {
+	invoker := &Invoker{registry: &registry{}}
+
+	// A valid function whose dependency is unregistered must return an error.
+	values, err := invoker.Invoke(func(dep *testService1) {})
+	equal(t, values, []any(nil))
+	equal(t, err != nil, true)
 }

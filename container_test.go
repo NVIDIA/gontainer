@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
@@ -122,6 +123,142 @@ func equal(t *testing.T, a, b any) {
 	t.Helper()
 	if !reflect.DeepEqual(a, b) {
 		t.Fatalf("equal failed: '%v' != '%v'", a, b)
+	}
+}
+
+// assertPanics runs call and fails the test unless it panics with a string value
+// that starts with the shared "gontainer:" prefix and contains want.
+func assertPanics(t *testing.T, want string, call func()) {
+	t.Helper()
+	defer func() {
+		// Recover the propagated panic so the test process survives.
+		recovered := recover()
+		if recovered == nil {
+			t.Fatalf("expected panic containing %q, got no panic", want)
+		}
+
+		// Every programmer-error panic must be a plain, prefixed string.
+		message, ok := recovered.(string)
+		if !ok {
+			t.Fatalf("expected string panic, got %T: %v", recovered, recovered)
+		}
+		if !strings.HasPrefix(message, panicPrefix) {
+			t.Fatalf("expected panic prefixed with %q, got %q", panicPrefix, message)
+		}
+		if !strings.Contains(message, want) {
+			t.Fatalf("expected panic containing %q, got %q", want, message)
+		}
+	}()
+	call()
+}
+
+// TestNewFactoryPanics verifies that NewFactory rejects invalid arguments with a
+// stable, gontainer-prefixed panic instead of returning an error or leaking a
+// reflect panic.
+func TestNewFactoryPanics(t *testing.T) {
+	// A typed nil factory function exercises the typed nil rejection path.
+	var nilFactoryFunc func() *testService1
+
+	tests := []struct {
+		name string
+		call func()
+		want string
+	}{
+		{
+			name: "UntypedNil",
+			call: func() { NewFactory(nil) },
+			want: "expected a function, got nil",
+		},
+		{
+			name: "NonFunctionValue",
+			call: func() { NewFactory(42) },
+			want: "expected a function, got int",
+		},
+		{
+			name: "TypedNilFunction",
+			call: func() { NewFactory(nilFactoryFunc) },
+			want: "expected a non-nil function",
+		},
+		{
+			name: "SignatureNoResults",
+			call: func() { NewFactory(func() {}) },
+			want: "unsupported function signature",
+		},
+		{
+			name: "SignatureOnlyError",
+			call: func() { NewFactory(func() error { return nil }) },
+			want: "unsupported function signature",
+		},
+		{
+			name: "SignatureEmptyInterface",
+			call: func() { NewFactory(func() any { return nil }) },
+			want: "unsupported function signature",
+		},
+		{
+			name: "SignatureTwoServices",
+			call: func() { NewFactory(func() (int, string) { return 0, "" }) },
+			want: "unsupported function signature",
+		},
+		{
+			name: "SignatureErrorFirst",
+			call: func() { NewFactory(func() (error, int) { return nil, 0 }) },
+			want: "unsupported function signature",
+		},
+		{
+			name: "SignatureTooManyResults",
+			call: func() { NewFactory(func() (int, func() error, error, bool) { return 0, nil, nil, false }) },
+			want: "unsupported function signature",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertPanics(t, tt.want, tt.call)
+		})
+	}
+}
+
+// TestNewEntrypointPanics verifies that NewEntrypoint rejects invalid arguments
+// with a stable, gontainer-prefixed panic instead of returning an error or
+// leaking a reflect panic.
+func TestNewEntrypointPanics(t *testing.T) {
+	// A typed nil entrypoint function exercises the typed nil rejection path.
+	var nilEntrypointFunc func() error
+
+	tests := []struct {
+		name string
+		call func()
+		want string
+	}{
+		{
+			name: "UntypedNil",
+			call: func() { NewEntrypoint(nil) },
+			want: "expected a function, got nil",
+		},
+		{
+			name: "NonFunctionValue",
+			call: func() { NewEntrypoint("not-a-func") },
+			want: "expected a function, got string",
+		},
+		{
+			name: "TypedNilFunction",
+			call: func() { NewEntrypoint(nilEntrypointFunc) },
+			want: "expected a non-nil function",
+		},
+		{
+			name: "SignatureNonErrorResult",
+			call: func() { NewEntrypoint(func() int { return 0 }) },
+			want: "unsupported function signature",
+		},
+		{
+			name: "SignatureTwoResults",
+			call: func() { NewEntrypoint(func() (int, error) { return 0, nil }) },
+			want: "unsupported function signature",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertPanics(t, tt.want, tt.call)
+		})
 	}
 }
 

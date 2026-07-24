@@ -526,6 +526,20 @@ Expected failures should be returned as an `error` - which the container renders
 the structured traceback shown above - while a panic signals a programming error that
 you want to surface immediately rather than silently absorb.
 
+In addition, the public interface validates its arguments eagerly and panics on
+misuse. These panics indicate a programming error in the caller, not a runtime failure:
+
+- `NewFactory` and `NewEntrypoint` panic when the argument is `nil`, is not a
+  function, is a typed nil function, or has an unsupported signature.
+- `Invoker.Invoke` panics when the argument is `nil`, is not a function, or is a
+  typed nil function.
+- `Resolver.Resolve` panics when the target is not a valid, non-nil, writable
+  pointer.
+
+Valid calls never panic for these reasons: any failure during dependency
+resolution, graph construction, factory or entrypoint execution, invocation, or
+cleanup is still returned as an `error`.
+
 ## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
