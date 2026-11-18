@@ -124,8 +124,8 @@ func (r *registry) validateRegistry() error {
 					inType = innerType
 				}
 
-				// Walk through all factories for this in argument type.
-				typeFactories := r.findFactories(inType)
+				// Walk through the factories this in argument resolves to.
+				typeFactories := r.selectFactories(inType, isMultiple)
 				for _, factoryForType := range typeFactories {
 					if factoryForType == fact {
 						errs = append(errs, newCircularDependencyError(fact))
@@ -287,13 +287,8 @@ func (r *registry) resolveRegular(serviceType reflect.Type) (reflect.Value, erro
 // types with several implementations: a regular or optional dependency must not
 // instantiate the implementations it does not return.
 func (r *registry) resolveByType(serviceType reflect.Type, all bool) ([]reflect.Value, error) {
-	// Lookup factory definition by an output type.
-	factories := r.findFactories(serviceType)
-
-	// Avoid spawning the remaining implementations.
-	if !all && len(factories) > 1 {
-		factories = factories[:1]
-	}
+	// Lookup factory definitions to spawn by an output type.
+	factories := r.selectFactories(serviceType, all)
 
 	// Prepare result values slice.
 	results := make([]reflect.Value, 0, len(factories))
@@ -316,6 +311,22 @@ func (r *registry) resolveByType(serviceType reflect.Type, all bool) ([]reflect.
 
 	// Return resolved values.
 	return results, nil
+}
+
+// selectFactories returns the factories a dependency on the service type resolves to.
+//
+// With all set, it returns every matching factory in registration order. Otherwise
+// it returns only the first one, so that the remaining implementations are not spawned.
+func (r *registry) selectFactories(serviceType reflect.Type, all bool) []*factory {
+	// Lookup factory definitions by an output type.
+	factories := r.findFactories(serviceType)
+
+	// Avoid spawning the remaining implementations.
+	if !all && len(factories) > 1 {
+		factories = factories[:1]
+	}
+
+	return factories
 }
 
 // findFactories lookups for all factories for an output type in the registry.
