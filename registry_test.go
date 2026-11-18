@@ -313,6 +313,39 @@ func TestRegistryResolveInterfaceMultiple(t *testing.T) {
 	equal(t, frenchSpawned.Load(), int32(1))
 }
 
+// politeGreeter is a greeter implementation that wraps another greeter.
+type politeGreeter struct{ inner greeter }
+
+// greet returns the wrapped greeting with an exclamation mark.
+func (p politeGreeter) greet() string { return p.inner.greet() + "!" }
+
+// TestRegistryValidateInterfaceWrapper verifies that the cycle check follows the
+// implementation a regular interface dependency resolves to.
+func TestRegistryValidateInterfaceWrapper(t *testing.T) {
+	t.Run("WrappedFirstImplementation", func(t *testing.T) {
+		var got string
+
+		err := Run(
+			NewFactory(func() englishGreeter { return englishGreeter{} }),
+			NewFactory(func(g greeter) politeGreeter { return politeGreeter{inner: g} }),
+			NewEntrypoint(func(p politeGreeter) { got = p.greet() }),
+		)
+
+		equal(t, err, nil)
+		equal(t, got, "hello!")
+	})
+
+	t.Run("WrapperResolvesToItself", func(t *testing.T) {
+		err := Run(
+			NewFactory(func(g greeter) politeGreeter { return politeGreeter{inner: g} }),
+			NewFactory(func() englishGreeter { return englishGreeter{} }),
+			NewEntrypoint(func(p politeGreeter) {}),
+		)
+
+		equal(t, errors.Is(err, ErrCircularDependency), true)
+	})
+}
+
 // TestRegistryInvokeFunctions tests corresponding registry method.
 func TestRegistryInvokeFunctions(t *testing.T) {
 	registry := &registry{}
