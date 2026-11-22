@@ -320,9 +320,9 @@ type politeGreeter struct{ inner greeter }
 func (p politeGreeter) greet() string { return p.inner.greet() + "!" }
 
 // TestRegistryValidateInterfaceWrapper verifies that the cycle check follows the
-// implementation a regular interface dependency resolves to.
+// implementations an interface dependency resolves to.
 func TestRegistryValidateInterfaceWrapper(t *testing.T) {
-	t.Run("WrappedFirstImplementation", func(t *testing.T) {
+	t.Run("RegularResolvesToImplementation", func(t *testing.T) {
 		var got string
 
 		err := Run(
@@ -335,10 +335,33 @@ func TestRegistryValidateInterfaceWrapper(t *testing.T) {
 		equal(t, got, "hello!")
 	})
 
-	t.Run("WrapperResolvesToItself", func(t *testing.T) {
+	t.Run("RegularResolvesToWrapper", func(t *testing.T) {
 		err := Run(
 			NewFactory(func(g greeter) politeGreeter { return politeGreeter{inner: g} }),
 			NewFactory(func() englishGreeter { return englishGreeter{} }),
+			NewEntrypoint(func(p politeGreeter) {}),
+		)
+
+		equal(t, errors.Is(err, ErrCircularDependency), true)
+	})
+
+	t.Run("OptionalResolvesToImplementation", func(t *testing.T) {
+		var got string
+
+		err := Run(
+			NewFactory(func() englishGreeter { return englishGreeter{} }),
+			NewFactory(func(g Optional[greeter]) politeGreeter { return politeGreeter{inner: g.Get()} }),
+			NewEntrypoint(func(p politeGreeter) { got = p.greet() }),
+		)
+
+		equal(t, err, nil)
+		equal(t, got, "hello!")
+	})
+
+	t.Run("MultipleIncludesWrapper", func(t *testing.T) {
+		err := Run(
+			NewFactory(func() englishGreeter { return englishGreeter{} }),
+			NewFactory(func(gs Multiple[greeter]) politeGreeter { return politeGreeter{inner: gs[0]} }),
 			NewEntrypoint(func(p politeGreeter) {}),
 		)
 

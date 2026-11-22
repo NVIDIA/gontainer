@@ -72,7 +72,7 @@ func (r *registry) validateRegistry() error {
 			}
 
 			// Could a factory for this type be resolved?
-			foundFactories := r.findFactories(inType)
+			foundFactories := r.findFactories(inType, false)
 			if len(foundFactories) == 0 {
 				errs = append(errs, newDependencyNotResolvedError(fact, inType))
 				continue
@@ -91,7 +91,7 @@ func (r *registry) validateRegistry() error {
 		}
 
 		// Validate uniqueness of the factory output type.
-		factories := r.findFactories(outType)
+		factories := r.findFactories(outType, true)
 		if len(factories) > 1 {
 			errs = append(errs, newFactoryTypeDuplicatedError(fact))
 		}
@@ -125,7 +125,7 @@ func (r *registry) validateRegistry() error {
 				}
 
 				// Walk through the factories this in argument resolves to.
-				typeFactories := r.selectFactories(inType, isMultiple)
+				typeFactories := r.findFactories(inType, isMultiple)
 				for _, factoryForType := range typeFactories {
 					if factoryForType == fact {
 						errs = append(errs, newCircularDependencyError(fact))
@@ -288,7 +288,7 @@ func (r *registry) resolveRegular(serviceType reflect.Type) (reflect.Value, erro
 // instantiate the implementations it does not return.
 func (r *registry) resolveByType(serviceType reflect.Type, all bool) ([]reflect.Value, error) {
 	// Lookup factory definitions to spawn by an output type.
-	factories := r.selectFactories(serviceType, all)
+	factories := r.findFactories(serviceType, all)
 
 	// Prepare result values slice.
 	results := make([]reflect.Value, 0, len(factories))
@@ -313,24 +313,10 @@ func (r *registry) resolveByType(serviceType reflect.Type, all bool) ([]reflect.
 	return results, nil
 }
 
-// selectFactories returns the factories a dependency on the service type resolves to.
-//
-// With all set, it returns every matching factory in registration order. Otherwise
-// it returns only the first one, so that the remaining implementations are not spawned.
-func (r *registry) selectFactories(serviceType reflect.Type, all bool) []*factory {
-	// Lookup factory definitions by an output type.
-	factories := r.findFactories(serviceType)
-
-	// Avoid spawning the remaining implementations.
-	if !all && len(factories) > 1 {
-		factories = factories[:1]
-	}
-
-	return factories
-}
-
-// findFactories lookups for all factories for an output type in the registry.
-func (r *registry) findFactories(serviceType reflect.Type) []*factory {
+// findFactories lookups for factories for an output type in the registry. It returns
+// every matching factory in registration order when all is set, and only the first
+// one otherwise.
+func (r *registry) findFactories(serviceType reflect.Type, all bool) []*factory {
 	// Prepare result factories slice.
 	var factories []*factory
 
@@ -356,6 +342,11 @@ func (r *registry) findFactories(serviceType reflect.Type) []*factory {
 				continue
 			}
 		}
+	}
+
+	// Keep only the first matching factory unless all of them are requested.
+	if !all && len(factories) > 1 {
+		factories = factories[:1]
 	}
 
 	// Return matched factories.
