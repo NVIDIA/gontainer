@@ -248,12 +248,16 @@ gontainer.NewFactory(func(store Store) *API {
 })
 ```
 
-> **When several services implement the same interface, a regular dependency
-> resolves to the _first one in registration order_, and only that
+> **When several services implement the same interface, a regular or optional
+> dependency resolves to the _first one in registration order_, and only that
 > implementation is spawned - others are left untouched.** This is by
 > design: it keeps regular resolution deterministic and free of side effects.
-> To receive every implementation, depend on
+> To receive every implementation in registration order, depend on
 > [`Multiple[T]`](#multiple-dependencies) instead.
+
+A decorator that implements the interface it wraps must be registered after
+the wrapped implementation; otherwise it depends on itself and `Run` reports
+a circular dependency.
 
 ### Multiple Instances of the Same Type
 
